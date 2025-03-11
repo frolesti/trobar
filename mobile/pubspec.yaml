@@ -33,6 +33,7 @@ dependencies:
   http: ^1.3.0  # For API calls
   provider: ^6.0.5  # For state management
   google_maps_flutter: ^2.5.0  # For maps
+  google_maps_flutter_web: ^0.5.0
   geolocator: ^13.0.2  # GPS & Location services
   geocoding: ^2.0.5 # For geocoding (searching for locations)
   flutter_typeahead: ^3.1.0 # For the search bar (optional, for user input)

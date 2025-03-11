@@ -5,29 +5,17 @@ class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   @override
-  MapScreenState createState() => MapScreenState(); // Update this to use MapScreenState (public)
+  State<MapScreen> createState() => _MapScreenState();
 }
 
-class MapScreenState extends State<MapScreen> {
-  // Remove the leading underscore
-  late GoogleMapController mapController;
-
-  final LatLng _center = const LatLng(
-    37.7749,
-    -122.4194,
-  ); // Example: San Francisco
-
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
-  }
+class _MapScreenState extends State<MapScreen> {
+  static const LatLng _pGooglePlex = LatLng(41.390205, 2.154007);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Find Bars")),
       body: GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(target: _center, zoom: 11.0),
+        initialCameraPosition: CameraPosition(target: _pGooglePlex, zoom: 13),
       ),
     );
   }
