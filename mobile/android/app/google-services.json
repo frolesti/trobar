@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "767859145063",
+    "project_id": "trobar-app",
+    "storage_bucket": "trobar-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:767859145063:android:942aa23e0b99ce325517c2",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVGwoZ79EU4UpS-fDvn9nRi5owQj0Rxzo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
