@@ -32,6 +32,8 @@ class MyApp extends StatelessWidget {
 
 // Verifica si el usuario ya está autenticado para dirigirlo al mapa o a la bienvenida
 class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(

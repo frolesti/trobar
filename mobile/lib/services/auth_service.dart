@@ -8,8 +8,11 @@ class AuthService {
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
       return userCredential.user;
+    } on FirebaseAuthException catch (e) {
+      print("Sign-up error: ${e.code} - ${e.message}");
+      return null;
     } catch (e) {
-      print("Sign-up error: $e");
+      print("Unexpected error: $e");
       return null;
     }
   }
@@ -21,8 +24,11 @@ class AuthService {
         password: password,
       );
       return userCredential.user;
+    } on FirebaseAuthException catch (e) {
+      print("Login error: ${e.code} - ${e.message}");
+      return null;
     } catch (e) {
-      print("Login error: $e");
+      print("Unexpected error: $e");
       return null;
     }
   }

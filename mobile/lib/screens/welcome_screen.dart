@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WelcomeScreen extends StatefulWidget {
+  const WelcomeScreen({super.key});
+
   @override
   _WelcomeScreenState createState() => _WelcomeScreenState();
 }
@@ -21,10 +23,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   ];
 
   void _registerUser() async {
-    String name = _nameController.text;
-    String email = _emailController.text;
-
-    if (name.isEmpty || email.isEmpty || _selectedTeam == null) {
+    if (_nameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _selectedTeam == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Todos los campos son obligatorios")),
       );
@@ -32,8 +33,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
 
     await FirebaseFirestore.instance.collection('users').add({
-      'name': name,
-      'email': email,
+      'name': _nameController.text,
+      'email': _emailController.text,
       'favorite_team': _selectedTeam,
     });
 
@@ -85,6 +86,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 }
 
 class LoginScreen extends StatelessWidget {
+  const LoginScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

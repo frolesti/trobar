@@ -75,4 +75,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'trobar-app.firebasestorage.app',
     measurementId: 'G-051MXED1W5',
   );
+
 }
