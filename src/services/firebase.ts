@@ -13,7 +13,7 @@ export const getBars = async (): Promise<Bar[]> => {
     }
 
     const bars: Bar[] = [];
-    barsSnapshot.forEach(doc => {
+    barsSnapshot.forEach((doc: any) => {
       const data = doc.data();
       // Mapegem les dades de Firestore a la nostra interfície Bar
       // Assegurem que l'ID ve del document ID

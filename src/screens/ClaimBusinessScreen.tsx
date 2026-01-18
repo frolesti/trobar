@@ -49,7 +49,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     style={styles.input} 
                     placeholder="El teu Nom Complet" 
                     value={formData.name}
-                    onChangeText={(t) => setFormData({...formData, name: t})}
+                    onChangeText={(t: string) => setFormData({...formData, name: t})}
                 />
                 
                 <TextInput 
@@ -57,7 +57,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     placeholder="Telèfon de Contacte" 
                     keyboardType="phone-pad"
                     value={formData.phone}
-                    onChangeText={(t) => setFormData({...formData, phone: t})}
+                    onChangeText={(t: string) => setFormData({...formData, phone: t})}
                 />
                 
                 <TextInput 
@@ -66,7 +66,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={formData.email}
-                    onChangeText={(t) => setFormData({...formData, email: t})}
+                    onChangeText={(t: string) => setFormData({...formData, email: t})}
                 />
 
                 <Text style={styles.sectionTitle}>Verificació</Text>
@@ -74,7 +74,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     style={styles.input} 
                     placeholder="CIF / NIF del Negoci" 
                     value={formData.cif}
-                    onChangeText={(t) => setFormData({...formData, cif: t})}
+                    onChangeText={(t: string) => setFormData({...formData, cif: t})}
                 />
                 
                 <TouchableOpacity style={styles.uploadButton}>
