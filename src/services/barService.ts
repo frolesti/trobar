@@ -26,7 +26,7 @@ const mapDocToBar = (doc: any): Bar => {
         longitude: lng,
         rating: data.rating || 4.0,
         isOpen: data.isOpen ?? true,
-        image: data.image || data.imageUrl || 'https://via.placeholder.com/150',
+        image: (data.image && data.image.startsWith('http')) ? data.image : undefined, 
         tags: data.amenities || [], // Mapegem 'amenities' a 'tags'
         // Camps opcionals que potser no estan a totes les entrades
         nextMatch: data.nextMatch || undefined

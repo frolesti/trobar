@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, ActivityIndicator, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated } from 'react-native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons'; // Import Vector Icons
 import { fetchBars } from '../services/barService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -35,6 +36,50 @@ const deg2rad = (deg: number) => {
   return deg * (Math.PI/180)
 };
 
+// --- STYLES & ASSETS FOR SKETCHY UI ---
+const SKETCHY_COLORS = {
+    bg: '#FFFBF0', // Paper/Cream background
+    primary: '#D32F2F', // Rust Red (Markers)
+    text: '#3E2723', // Dark Brown/Black
+    accent: '#8D6E63', // Secondary brown
+    uiBg: 'rgba(255, 251, 240, 0.95)', // Semi-transparent paper
+};
+
+// Custom "Paper" Map Style
+const PAPER_MAP_STYLE = [
+  { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
+  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+  { "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
+  { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+  { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
+  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
+  { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+  { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
+  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+  { "featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
+  { "featureType": "transit.line", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
+  { "featureType": "transit.station", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
+  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] },
+  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
+];
+
+// SVG Path for Hand-Drawn Pin (Approximate)
+const SKETCHY_PIN_PATH = "M 12 2 C 7 2 3 7 3 12 C 3 17 12 24 12 24 C 12 24 21 17 21 12 C 21 7 17 2 12 2 Z";
+
+// Base64 fallback if file asset fails for any reason
+const DEFAULT_BAR_IMAGE = require('../../assets/img/bar-fallout.jpg');
+
+const getBarImageSource = (img: string | undefined | null) => {
+    if (img && typeof img === 'string' && img.startsWith('http') && img !== 'null' && img !== 'undefined' && img.trim() !== '') {
+        return { uri: img };
+    }
+    return DEFAULT_BAR_IMAGE;
+};
+
 const MapScreen = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const navigation = useNavigation<any>();
@@ -55,6 +100,9 @@ const MapScreen = () => {
     const [selectedTeam, setSelectedTeam] = useState('');
     const [showFilters, setShowFilters] = useState(false); // Guest mode filters
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
+
+    // Force local placeholder if a remote image fails to load
+    const [failedImages, setFailedImages] = useState<Record<string, true>>({});
 
     // Dades
     const [bars, setBars] = useState<Bar[]>([]);
@@ -163,6 +211,12 @@ const MapScreen = () => {
     // 3. Web Specific Initialization (Google Maps JS)
     useEffect(() => {
         if (Platform.OS !== 'web') return; 
+
+        // Inject Google Fonts (Lora - Clean Serif for better readability)
+        const fontLink = document.createElement('link');
+        fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap';
+        fontLink.rel = 'stylesheet';
+        document.head.appendChild(fontLink);
 
         const loadMapAndAutocomplete = () => {
             if (centerLocation && mapDivRef.current && !googleMapRef.current && window.google) {
@@ -287,21 +341,25 @@ const MapScreen = () => {
         const mapDomNode = mapDivRef.current as unknown as HTMLElement;
         const mapOptions = {
             center: { lat: centerLocation.latitude, lng: centerLocation.longitude },
-            zoom: 14, disableDefaultUI: true, clickableIcons: false,
+            zoom: 14, 
+            disableDefaultUI: true, 
+            clickableIcons: false,
+            styles: PAPER_MAP_STYLE, // Apply Sketchy Paper Style
+            backgroundColor: SKETCHY_COLORS.bg,
         };
         const map = new window.google.maps.Map(mapDomNode, mapOptions);
         googleMapRef.current = map;
 
-        // User Marker
+        // User Marker (Custom Dot)
         if (userLocation) {
             new window.google.maps.Marker({
                 position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
                 map: map,
                 icon: {
                     path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 8, fillColor: "#4285F4", fillOpacity: 1, strokeWeight: 2, strokeColor: "white",
+                    scale: 6, fillColor: SKETCHY_COLORS.text, fillOpacity: 0.8, strokeWeight: 0,
                 },
-                title: "La teva ubicació real", zIndex: 999
+                title: "Tu", zIndex: 999
             });
         }
         
@@ -341,14 +399,14 @@ const MapScreen = () => {
         // Cercle
         if (circleRef.current) circleRef.current.setMap(null);
         circleRef.current = new window.google.maps.Circle({
-            strokeColor: "#2196F3", strokeOpacity: 0.8, strokeWeight: 2,
-            fillColor: "#2196F3", fillOpacity: 0.1,
+            strokeColor: SKETCHY_COLORS.primary, strokeOpacity: 0.6, strokeWeight: 1, // Minimalist stroke
+            fillColor: SKETCHY_COLORS.primary, fillOpacity: 0.05, // Very faint fill
             map: googleMapRef.current,
             center: { lat: centerLocation.latitude, lng: centerLocation.longitude },
             radius: radiusKm * 1000, clickable: false 
         });
 
-        // Center Marker
+        // Center Marker ("Pin" style)
         if (centerMarkerRef.current) centerMarkerRef.current.setMap(null);
         // Only if not near user location
         let showCenter = true;
@@ -360,12 +418,16 @@ const MapScreen = () => {
             centerMarkerRef.current = new window.google.maps.Marker({
                 position: { lat: centerLocation.latitude, lng: centerLocation.longitude },
                 map: googleMapRef.current,
-                icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 0 },
-                label: { text: "📍", fontSize: "40px" }, zIndex: 900
+                icon: { 
+                    path: window.google.maps.SymbolPath.CIRCLE, 
+                    scale: 5, strokeColor: SKETCHY_COLORS.text, strokeWeight: 2, 
+                    fillColor: 'transparent', fillOpacity: 0
+                },
+                zIndex: 900
             });
         }
 
-        // Bar Markers
+        // Bar Markers (Custom Sketchy Pins)
         markersRef.current.forEach(m => m.setMap(null));
         markersRef.current = [];
         barsToRender.forEach(bar => {
@@ -373,8 +435,15 @@ const MapScreen = () => {
                 position: { lat: bar.latitude, lng: bar.longitude },
                 map: googleMapRef.current,
                 title: bar.name,
-                icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 0 },
-                label: { text: "🍺", fontSize: "30px" } 
+                icon: { 
+                    path: SKETCHY_PIN_PATH, 
+                    fillColor: SKETCHY_COLORS.primary, 
+                    fillOpacity: 0.9, 
+                    strokeWeight: 0, 
+                    scale: 1.5, // Adjust size
+                    anchor: new window.google.maps.Point(12, 24) 
+                },
+                label: { text: " ", fontSize: "0px" } 
             });
             marker.addListener("click", () => { setSelectedBar(bar); });
             markersRef.current.push(marker);
@@ -406,7 +475,7 @@ const MapScreen = () => {
                 if (polylineRef.current) polylineRef.current.setMap(null);
                 const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
                 polylineRef.current = new window.google.maps.Polyline({
-                    path: decodedPath, geodesic: true, strokeColor: "#4285F4",
+                    path: decodedPath, geodesic: true, strokeColor: SKETCHY_COLORS.primary,
                     strokeOpacity: 1.0, strokeWeight: 5, map: googleMapRef.current
                 });
                 // Calculate info
@@ -442,7 +511,16 @@ const MapScreen = () => {
     };
 
      const openExternalMaps = (bar: Bar) => {
-        const url = `https://www.google.com/maps/dir/?api=1&destination=${bar.latitude},${bar.longitude}&travelmode=walking`;
+        let url = `https://www.google.com/maps/dir/?api=1&destination=${bar.latitude},${bar.longitude}&travelmode=walking`;
+
+        // Afegim l'origen explícitament per assegurar que Google Maps fa servir la mateixa ubicació que l'app
+        // Això soluciona possibles discrepàncies si el GPS del navegador va amb retard
+        if (userLocation) {
+            url += `&origin=${userLocation.coords.latitude},${userLocation.coords.longitude}`;
+        } else if (centerLocation) {
+            url += `&origin=${centerLocation.latitude},${centerLocation.longitude}`;
+        }
+
         Linking.openURL(url);
     };
 
@@ -453,16 +531,22 @@ const MapScreen = () => {
             return (
                 <View style={styles.detailContainer}>
                     <View style={[styles.detailHeader, {flexDirection: 'row'}]}>
-                        <Image source={{ uri: selectedBar.image }} style={styles.barImage} />
+                        <Image
+                            source={failedImages[selectedBar.id] ? DEFAULT_BAR_IMAGE : getBarImageSource(selectedBar.image)}
+                            style={styles.barImage}
+                            resizeMode="cover"
+                            onError={() => setFailedImages((prev) => (prev[selectedBar.id] ? prev : { ...prev, [selectedBar.id]: true }))}
+                        />
                         <View style={styles.headerInfo}>
                             <Text style={styles.barName}>{selectedBar.name}</Text>
                             <View style={styles.ratingContainer}>
-                                <Text style={styles.ratingText}>⭐ {selectedBar.rating}</Text>
+                                <Feather name="star" size={14} color={SKETCHY_COLORS.text} style={{marginRight: 4}} />
+                                <Text style={styles.ratingText}>{selectedBar.rating}</Text>
                                 <Text style={[styles.statusTag, selectedBar.isOpen ? styles.open : styles.closed]}>
                                     {selectedBar.isOpen ? 'Obert' : 'Tancat'}
                                 </Text>
                             </View>
-                            <Text style={{fontSize:12, color:'#666', marginTop:4}}>
+                            <Text style={{fontSize:12, color:'#666', marginTop:4, fontFamily: 'Lora'}}>
                                 {routeInfo 
                                     ? `⏱️ ${routeInfo.duration} caminant (${routeInfo.distance})`
                                     : `📍 A ${getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, selectedBar.latitude, selectedBar.longitude).toFixed(1)} km`
@@ -470,7 +554,7 @@ const MapScreen = () => {
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => setSelectedBar(null)} style={{padding: 5}}>
-                            <Text style={{fontSize: 20, color:'#999'}}>✕</Text>
+                            <Feather name="x" size={24} color="#999" />
                         </TouchableOpacity>
                     </View>
 
@@ -486,10 +570,13 @@ const MapScreen = () => {
                     )}
 
                     <TouchableOpacity 
-                        style={{backgroundColor:'#2196F3', borderRadius: 12, padding: 15, alignItems:'center', marginTop: 10}}
+                        style={{backgroundColor: SKETCHY_COLORS.primary, borderRadius: 12, padding: 15, alignItems:'center', marginTop: 10}}
                         onPress={() => openExternalMaps(selectedBar)}
                     >
-                        <Text style={{color:'white', fontWeight:'bold', fontSize: 16}}>🚶 Com arribar-hi</Text>
+                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <Feather name="navigation" size={18} color="white" style={{marginRight: 8}} />
+                            <Text style={{color:'white', fontWeight:'bold', fontSize: 16, fontFamily: 'Lora'}}>Com arribar-hi</Text>
+                        </View>
                     </TouchableOpacity>
                 </View>
             );
@@ -510,15 +597,26 @@ const MapScreen = () => {
                             }}
                             onPress={() => setSelectedBar(bar)}
                         >
-                             <Image source={{ uri: bar.image }} style={{width: 50, height: 50, borderRadius: 8, backgroundColor:'#eee'}} />
+                             <Image
+                                 source={failedImages[bar.id] ? DEFAULT_BAR_IMAGE : getBarImageSource(bar.image)}
+                                 style={{width: 50, height: 50, borderRadius: 8, backgroundColor:'#eee'}}
+                                 resizeMode="cover"
+                                 onError={() => setFailedImages((prev) => (prev[bar.id] ? prev : { ...prev, [bar.id]: true }))}
+                             />
                              <View style={{marginLeft: 12, justifyContent:'center'}}>
-                                 <Text style={{fontWeight:'bold', fontSize: 14}}>{bar.name}</Text>
-                                 <Text style={{fontSize: 12, color:'#666'}}>
+                                 <Text style={{fontWeight:'bold', fontSize: 14, fontFamily: 'Lora'}}>{bar.name}</Text>
+                                 <Text style={{fontSize: 12, color:'#666', fontFamily: 'Lora'}}>
                                     A {getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude).toFixed(1)} km
                                  </Text>
-                                 <View style={{flexDirection:'row', marginTop: 2}}>
-                                     <Text style={{fontSize: 10, color:'#888'}}>⭐ {bar.rating}</Text>
-                                     {bar.nextMatch && <Text style={{fontSize: 10, color:'red', marginLeft: 8}}>⚽ Partit avui</Text>}
+                                 <View style={{flexDirection:'row', marginTop: 2, alignItems: 'center'}}>
+                                     <Feather name="star" size={10} color="#888" style={{marginRight: 2}} />
+                                     <Text style={{fontSize: 10, color:'#888', fontFamily: 'Lora'}}>{bar.rating}</Text>
+                                     {bar.nextMatch && (
+                                         <View style={{flexDirection: 'row', alignItems: 'center', marginLeft: 8}}>
+                                             <Feather name="tv" size={10} color="red" style={{marginRight: 2}} />
+                                             <Text style={{fontSize: 10, color:'red', fontFamily: 'Lora'}}>Partit avui</Text>
+                                         </View>
+                                     )}
                                  </View>
                              </View>
                         </TouchableOpacity>
@@ -535,20 +633,20 @@ const MapScreen = () => {
         if (Platform.OS === 'web') {
              return (
                  <View style={[styles.searchBar, {flex: 1}]}>
-                    <View style={styles.searchIconPlaceholder} />
+                    <Feather name="search" size={20} color={SKETCHY_COLORS.text} style={{marginRight: 10}} />
                     {/* @ts-ignore */}
                     <input
                         ref={autocompleteInputRef}
                         type="text"
-                        placeholder="Des d'on vols veure el Barça"
+                        placeholder="Des d'on vols veure el Barça?"
                         style={{
-                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: '#333'
+                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: '#333', fontFamily: 'Lora'
                         }}
                         defaultValue={searchQuery}
                     />
                      {searchQuery !== '' && (
                         <TouchableOpacity onPress={centerMapToGPS} style={{marginRight: 8}}>
-                            <Text style={{fontSize: 12, color:'#666'}}>✕</Text>
+                            <Feather name="x" size={16} color="#666" />
                         </TouchableOpacity>
                     )}
                  </View>
@@ -557,9 +655,9 @@ const MapScreen = () => {
         // Native Input (Simple Text Input for now, assuming no Autocomplete needed immediately or implemented via library)
         return (
              <View style={[styles.searchBar, {flex: 1}]}>
-                <View style={styles.searchIconPlaceholder} />
+                <Feather name="search" size={20} color={SKETCHY_COLORS.text} style={{marginRight: 10}} />
                 <TextInput 
-                    placeholder="Des d'on vols veure el Barça" 
+                    placeholder="Des d'on vols veure el Barça?" 
                     style={styles.searchInput}
                     placeholderTextColor="#999"
                     value={searchQuery}
@@ -576,14 +674,14 @@ const MapScreen = () => {
          if (Platform.OS === 'web') {
               // ... Reuse Web Select Implementation
              return (
-                <View style={{marginTop: 10, marginBottom: 5}}>
+                 <View style={{ marginTop: (user || showFilters) ? 8 : 0, marginBottom: (user || showFilters) ? 4 : 0 }}>
                 {user ? (
                         <TouchableOpacity 
                             onPress={() => navigation.navigate('Profile')}
                             style={styles.webProfileFilter}
                         >
                             <View style={{flexDirection:'row', alignItems:'center'}}>
-                                <Text style={{fontSize: 18, marginRight: 10}}>⚙️</Text>
+                                <Feather name="settings" size={18} color={SKETCHY_COLORS.text} style={{marginRight: 10}} />
                                 <View>
                                     <Text style={styles.webProfileFilterLabel}>Filtres de Perfil Actius</Text>
                                     <Text style={styles.webProfileFilterValue}>
@@ -597,20 +695,12 @@ const MapScreen = () => {
                     ) : ( 
                          // Guest 
                          <>
-                            {!showFilters ? (
-                                <TouchableOpacity 
-                                    onPress={() => setShowFilters(true)}
-                                    style={styles.webGuestFilterButton}
-                                >
-                                    <Text style={{marginRight: 6}}>⚙️</Text>
-                                    <Text style={{fontWeight: '600', color: '#333', fontSize: 13}}>Configurar Filtres</Text>
-                                </TouchableOpacity>
-                            ) : (
+                            {showFilters && (
                                 <View style={styles.webGuestFilterPanel}>
                                     <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 12, alignItems:'center'}}>
                                         <Text style={{fontWeight:'bold', color:'#333', fontSize: 13}}>FILTRAR PARTITS</Text>
                                         <TouchableOpacity onPress={() => setShowFilters(false)} style={{padding: 4}}>
-                                            <Text style={{fontSize: 10, color: '#999', fontWeight:'bold'}}>TANCAR ✕</Text>
+                                            <Feather name="x" size={16} color="#999" />
                                         </TouchableOpacity>
                                     </View>
                                     <View style={{flexDirection: 'row', gap: 10}}>
@@ -619,7 +709,16 @@ const MapScreen = () => {
                                             <select 
                                                 value={selectedSport}
                                                 onChange={(e: any) => { setSelectedSport(e.target.value); setSelectedTeam(''); }}
-                                                style={styles.webSelect}
+                                                style={{
+                                                    width: '100%',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    outline: 'none',
+                                                    color: SKETCHY_COLORS.text,
+                                                    fontSize: 16,
+                                                    fontFamily: 'Lora',
+                                                    fontWeight: 'bold'
+                                                }}
                                             >
                                                 <option value="">Esport (Qualsevol)</option>
                                                 <option value="Futbol">Futbol</option>
@@ -631,7 +730,16 @@ const MapScreen = () => {
                                                 value={selectedTeam}
                                                 onChange={(e: any) => setSelectedTeam(e.target.value)}
                                                 disabled={selectedSport === ''}
-                                                style={styles.webSelect}
+                                                style={{
+                                                    width: '100%',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    outline: 'none',
+                                                    color: SKETCHY_COLORS.text,
+                                                    fontSize: 16,
+                                                    fontFamily: 'Lora',
+                                                    fontWeight: 'bold'
+                                                }}
                                             >
                                                 <option value="">Equip (Qualsevol)</option>
                                                 {selectedSport === 'Futbol' && <option value="FC Barcelona">FC Barcelona</option>}
@@ -658,13 +766,12 @@ const MapScreen = () => {
         if (Platform.OS === 'web') {
             return (
                 <View style={styles.radiusContainer}>
-                        <View style={{flexDirection:'row', justifyContent:'space-between', alignItems: 'center', marginBottom: 5}}>
-                            <Text style={styles.radiusLabel}>Distància: {radiusKm < 1 ? `${Math.round(radiusKm*1000)}m` : `${radiusKm} km`}</Text>
-                            <Text style={{fontSize:10, color:'#999'}}>(Max: 5km)</Text>
-                        </View>
                         <View style={{ width: '100%', height: 30, justifyContent: 'center' }}>
                              {/* @ts-ignore */}
-                             <input type="range" min="0.1" max="5" step="0.1" value={radiusKm} onChange={(e: any) => setRadiusKm(parseFloat(e.target.value))} style={{ width: '100%', accentColor: '#2196F3', cursor: 'pointer', height: 8 }} />
+                             <input type="range" min="0.1" max="5" step="0.1" value={radiusKm} onChange={(e: any) => setRadiusKm(parseFloat(e.target.value))} style={{ width: '100%', accentColor: SKETCHY_COLORS.primary, cursor: 'pointer', height: 8 }} />
+                        </View>
+                        <View style={{alignItems: 'center', marginTop: 6}}>
+                            <Text style={styles.radiusLabel}>{radiusKm < 1 ? `${Math.round(radiusKm*1000)} m` : `${radiusKm} km`}</Text>
                         </View>
                 </View>
             )
@@ -683,7 +790,7 @@ const MapScreen = () => {
                 >
                     {user?.avatar 
                         ? <Image source={{uri: user.avatar}} style={{width: 44, height: 44, borderRadius: 22}} />
-                        : <Text style={{fontSize: 24}}>👤</Text>
+                        : <Feather name="user" size={24} color={SKETCHY_COLORS.text} />
                     }
                 </TouchableOpacity>
              </View>
@@ -696,7 +803,7 @@ const MapScreen = () => {
     if (!userLocation && !centerLocation) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#2196F3" />
+                <ActivityIndicator size="large" color={SKETCHY_COLORS.primary} />
                 <Text style={{marginTop:10}}>Obtenint la teva ubicació real...</Text>
             </View>
         );
@@ -771,10 +878,17 @@ const MapScreen = () => {
                     </SafeAreaView>
 
                     <TouchableOpacity 
+                        style={styles.fabSettings}
+                        onPress={() => setShowFilters(!showFilters)}
+                    >
+                        <Feather name="filter" size={24} color={SKETCHY_COLORS.text} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
                         style={styles.fabGps}
                         onPress={centerMapToGPS}
                     >
-                        <Text style={{ fontSize: 20 }}>📍</Text>
+                        <Feather name="crosshair" size={24} color={SKETCHY_COLORS.text} />
                     </TouchableOpacity>
 
                     <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
@@ -788,9 +902,18 @@ const MapScreen = () => {
 
              {/* DESKTOP GPS BUTTON */}
              {isDesktop && (
-                <TouchableOpacity style={[styles.fabGps, { right: 20, bottom: 20 }]} onPress={centerMapToGPS}>
-                    <Text style={{ fontSize: 20 }}>📍</Text>
-                </TouchableOpacity>
+                <>
+                    <TouchableOpacity 
+                        style={[styles.fabSettings, { right: 20, bottom: 80 }]} 
+                        onPress={() => setShowFilters(!showFilters)}
+                    >
+                         <Feather name="filter" size={24} color={SKETCHY_COLORS.text} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.fabGps, { right: 20, bottom: 20 }]} onPress={centerMapToGPS}>
+                        <Feather name="crosshair" size={24} color={SKETCHY_COLORS.text} />
+                    </TouchableOpacity>
+                </>
              )}
 
             <StatusBar style="dark" />
@@ -800,106 +923,120 @@ const MapScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { flex: 1, backgroundColor: SKETCHY_COLORS.bg },
     mapContainer: { flex: 1, width: '100%', height: '100%' },
     map: { width: '100%', height: '100%' },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCHY_COLORS.bg },
     
     // Top Bar & Header
     topBarContainer: {
-        position: 'absolute', top: 20, left: 0, right: 0, 
-        marginHorizontal: 'auto', paddingHorizontal: 16, zIndex: 10, maxWidth: 600, width: '100%'
+        position: 'absolute', top: 12, left: 0, right: 0,
+        marginHorizontal: 'auto', paddingHorizontal: 12, zIndex: 10, maxWidth: 600, width: '100%'
     },
     desktopSidebar: {
-        width: 400, backgroundColor: 'white', height: '100%', zIndex: 20,
+        width: 400, backgroundColor: SKETCHY_COLORS.bg, height: '100%', zIndex: 20,
         // @ts-ignore
-        boxShadow: '4px 0px 10px rgba(0,0,0,0.1)', borderRightWidth: 1, borderRightColor: '#eee',
+        boxShadow: '4px 0px 0px rgba(0,0,0,0.05)', borderRightWidth: 2, borderRightColor: '#eee',
         display: 'flex', flexDirection: 'column'
     },
-    desktopSidebarContent: { padding: 16, backgroundColor: 'white', zIndex: 2 },
+    desktopSidebarContent: { padding: 16, backgroundColor: SKETCHY_COLORS.bg, zIndex: 2 },
     
     searchBar: {
-        flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 10, alignItems: 'center',
-        ...Platform.select({ web: { boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }, android: { elevation: 4 }, ios: { shadowOpacity: 0.1 } })
+        flexDirection: 'row', backgroundColor: SKETCHY_COLORS.bg, borderRadius: 10, padding: 10, alignItems: 'center',
+        borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } }) // Hard shadow
     },
-    searchIconPlaceholder: { width: 20, height: 20, backgroundColor: '#ddd', marginRight: 10, borderRadius: 10 },
-    searchInput: { flex: 1, fontSize: 16, color: '#333' },
+    searchIconPlaceholder: { width: 12, height: 12, backgroundColor: SKETCHY_COLORS.text, marginRight: 10, borderRadius: 6 },
+    searchInput: { flex: 1, fontSize: 16, color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
     avatarButton: {
-        width: 48, height: 48, borderRadius: 24, marginLeft: 10, backgroundColor: 'white',
-        justifyContent: 'center', alignItems: 'center', ...Platform.select({ web: { boxShadow: '0 2px 5px rgba(0,0,0,0.1)', cursor: 'pointer' }, default: { elevation: 4 } })
+        width: 44, height: 44, borderRadius: 22, marginLeft: 10, backgroundColor: SKETCHY_COLORS.bg,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
 
-    // Markers
+    // Markers (Native)
     markerContainer: { alignItems: 'center', ...Platform.select({ web: { cursor: 'pointer' } }) },
     markerBubble: {
-        backgroundColor: 'white', padding: 5, borderRadius: 20, borderWidth: 1, borderColor: '#ddd',
-        ...Platform.select({ web: { boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }, default: { elevation: 3 } })
+        backgroundColor: SKETCHY_COLORS.bg, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: SKETCHY_COLORS.primary,
+        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.2)' } })
     },
-    markerBubbleSelected: { backgroundColor: '#2196F3', borderColor: '#1976D2', transform: [{ scale: 1.2 }], zIndex: 999 },
-    markerText: { fontSize: 16 },
+    markerBubbleSelected: { backgroundColor: SKETCHY_COLORS.primary, borderColor: SKETCHY_COLORS.text, transform: [{ scale: 1.1 }], zIndex: 999 },
+    markerText: { fontSize: 16, color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
     markerArrow: {
         width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid',
         borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
-        borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: 'white', marginTop: -2
+        borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: SKETCHY_COLORS.primary, marginTop: -2
     },
 
     // Bottom Sheet
     bottomSheet: {
-        position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white',
-        borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 30,
-        ...Platform.select({ web: { boxShadow: '0 -2px 4px rgba(0,0,0,0.1)' }, default: { elevation: 10 } }),
+        position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: SKETCHY_COLORS.bg,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 30,
+        borderWidth: 2, borderColor: '#eee', borderBottomWidth: 0,
+        ...Platform.select({ web: { boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' } }),
         zIndex: 20, minHeight: 120, maxWidth: 600, marginHorizontal: 'auto', alignSelf: 'center', width: '100%'
     },
     bottomSheetHandle: {
-        width: 60, height: 6, backgroundColor: '#ddd', borderRadius: 3, marginBottom: 12, alignSelf: 'center',
+        width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2, marginBottom: 12, alignSelf: 'center',
         ...Platform.select({ web: { cursor: 'grab' } })
     },
-    bottomSheetTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
+    bottomSheetTitle: { fontSize: 18, fontWeight: '600', color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
 
     // Fab
     fabGps: {
-        position: 'absolute', right: 16, bottom: 220, width: 48, height: 48, borderRadius: 24, backgroundColor: 'white',
+        position: 'absolute', right: 16, bottom: 135, width: 44, height: 44, borderRadius: 22, 
+        backgroundColor: SKETCHY_COLORS.bg, borderWidth: 2, borderColor: SKETCHY_COLORS.text,
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
-        ...Platform.select({ web: { boxShadow: '0 2px 4px rgba(0,0,0,0.2)', cursor: 'pointer' }, default: { elevation: 5 } })
+        ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+    },
+    fabSettings: {
+        position: 'absolute', right: 16, bottom: 190, width: 44, height: 44, borderRadius: 22, 
+        backgroundColor: SKETCHY_COLORS.bg, borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+        justifyContent: 'center', alignItems: 'center', zIndex: 15,
+        ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
 
     // Web Styles
-    radiusContainer: { backgroundColor: 'white', padding: 10, marginTop: 10, borderRadius: 16, ...Platform.select({ web: { boxShadow: '0 1px 2px rgba(0,0,0,0.1)' } }) },
-    radiusLabel: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 8 },
-    webProfileFilter: {
-        backgroundColor: '#E3F2FD', padding: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        borderWidth: 1, borderColor: '#BBDEFB', ...Platform.select({ web: { cursor: 'pointer' } })
+    radiusContainer: {
+        backgroundColor: 'transparent', padding: 0, marginTop: 4
     },
-    webProfileFilterLabel: { fontSize: 10, color: '#1565C0', fontWeight: 'bold', textTransform:'uppercase' },
-    webProfileFilterValue: { fontSize: 14, color: '#0D47A1', fontWeight:'500' },
+    radiusLabel: { fontSize: 14, fontWeight: 'bold', color: SKETCHY_COLORS.text, marginBottom: 0, fontFamily: 'Lora' },
+    
+    webProfileFilter: {
+        backgroundColor: 'transparent', padding: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        borderWidth: 2, borderColor: SKETCHY_COLORS.text, borderStyle: 'dashed', marginTop: 8,
+        ...Platform.select({ web: { cursor: 'pointer' } })
+    },
+    webProfileFilterLabel: { fontSize: 12, color: SKETCHY_COLORS.text, fontWeight: 'bold', fontFamily: 'Lora' },
+    webProfileFilterValue: { fontSize: 14, color: SKETCHY_COLORS.primary, fontWeight:'bold', fontFamily: 'Lora' },
     webGuestFilterButton: {
-        backgroundColor: 'white', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 24, 
+        backgroundColor: SKETCHY_COLORS.bg, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, 
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start',
-        borderWidth: 1, borderColor: '#eee', ...Platform.select({ web: { boxShadow: '0 1px 3px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+        borderWidth: 2, borderColor: SKETCHY_COLORS.text, 
+        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
     webGuestFilterPanel: {
-        backgroundColor: 'white', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#eee',
-        ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.05)' } })
+        backgroundColor: SKETCHY_COLORS.bg, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.05)' } })
     },
-    webSelectContainer: { flex: 1, backgroundColor: '#f5f5f7', borderRadius: 8, height: 40, justifyContent: 'center', paddingHorizontal: 10 },
-    webSelect: { width: '100%', border: 'none', background: 'transparent', outline: 'none', color: '#333', fontSize: 14 },
+    webSelectContainer: { flex: 1, backgroundColor: 'transparent', borderRadius: 0, height: 40, justifyContent: 'center', paddingHorizontal: 10, borderBottomWidth: 2, borderBottomColor: SKETCHY_COLORS.text },
 
     // Detail
     detailContainer: { flex: 1 },
     detailHeader: { flexDirection: 'row', marginBottom: 16 },
-    barImage: { width: 80, height: 80, borderRadius: 12, marginRight: 12, backgroundColor: '#eee' },
+    barImage: { width: 80, height: 80, borderRadius: 8, marginRight: 12, backgroundColor: '#eee', borderWidth: 2, borderColor: SKETCHY_COLORS.text },
     headerInfo: { flex: 1, justifyContent: 'space-around' },
-    barName: { fontSize: 18, fontWeight: 'bold', color: '#222' },
+    barName: { fontSize: 20, fontWeight: 'bold', color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
     ratingContainer: { flexDirection: 'row', alignItems: 'center' },
-    ratingText: { fontWeight: 'bold', marginRight: 8 },
-    statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12, overflow: 'hidden' },
+    ratingText: { fontWeight: 'bold', marginRight: 8, color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
+    statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12, overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1, borderColor: '#ccc' },
     open: { backgroundColor: '#E8F5E9', color: '#2E7D32' },
     closed: { backgroundColor: '#FFEBEE', color: '#C62828' },
-    matchCard: { backgroundColor: '#F5F5F7', padding: 12, borderRadius: 12, marginBottom: 16 },
-    matchTitle: { fontSize: 12, color: '#666', marginBottom: 8, textTransform: 'uppercase' },
+    matchCard: { backgroundColor: '#fff', padding: 12, borderRadius: 0, marginBottom: 16, borderWidth: 1, borderColor: SKETCHY_COLORS.text, borderStyle: 'dashed' },
+    matchTitle: { fontSize: 14, color: SKETCHY_COLORS.text, marginBottom: 8, fontFamily: 'Lora', fontWeight: 'bold' },
     matchTeams: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-    teamText: { fontSize: 16, fontWeight: '600', width: '40%', textAlign: 'center' },
-    vsText: { color: '#999', marginHorizontal: 10 },
+    teamText: { fontSize: 18, fontWeight: 'bold', width: '40%', textAlign: 'center', fontFamily: 'Lora', color: SKETCHY_COLORS.text },
+    vsText: { color: SKETCHY_COLORS.primary, marginHorizontal: 10, fontFamily: 'Lora', fontWeight: 'bold' },
 });
 
 export default MapScreen;
