@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ensureLoraOnWeb, sketchFontFamily, SKETCH_THEME } from '../theme/sketchTheme';
 
 // Define the navigation types (we can move this to a types file later)
 export type RootStackParamList = {
@@ -14,12 +15,7 @@ type Props = {
 
 const StartupScreen = ({ navigation }: Props) => {
   useEffect(() => {
-    if (Platform.OS === 'web') {
-        const fontLink = document.createElement('link');
-        fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap';
-        fontLink.rel = 'stylesheet';
-        document.head.appendChild(fontLink);
-    }
+    ensureLoraOnWeb();
 
     // Simulació de càrrega de recursos i verificació de sessió
     const timer = setTimeout(() => {
@@ -45,7 +41,7 @@ const StartupScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFBF0', // Paper/Cream background
+    backgroundColor: SKETCH_THEME.colors.bg, // Paper/Cream background
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -55,8 +51,8 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#3E2723', // Dark Brown
-    fontFamily: 'Lora',
+    color: SKETCH_THEME.colors.text, // Dark Brown
+    fontFamily: sketchFontFamily(),
     letterSpacing: 2,
   },
   loader: {
@@ -65,9 +61,9 @@ const styles = StyleSheet.create({
   copyright: {
     position: 'absolute',
     bottom: 30,
-    color: '#8D6E63',
+    color: SKETCH_THEME.colors.accent,
     fontSize: 12,
-    fontFamily: 'Lora',
+    fontFamily: sketchFontFamily(),
   },
 });
 
