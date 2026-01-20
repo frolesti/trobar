@@ -36,6 +36,11 @@ const deg2rad = (deg: number) => {
   return deg * (Math.PI/180)
 };
 
+// Helper (Shared)
+const getCleanBarName = (name: string) => {
+    return name.replace(/\s\d+$/, '');
+};
+
 // --- STYLES & ASSETS FOR SKETCHY UI ---
 const SKETCHY_COLORS = {
     bg: '#FFFBF0', // Paper/Cream background
@@ -451,7 +456,7 @@ const MapScreen = () => {
             const marker = new window.google.maps.Marker({
                 position: { lat: bar.latitude, lng: bar.longitude },
                 map: googleMapRef.current,
-                title: bar.name,
+                title: getCleanBarName(bar.name),
                 icon: { 
                     path: SKETCHY_PIN_PATH, 
                     fillColor: SKETCHY_COLORS.primary, 
@@ -528,7 +533,13 @@ const MapScreen = () => {
     };
 
      const openExternalMaps = (bar: Bar) => {
-        let url = `https://www.google.com/maps/dir/?api=1&destination=${bar.latitude},${bar.longitude}&travelmode=walking`;
+        // Clean the name in case it has the legacy number suffix (e.g. "Bar Name 12")
+        // We use the Name for destination because our database coordinates are approximate (randomized),
+        // so searching by name gives users the actual real-world location of the venue.
+        const cleanName = getCleanBarName(bar.name);
+        const destinationQuery = encodeURIComponent(`${cleanName}, Barcelona, Spain`);
+        
+        let url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}&travelmode=walking`;
 
         // Afegim l'origen explícitament per assegurar que Google Maps fa servir la mateixa ubicació que l'app
         // Això soluciona possibles discrepàncies si el GPS del navegador va amb retard
@@ -555,7 +566,7 @@ const MapScreen = () => {
                             onError={() => setFailedImages((prev) => (prev[selectedBar.id] ? prev : { ...prev, [selectedBar.id]: true }))}
                         />
                         <View style={styles.headerInfo}>
-                            <Text style={styles.barName}>{selectedBar.name}</Text>
+                            <Text style={styles.barName}>{getCleanBarName(selectedBar.name)}</Text>
                             <View style={styles.ratingContainer}>
                                 <Feather name="star" size={14} color={SKETCHY_COLORS.text} style={{marginRight: 4}} />
                                 <Text style={styles.ratingText}>{selectedBar.rating}</Text>
@@ -621,7 +632,7 @@ const MapScreen = () => {
                                  onError={() => setFailedImages((prev) => (prev[bar.id] ? prev : { ...prev, [bar.id]: true }))}
                              />
                              <View style={{marginLeft: 12, justifyContent:'center'}}>
-                                 <Text style={{fontWeight:'bold', fontSize: 14, fontFamily: 'Lora'}}>{bar.name}</Text>
+                                 <Text style={{fontWeight:'bold', fontSize: 14, fontFamily: 'Lora'}}>{getCleanBarName(bar.name)}</Text>
                                  <Text style={{fontSize: 12, color:'#666', fontFamily: 'Lora'}}>
                                     A {getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude).toFixed(1)} km
                                  </Text>
@@ -876,7 +887,7 @@ const MapScreen = () => {
                                 <Marker
                                     key={bar.id}
                                     coordinate={{ latitude: bar.latitude, longitude: bar.longitude }}
-                                    title={bar.name}
+                                    title={getCleanBarName(bar.name)}
                                     onPress={() => setSelectedBar(bar)}
                                 >
                                      <View style={[styles.markerContainer]}>

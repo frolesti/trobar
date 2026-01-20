@@ -49,7 +49,8 @@ export const seedDatabase = async () => {
             const lngOffset = (Math.random() - 0.5) * 0.06;
 
             const match = matches[i % matches.length];
-            const name = barNames[i % barNames.length] + " " + (i+1);
+            // Fix: Clean name without random number suffix for better Google Maps integration
+            const name = barNames[i % barNames.length]; 
 
             const barData = {
                 id: barId,
