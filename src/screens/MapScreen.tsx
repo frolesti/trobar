@@ -101,6 +101,8 @@ const MapScreen = () => {
     // Filters UI removed from the initial screen; sport/team filters still apply from profile state.
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
 
+    const [isSearchSettingsOpen, setIsSearchSettingsOpen] = useState(false);
+
     // Force local placeholder if a remote image fails to load
     const [failedImages, setFailedImages] = useState<Record<string, true>>({});
 
@@ -131,8 +133,12 @@ const MapScreen = () => {
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponderCapture: () => true,
             onMoveShouldSetPanResponder: (_, gestureState) => {
-                return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 5;
+                return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 2;
+            },
+            onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+                return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 2;
             },
             onPanResponderMove: (_, gestureState) => {
                 if (isDesktop) return; // No drag on desktop
@@ -297,12 +303,13 @@ const MapScreen = () => {
          if (Platform.OS !== 'web' || !isDesktop) {
             // Mòbil o Native
             if (selectedBar) {
+                const target = Math.min(Math.max(380, height * 0.58), height * 0.78);
                 Animated.timing(bottomSheetHeight, {
-                    toValue: 280, 
+                    toValue: target,
                     duration: 300,
                     useNativeDriver: false
                 }).start();
-                lastHeight.current = 280;
+                lastHeight.current = target;
             } else {
                 Animated.timing(bottomSheetHeight, {
                     toValue: 120, 
@@ -334,6 +341,16 @@ const MapScreen = () => {
          }
 
     }, [selectedBar, isDesktop]);
+
+    const resetFiltersToProfile = () => {
+        if (!user) {
+            setSelectedSport('');
+            setSelectedTeam('');
+            return;
+        }
+        setSelectedSport(user.favoriteSport || '');
+        setSelectedTeam(user.favoriteTeam || '');
+    };
 
     // --- WEB HELPERS ---
     const initWebMap = () => {
@@ -671,6 +688,97 @@ const MapScreen = () => {
     // Filters UI removed from the initial screen.
     const renderFilters = () => null;
 
+    const renderSearchSettingsOverlay = () => {
+        if (!isSearchSettingsOpen) return null;
+
+        return (
+            <View style={styles.settingsOverlay}>
+                <View style={styles.settingsCard}>
+                    <View style={styles.settingsHeader}>
+                        <Text style={styles.settingsTitle}>Cerca de partits</Text>
+                        <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={{ padding: 6 }}>
+                            <Feather name="x" size={18} color={SKETCHY_COLORS.text} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.settingsHint}>
+                        Configura els filtres de cerca per aquesta sessió.
+                    </Text>
+
+                    {Platform.OS === 'web' ? (
+                        <>
+                            <Text style={styles.settingsLabel}>Esport</Text>
+                            <View style={styles.webSelectContainer}>
+                                {/* @ts-ignore */}
+                                <select
+                                    value={selectedSport}
+                                    onChange={(e: any) => { setSelectedSport(e.target.value); setSelectedTeam(''); }}
+                                    style={{
+                                        width: '100%',
+                                        border: 'none',
+                                        background: 'transparent',
+                                        outline: 'none',
+                                        color: SKETCHY_COLORS.text,
+                                        fontSize: 16,
+                                        fontFamily: 'Lora',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    <option value="">Qualsevol</option>
+                                    <option value="Futbol">Futbol</option>
+                                </select>
+                            </View>
+
+                            <Text style={styles.settingsLabel}>Equip</Text>
+                            <View style={[styles.webSelectContainer, selectedSport === '' && { backgroundColor: '#f0f0f0', opacity: 0.6 }]}>
+                                {/* @ts-ignore */}
+                                <select
+                                    value={selectedTeam}
+                                    onChange={(e: any) => setSelectedTeam(e.target.value)}
+                                    disabled={selectedSport === ''}
+                                    style={{
+                                        width: '100%',
+                                        border: 'none',
+                                        background: 'transparent',
+                                        outline: 'none',
+                                        color: SKETCHY_COLORS.text,
+                                        fontSize: 16,
+                                        fontFamily: 'Lora',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    <option value="">Qualsevol</option>
+                                    {selectedSport === 'Futbol' && <option value="FC Barcelona">FC Barcelona</option>}
+                                    {selectedSport === 'Futbol' && <option value="Real Madrid">Real Madrid</option>}
+                                    {selectedSport === 'Futbol' && <option value="RCD Espanyol">RCD Espanyol</option>}
+                                    {selectedSport === 'Futbol' && <option value="Girona FC">Girona FC</option>}
+                                </select>
+                            </View>
+                        </>
+                    ) : (
+                        <Text style={styles.settingsHint}>Filtres avançats: pendent d’implementar a mòbil natiu.</Text>
+                    )}
+
+                    <View style={styles.settingsActions}>
+                        <TouchableOpacity onPress={resetFiltersToProfile} style={styles.settingsActionSecondary}>
+                            <Text style={styles.settingsActionSecondaryText}>{user ? 'Restablir (perfil)' : 'Reiniciar'}</Text>
+                        </TouchableOpacity>
+
+                        {user && (
+                            <TouchableOpacity onPress={() => { setIsSearchSettingsOpen(false); navigation.navigate('Profile'); }} style={styles.settingsActionSecondary}>
+                                <Text style={styles.settingsActionSecondaryText}>Editar perfil</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={styles.settingsActionPrimary}>
+                            <Text style={styles.settingsActionPrimaryText}>Fet</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
     const renderRadiusSlider = () => {
         if (Platform.OS === 'web') {
             return (
@@ -693,6 +801,12 @@ const MapScreen = () => {
         <View style={isDesktop ? styles.desktopSidebarContent : styles.topBarContainer}>
              <View style={{flexDirection: 'row', alignItems: 'center'}}>
                  {renderSearchBarInput()}
+                 <TouchableOpacity 
+                    style={styles.headerIconButton}
+                    onPress={() => setIsSearchSettingsOpen(true)}
+                 >
+                    <Feather name="sliders" size={22} color={SKETCHY_COLORS.text} />
+                 </TouchableOpacity>
                  <TouchableOpacity 
                     style={styles.avatarButton}
                     onPress={() => user ? navigation.navigate('Profile' as any) : navigation.navigate('Login' as any)}
@@ -794,7 +908,9 @@ const MapScreen = () => {
                     </TouchableOpacity>
 
                     <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
-                        <View {...panResponder.panHandlers} style={styles.bottomSheetHandle} />
+                        <View {...panResponder.panHandlers} style={styles.bottomSheetGrabArea}>
+                            <View style={styles.bottomSheetHandle} />
+                        </View>
                         <View style={{flex: 1, overflow: 'hidden'}}>
                             {renderContentPanel()}
                         </View>
@@ -812,6 +928,8 @@ const MapScreen = () => {
              )}
 
             <StatusBar style="dark" />
+
+            {renderSearchSettingsOverlay()}
         </View>
     );
 
@@ -848,6 +966,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: SKETCHY_COLORS.text,
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
+    headerIconButton: {
+        width: 44, height: 44, borderRadius: 22, marginLeft: 10, backgroundColor: SKETCHY_COLORS.bg,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+    },
 
     // Markers (Native)
     markerContainer: { alignItems: 'center', ...Platform.select({ web: { cursor: 'pointer' } }) },
@@ -871,9 +994,16 @@ const styles = StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' } }),
         zIndex: 20, minHeight: 120, maxWidth: 600, marginHorizontal: 'auto', alignSelf: 'center', width: '100%'
     },
-    bottomSheetHandle: {
-        width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2, marginBottom: 12, alignSelf: 'center',
+    bottomSheetGrabArea: {
+        width: '100%',
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: -8,
         ...Platform.select({ web: { cursor: 'grab' } })
+    },
+    bottomSheetHandle: {
+        width: 54, height: 6, backgroundColor: '#ccc', borderRadius: 3, alignSelf: 'center',
     },
     bottomSheetTitle: { fontSize: 18, fontWeight: '600', color: SKETCHY_COLORS.text, fontFamily: 'Lora' },
 
@@ -915,6 +1045,92 @@ const styles = StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.05)' } })
     },
     webSelectContainer: { flex: 1, backgroundColor: 'transparent', borderRadius: 0, height: 40, justifyContent: 'center', paddingHorizontal: 10, borderBottomWidth: 2, borderBottomColor: SKETCHY_COLORS.text },
+
+    // Search settings overlay
+    settingsOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.25)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+        zIndex: 999,
+    },
+    settingsCard: {
+        width: '100%',
+        maxWidth: 520,
+        backgroundColor: SKETCHY_COLORS.bg,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: SKETCHY_COLORS.text,
+        padding: 16,
+        ...Platform.select({ web: { boxShadow: '6px 6px 0px rgba(0,0,0,0.08)' } }),
+    },
+    settingsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    settingsTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: SKETCHY_COLORS.text,
+        fontFamily: 'Lora',
+    },
+    settingsHint: {
+        fontSize: 12,
+        color: '#666',
+        marginBottom: 12,
+        fontFamily: 'Lora',
+    },
+    settingsLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: SKETCHY_COLORS.text,
+        marginTop: 10,
+        marginBottom: 6,
+        fontFamily: 'Lora',
+    },
+    settingsActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginTop: 16,
+        gap: 10,
+        flexWrap: 'wrap',
+    },
+    settingsActionSecondary: {
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: SKETCHY_COLORS.text,
+        backgroundColor: 'transparent',
+        ...Platform.select({ web: { cursor: 'pointer' } })
+    },
+    settingsActionSecondaryText: {
+        fontFamily: 'Lora',
+        fontWeight: 'bold',
+        color: SKETCHY_COLORS.text,
+    },
+    settingsActionPrimary: {
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: SKETCHY_COLORS.text,
+        backgroundColor: SKETCHY_COLORS.primary,
+        ...Platform.select({ web: { cursor: 'pointer' } })
+    },
+    settingsActionPrimaryText: {
+        fontFamily: 'Lora',
+        fontWeight: 'bold',
+        color: 'white',
+    },
 
     // Detail
     detailContainer: { flex: 1 },
