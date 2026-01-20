@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { updateUserProfile, uploadProfileImage } from '../services/userService';
+import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
 
 const SPORTS = ['Futbol'];
 const TEAMS = ['FC Barcelona', 'Real Madrid', 'RCD Espanyol', 'Girona FC'];
@@ -35,6 +36,10 @@ export default function ProfileScreen() {
         setAvatarUri(user.avatar || '');
     }
   }, [user, isEditing]);
+
+  useEffect(() => {
+    ensureLoraOnWeb();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -90,7 +95,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
         <TouchableOpacity 
@@ -99,7 +104,7 @@ export default function ProfileScreen() {
             disabled={isLoading}
         >
             {isLoading ? 
-                <ActivityIndicator size="small" color="#007AFF" /> : 
+              <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} /> : 
                 <Text style={styles.editButtonText}>{isEditing ? "Guardar" : "Editar"}</Text>
             }
         </TouchableOpacity>
@@ -207,7 +212,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: SKETCH_THEME.colors.bg,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
@@ -215,11 +220,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    backgroundColor: 'white',
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: { elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 2 }
-    }),
+    backgroundColor: SKETCH_THEME.colors.uiBg,
+    borderBottomWidth: 1,
+    borderBottomColor: SKETCH_THEME.colors.border,
+    ...(sketchShadow() as object),
   },
   backButton: {
     padding: 8,
@@ -227,15 +231,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: SKETCH_THEME.colors.text,
+    fontFamily: sketchFontFamily(),
   },
   editButton: {
       padding: 8,
   },
   editButtonText: {
-      color: '#007AFF',
-      fontWeight: '600',
-      fontSize: 16
+      color: SKETCH_THEME.colors.primary,
+      fontWeight: '700',
+      fontSize: 16,
+      fontFamily: sketchFontFamily(),
   },
   content: {
     padding: 20,
@@ -252,103 +258,111 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     backgroundColor: '#E1E1E1',
     borderWidth: 3,
-    borderColor: 'white',
+    borderColor: SKETCH_THEME.colors.card,
   },
   changePhotoButton: {
       position: 'absolute',
       bottom: 0,
       right: 0,
-      backgroundColor: '#007AFF',
+      backgroundColor: SKETCH_THEME.colors.primary,
       width: 36,
       height: 36,
       borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 2,
-      borderColor: 'white'
+      borderColor: SKETCH_THEME.colors.card,
   },
   helperText: {
       fontSize: 12,
-      color: '#666',
+      color: SKETCH_THEME.colors.textMuted,
       marginBottom: 20,
+      fontFamily: sketchFontFamily(),
   },
   formContainer: {
       width: '100%',
-      backgroundColor: 'white',
+      backgroundColor: SKETCH_THEME.colors.uiBg,
       borderRadius: 16,
       padding: 24,
-      ...Platform.select({
-        web: { boxShadow: '0 4px 12px rgba(0,0,0,0.05)' },
-        default: { elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 }
-      }),
+      borderWidth: 1,
+      borderColor: SKETCH_THEME.colors.border,
+      ...(sketchShadow() as object),
       marginBottom: 24
   },
   label: {
       fontSize: 12,
-      color: '#888',
+      color: SKETCH_THEME.colors.accent,
       textTransform: 'uppercase',
       marginBottom: 4,
       marginTop: 12,
-      letterSpacing: 1
+      letterSpacing: 1,
+      fontFamily: sketchFontFamily(),
   },
   value: {
       fontSize: 16,
-      color: '#333',
+      color: SKETCH_THEME.colors.text,
       paddingVertical: 4,
-      fontWeight: '500'
+      fontWeight: '600',
+      fontFamily: sketchFontFamily(),
   },
   input: {
       fontSize: 16,
-      color: '#333',
+      color: SKETCH_THEME.colors.text,
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: '#DDD',
-      fontWeight: '500'
+      borderBottomColor: SKETCH_THEME.colors.border,
+      fontWeight: '600',
+      fontFamily: sketchFontFamily(),
   },
   readOnly: {
-      color: '#888'
+      color: SKETCH_THEME.colors.textMuted,
   },
   divider: {
       height: 1,
-      backgroundColor: '#EEEEEE',
+      backgroundColor: SKETCH_THEME.colors.border,
       marginVertical: 20
   },
   sectionTitle: {
       fontSize: 18,
       fontWeight: 'bold',
       marginBottom: 8,
-      color: '#333'
+      color: SKETCH_THEME.colors.text,
+      fontFamily: sketchFontFamily(),
   },
   logoutButton: {
     width: '100%',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#FFEBEE',
+    backgroundColor: SKETCH_THEME.colors.primarySoft,
+    borderWidth: 1,
+    borderColor: 'rgba(211, 47, 47, 0.25)',
     alignItems: 'center',
   },
   logoutText: {
-    color: '#D32F2F',
+    color: SKETCH_THEME.colors.primary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: sketchFontFamily(),
   },
   cancelButton: {
       marginTop: 10,
       padding: 12
   },
   cancelText: {
-      color: '#666',
-      fontSize: 14
+      color: SKETCH_THEME.colors.textMuted,
+      fontSize: 14,
+      fontFamily: sketchFontFamily(),
   },
   pickerContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: '#DDD',
+    borderBottomColor: SKETCH_THEME.colors.border,
     // marginBottom: 8, 
   },
   picker: {
     width: '100%',
     ...Platform.select({
       android: {
-         color: '#333',
+         color: SKETCH_THEME.colors.text,
       }
     })
   }

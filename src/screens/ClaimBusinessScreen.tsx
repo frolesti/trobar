@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
+import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ClaimBusiness'>;
@@ -17,6 +19,10 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
       email: '',
       cif: ''
   });
+
+    useEffect(() => {
+        ensureLoraOnWeb();
+    }, []);
 
   const handleSubmit = () => {
     // Aquí aniria la lògica d'enviar al backend
@@ -48,6 +54,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                 <TextInput 
                     style={styles.input} 
                     placeholder="El teu Nom Complet" 
+                    placeholderTextColor={SKETCH_THEME.colors.textMuted}
                     value={formData.name}
                     onChangeText={(t: string) => setFormData({...formData, name: t})}
                 />
@@ -56,6 +63,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     style={styles.input} 
                     placeholder="Telèfon de Contacte" 
                     keyboardType="phone-pad"
+                    placeholderTextColor={SKETCH_THEME.colors.textMuted}
                     value={formData.phone}
                     onChangeText={(t: string) => setFormData({...formData, phone: t})}
                 />
@@ -65,6 +73,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     placeholder="Email Corporatiu" 
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    placeholderTextColor={SKETCH_THEME.colors.textMuted}
                     value={formData.email}
                     onChangeText={(t: string) => setFormData({...formData, email: t})}
                 />
@@ -73,12 +82,16 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                 <TextInput 
                     style={styles.input} 
                     placeholder="CIF / NIF del Negoci" 
+                    placeholderTextColor={SKETCH_THEME.colors.textMuted}
                     value={formData.cif}
                     onChangeText={(t: string) => setFormData({...formData, cif: t})}
                 />
                 
                 <TouchableOpacity style={styles.uploadButton}>
-                    <Text style={styles.uploadButtonText}>📎 Adjuntar Factura o Document (Opcional)</Text>
+                    <View style={styles.uploadRow}>
+                        <Feather name="paperclip" size={16} color={SKETCH_THEME.colors.primary} />
+                        <Text style={styles.uploadButtonText}>Adjuntar Factura o Document (Opcional)</Text>
+                    </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
@@ -97,7 +110,7 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: SKETCH_THEME.colors.bg,
   },
   scrollContent: {
       padding: 20,
@@ -110,79 +123,88 @@ const styles = StyleSheet.create({
   headerTitle: {
       fontSize: 28,
       fontWeight: 'bold',
-      color: '#333',
+      color: SKETCH_THEME.colors.text,
       marginBottom: 8,
+      fontFamily: sketchFontFamily(),
   },
   headerSubtitle: {
       fontSize: 16,
-      color: '#666',
+      color: SKETCH_THEME.colors.textMuted,
       lineHeight: 22,
+      fontFamily: sketchFontFamily(),
   },
   formCard: {
-      backgroundColor: 'white',
+      backgroundColor: SKETCH_THEME.colors.uiBg,
       borderRadius: 16,
       padding: 20,
       marginBottom: 20,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
+      borderWidth: 1,
+      borderColor: SKETCH_THEME.colors.border,
+      ...(sketchShadow() as object),
   },
   sectionTitle: {
       fontSize: 14,
       fontWeight: 'bold',
-      color: '#999',
+      color: SKETCH_THEME.colors.accent,
       textTransform: 'uppercase',
       marginBottom: 12,
       marginTop: 8,
+      fontFamily: sketchFontFamily(),
   },
   input: {
-      backgroundColor: '#FAFAFA',
+      backgroundColor: SKETCH_THEME.colors.card,
       borderWidth: 1,
-      borderColor: '#E0E0E0',
+      borderColor: SKETCH_THEME.colors.border,
       borderRadius: 12,
       padding: 14,
       fontSize: 16,
       marginBottom: 16,
+      color: SKETCH_THEME.colors.text,
+      fontFamily: sketchFontFamily(),
   },
   uploadButton: {
       padding: 16,
       borderWidth: 1,
-      borderColor: '#2196F3',
+      borderColor: 'rgba(211, 47, 47, 0.45)',
       borderStyle: 'dashed',
       borderRadius: 12,
       alignItems: 'center',
       marginBottom: 24,
-      backgroundColor: '#E3F2FD',
+      backgroundColor: SKETCH_THEME.colors.primarySoft,
+  },
+  uploadRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
   },
   uploadButtonText: {
-      color: '#2196F3',
-      fontWeight: '500',
+      color: SKETCH_THEME.colors.primary,
+      fontWeight: '700',
+      fontFamily: sketchFontFamily(),
   },
   submitButton: {
-      backgroundColor: '#2196F3',
+      backgroundColor: SKETCH_THEME.colors.primary,
       padding: 16,
       borderRadius: 12,
       alignItems: 'center',
-      shadowColor: '#2196F3',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
+      borderWidth: 1,
+      borderColor: 'rgba(211, 47, 47, 0.35)',
+      ...(sketchShadow() as object),
   },
   submitButtonText: {
       color: 'white',
       fontSize: 16,
       fontWeight: 'bold',
+      fontFamily: sketchFontFamily(),
   },
   cancelButton: {
       alignItems: 'center',
       padding: 16,
   },
   cancelButtonText: {
-      color: '#666',
-      fontWeight: '600',
+      color: SKETCH_THEME.colors.textMuted,
+      fontWeight: '700',
+      fontFamily: sketchFontFamily(),
   },
 });
 
