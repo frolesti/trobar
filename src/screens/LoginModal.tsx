@@ -15,6 +15,7 @@ const LoginModal = ({ navigation }: Props) => {
   // UI State
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Form State
   const [email, setEmail] = useState('');
@@ -22,30 +23,39 @@ const LoginModal = ({ navigation }: Props) => {
   const [name, setName] = useState('');
 
   const handleGoogleLogin = async () => {
+    setLocalError(null);
     try {
         await loginGoogle();
         navigation.goBack();
-    } catch (e) {
-        // Error ja gestionat al context
+    } catch (e: any) {
+        setLocalError(e.message || "No s'ha pogut iniciar sessió amb Google.");
     }
   };
 
   const handleAppleLogin = async () => {
+      setLocalError(null);
       try {
           await loginApple();
           navigation.goBack();
-      } catch (e) {
-          // Error gestionat
+      } catch (e: any) {
+          console.error(e);
+          // check for specific firebase error codes if needed
+          if (e.code === 'auth/operation-not-allowed') {
+             setLocalError("L'inici de sessió amb Apple no està habilitat en aquest moment.");
+          } else {
+             setLocalError("No s'ha pogut iniciar sessió amb Apple.");
+          }
       }
   };
 
   const handleEmailSubmit = async () => {
+      setLocalError(null);
       if (!email || !password) {
-          Alert.alert("Error", "Si us plau, omple tots els camps.");
+          setLocalError("Si us plau, omple tots els camps.");
           return;
       }
       if (isRegistering && !name) {
-          Alert.alert("Error", "Necessitem el teu nom.");
+          setLocalError("Necessitem el teu nom.");
           return;
       }
 
@@ -57,7 +67,7 @@ const LoginModal = ({ navigation }: Props) => {
           }
           navigation.goBack();
       } catch (error: any) {
-          Alert.alert("Error d'autenticació", error.message || "Hi ha hagut un problema.");
+          setLocalError(error.message || "Hi ha hagut un problema amb el correu.");
       }
   };
 
@@ -135,6 +145,12 @@ const LoginModal = ({ navigation }: Props) => {
 
         <View style={styles.content}>
             
+            {localError && (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>⚠️ {localError}</Text>
+                </View>
+            )}
+
             {!showEmailForm && (
                 <View style={styles.header}>
                     <Text style={styles.emoji}>👋</Text>
@@ -325,6 +341,24 @@ const styles = StyleSheet.create({
       fontSize: 16,
       fontWeight: 'bold',
   },
+  errorContainer: {
+    width: '100%',
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  errorText: {
+      color: '#D32F2F',
+      fontSize: 14,
+      fontWeight: '500',
+      textAlign: 'center'
+  }
 });
 
 export default LoginModal;
