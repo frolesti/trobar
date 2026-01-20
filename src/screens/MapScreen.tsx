@@ -98,7 +98,7 @@ const MapScreen = () => {
     // State Web / Advanced Filters
     const [selectedSport, setSelectedSport] = useState('');
     const [selectedTeam, setSelectedTeam] = useState('');
-    const [showFilters, setShowFilters] = useState(false); // Guest mode filters
+    // Filters UI removed from the initial screen; sport/team filters still apply from profile state.
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
 
     // Force local placeholder if a remote image fails to load
@@ -668,99 +668,8 @@ const MapScreen = () => {
         );
     };
     
-    // Web Filters rely on <select>, Native needs UI adaptation. 
-    // Implementing Hybrid:
-    const renderFilters = () => {
-         if (Platform.OS === 'web') {
-              // ... Reuse Web Select Implementation
-             return (
-                 <View style={{ marginTop: (user || showFilters) ? 8 : 0, marginBottom: (user || showFilters) ? 4 : 0 }}>
-                {user ? (
-                        <TouchableOpacity 
-                            onPress={() => navigation.navigate('Profile')}
-                            style={styles.webProfileFilter}
-                        >
-                            <View style={{flexDirection:'row', alignItems:'center'}}>
-                                <Feather name="settings" size={18} color={SKETCHY_COLORS.text} style={{marginRight: 10}} />
-                                <View>
-                                    <Text style={styles.webProfileFilterLabel}>Filtres de Perfil Actius</Text>
-                                    <Text style={styles.webProfileFilterValue}>
-                                        {selectedSport || "Cap esport"} {selectedTeam ? ` • ${selectedTeam}` : ""}
-                                        {!selectedSport && !selectedTeam && "Sense filtres configurats"}
-                                    </Text>
-                                </View>
-                            </View>
-                            <Text style={{fontSize: 12, color: '#1976D2', fontWeight:'600'}}>EDITAR</Text>
-                        </TouchableOpacity>
-                    ) : ( 
-                         // Guest 
-                         <>
-                            {showFilters && (
-                                <View style={styles.webGuestFilterPanel}>
-                                    <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 12, alignItems:'center'}}>
-                                        <Text style={{fontWeight:'bold', color:'#333', fontSize: 13}}>FILTRAR PARTITS</Text>
-                                        <TouchableOpacity onPress={() => setShowFilters(false)} style={{padding: 4}}>
-                                            <Feather name="x" size={16} color="#999" />
-                                        </TouchableOpacity>
-                                    </View>
-                                    <View style={{flexDirection: 'row', gap: 10}}>
-                                        <View style={styles.webSelectContainer}>
-                                            {/* @ts-ignore */}
-                                            <select 
-                                                value={selectedSport}
-                                                onChange={(e: any) => { setSelectedSport(e.target.value); setSelectedTeam(''); }}
-                                                style={{
-                                                    width: '100%',
-                                                    border: 'none',
-                                                    background: 'transparent',
-                                                    outline: 'none',
-                                                    color: SKETCHY_COLORS.text,
-                                                    fontSize: 16,
-                                                    fontFamily: 'Lora',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                <option value="">Esport (Qualsevol)</option>
-                                                <option value="Futbol">Futbol</option>
-                                            </select>
-                                        </View>
-                                        <View style={[styles.webSelectContainer, selectedSport === '' && {backgroundColor: '#f0f0f0', opacity: 0.5}]}>
-                                            {/* @ts-ignore */}
-                                            <select 
-                                                value={selectedTeam}
-                                                onChange={(e: any) => setSelectedTeam(e.target.value)}
-                                                disabled={selectedSport === ''}
-                                                style={{
-                                                    width: '100%',
-                                                    border: 'none',
-                                                    background: 'transparent',
-                                                    outline: 'none',
-                                                    color: SKETCHY_COLORS.text,
-                                                    fontSize: 16,
-                                                    fontFamily: 'Lora',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                <option value="">Equip (Qualsevol)</option>
-                                                {selectedSport === 'Futbol' && <option value="FC Barcelona">FC Barcelona</option>}
-                                                {selectedSport === 'Futbol' && <option value="Real Madrid">Real Madrid</option>}
-                                                {selectedSport === 'Futbol' && <option value="RCD Espanyol">RCD Espanyol</option>}
-                                            {selectedSport === 'Futbol' && <option value="Girona FC">Girona FC</option>}
-                                            </select>
-                                        </View>
-                                    </View>
-                                </View>
-                            )}
-                         </>
-                    )
-                }
-                </View>
-             )
-         }
-
-         // NATIVE FILTERS Implementation (Simplified for now)
-         return null; // TODO: Implement Picker for Native
-    };
+    // Filters UI removed from the initial screen.
+    const renderFilters = () => null;
 
     const renderRadiusSlider = () => {
         if (Platform.OS === 'web') {
@@ -878,13 +787,6 @@ const MapScreen = () => {
                     </SafeAreaView>
 
                     <TouchableOpacity 
-                        style={styles.fabSettings}
-                        onPress={() => setShowFilters(!showFilters)}
-                    >
-                        <Feather name="filter" size={24} color={SKETCHY_COLORS.text} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
                         style={styles.fabGps}
                         onPress={centerMapToGPS}
                     >
@@ -903,13 +805,6 @@ const MapScreen = () => {
              {/* DESKTOP GPS BUTTON */}
              {isDesktop && (
                 <>
-                    <TouchableOpacity 
-                        style={[styles.fabSettings, { right: 20, bottom: 80 }]} 
-                        onPress={() => setShowFilters(!showFilters)}
-                    >
-                         <Feather name="filter" size={24} color={SKETCHY_COLORS.text} />
-                    </TouchableOpacity>
-
                     <TouchableOpacity style={[styles.fabGps, { right: 20, bottom: 20 }]} onPress={centerMapToGPS}>
                         <Feather name="crosshair" size={24} color={SKETCHY_COLORS.text} />
                     </TouchableOpacity>
