@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Define the navigation types (we can move this to a types file later)
@@ -14,6 +14,13 @@ type Props = {
 
 const StartupScreen = ({ navigation }: Props) => {
   useEffect(() => {
+    if (Platform.OS === 'web') {
+        const fontLink = document.createElement('link');
+        fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap';
+        fontLink.rel = 'stylesheet';
+        document.head.appendChild(fontLink);
+    }
+
     // Simulació de càrrega de recursos i verificació de sessió
     const timer = setTimeout(() => {
       // Navegar a la pantalla principal (Map) i reemplaçar la història per evitar tornar enrere
@@ -28,9 +35,9 @@ const StartupScreen = ({ navigation }: Props) => {
       <View style={styles.logoContainer}>
         {/* Aquí aniria el logo (Image) */}
         <Text style={styles.logoText}>TroBar</Text>
-        <ActivityIndicator size="small" color="#fff" style={styles.loader} />
+        <ActivityIndicator size="small" color="#D32F2F" style={styles.loader} />
       </View>
-      <Text style={styles.version}>v1.0.0</Text>
+      <Text style={styles.copyright}>© frolesti</Text>
     </View>
   );
 };
@@ -38,7 +45,7 @@ const StartupScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2196F3', // Color corporatiu (a definir)
+    backgroundColor: '#FFFBF0', // Paper/Cream background
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -48,17 +55,19 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#3E2723', // Dark Brown
+    fontFamily: 'Lora',
     letterSpacing: 2,
   },
   loader: {
     marginTop: 20,
   },
-  version: {
+  copyright: {
     position: 'absolute',
     bottom: 30,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#8D6E63',
     fontSize: 12,
+    fontFamily: 'Lora',
   },
 });
 
