@@ -19,7 +19,9 @@
       "bundleIdentifier": "com.example.trobar",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Aquesta app necessita la teva ubicació per trobar bars a prop."
+        "NSLocationWhenInUseUsageDescription": "Aquesta app necessita la teva ubicació per trobar bars a prop.",
+        "NSPhotoLibraryUsageDescription": "Aquesta app necessita accés a la teva galeria per canviar la foto de perfil.",
+        "NSCameraUsageDescription": "Aquesta app necessita accés a la teva càmera per fer fotos de perfil."
       }
     },
     "android": {
@@ -39,6 +41,12 @@
     },
     "plugins": [
       "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'app necessita accés a les teves fotos per actualitzar el perfil."
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth"
     ]
