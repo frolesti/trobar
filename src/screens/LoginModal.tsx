@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Platform, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
@@ -10,61 +10,184 @@ type Props = {
 };
 
 const LoginModal = ({ navigation }: Props) => {
-  const { login, isLoading } = useAuth();
+  const { loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
+  
+  // UI State
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleLogin = async () => {
-    await login();
-    navigation.goBack(); // Tanca el modal un cop loguejat
+  // Form State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+
+  const handleGoogleLogin = async () => {
+    try {
+        await loginGoogle();
+        navigation.goBack();
+    } catch (e) {
+        // Error ja gestionat al context
+    }
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Botó de tancar */}
-      <TouchableOpacity 
-        style={styles.closeButton} 
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.closeText}>✕</Text>
-      </TouchableOpacity>
+  const handleAppleLogin = async () => {
+      try {
+          await loginApple();
+          navigation.goBack();
+      } catch (e) {
+          // Error gestionat
+      }
+  };
 
-      <View style={styles.content}>
-        <View style={styles.header}>
-            <Text style={styles.emoji}>👋</Text>
-            <Text style={styles.title}>Benvingut a TroBar</Text>
-            <Text style={styles.subtitle}>
-            Inicia sessió per guardar els teus bars preferits, rebre alertes de partits i molt més.
-            </Text>
-        </View>
+  const handleEmailSubmit = async () => {
+      if (!email || !password) {
+          Alert.alert("Error", "Si us plau, omple tots els camps.");
+          return;
+      }
+      if (isRegistering && !name) {
+          Alert.alert("Error", "Necessitem el teu nom.");
+          return;
+      }
 
-        <View style={styles.actions}>
-            {/* Botó Google */}
-            <TouchableOpacity 
-                style={[styles.button, styles.googleButton]} 
-                onPress={handleLogin}
-                disabled={isLoading}
-            >
-                <Text style={[styles.buttonText, styles.googleText]}>
-                    {isLoading ? 'Iniciant...' : 'Continuar amb Google'}
-                </Text>
-            </TouchableOpacity>
+      try {
+          if (isRegistering) {
+              await registerEmail(email, password, name);
+          } else {
+              await loginEmail(email, password);
+          }
+          navigation.goBack();
+      } catch (error: any) {
+          Alert.alert("Error d'autenticació", error.message || "Hi ha hagut un problema.");
+      }
+  };
 
-            {/* Botó Apple */}
-            <TouchableOpacity style={[styles.button, styles.appleButton]} onPress={handleLogin}>
-                <Text style={[styles.buttonText, styles.appleText]}>Continuar amb Apple</Text>
-            </TouchableOpacity>
+  // Sub-component: Formulari Email
+  const renderEmailForm = () => (
+      <View style={{width: '100%'}}>
+          <Text style={styles.formTitle}>{isRegistering ? 'Crear Compte' : 'Iniciar Sessió'}</Text>
+          
+          {isRegistering && (
+              <TextInput 
+                style={styles.input}
+                placeholder="Nom complet"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+          )}
 
-            {/* Link Email */}
-            <TouchableOpacity style={styles.emailLink}>
-                <Text style={styles.emailText}>Continuar amb Email</Text>
-            </TouchableOpacity>
-        </View>
+          <TextInput 
+            style={styles.input}
+            placeholder="Correu electrònic"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-        <Text style={styles.disclaimer}>
-            En continuar, acceptes els nostres Termes de Servei i Política de Privacitat.
-        </Text>
+          <TextInput 
+            style={styles.input}
+            placeholder="Contrasenya"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <TouchableOpacity 
+            style={[styles.button, styles.emailSubmitButton]} 
+            onPress={handleEmailSubmit}
+            disabled={isLoading}
+          >
+              {isLoading ? (
+                  <ActivityIndicator color="white" />
+              ) : (
+                  <Text style={styles.emailSubmitText}>
+                      {isRegistering ? 'Registrar-se' : 'Entrar'}
+                  </Text>
+              )}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)} style={{marginTop: 15, padding: 5}}>
+              <Text style={{textAlign:'center', color:'#666'}}>
+                  {isRegistering ? 'Ja tens compte? Inicia sessió' : 'No tens compte? Registra\'t'}
+              </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setShowEmailForm(false)} style={{marginTop: 15, padding: 5}}>
+              <Text style={{textAlign:'center', color:'#2196F3', fontSize: 14}}>Tornar enrere</Text>
+          </TouchableOpacity>
       </View>
-      <StatusBar style="light" />{/* Per si és modal full screen */}
-    </View>
+  );
+
+  return (
+    <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+    >
+      <ScrollView contentContainerStyle={{flexGrow: 1}}>
+        {/* Botó de tancar */}
+        <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => navigation.goBack()}
+        >
+            <Text style={styles.closeText}>✕</Text>
+        </TouchableOpacity>
+
+        <View style={styles.content}>
+            
+            {!showEmailForm && (
+                <View style={styles.header}>
+                    <Text style={styles.emoji}>👋</Text>
+                    <Text style={styles.title}>Benvingut a TroBar</Text>
+                    <Text style={styles.subtitle}>
+                        Inicia sessió per guardar els teus bars preferits, rebre alertes de partits i molt més.
+                    </Text>
+                </View>
+            )}
+
+            <View style={styles.actions}>
+                {showEmailForm ? renderEmailForm() : (
+                    <>
+                        {/* Botó Google */}
+                        <TouchableOpacity 
+                            style={[styles.button, styles.googleButton]} 
+                            onPress={handleGoogleLogin}
+                            disabled={isLoading}
+                        >
+                            <Text style={[styles.buttonText, styles.googleText]}>
+                                {isLoading ? 'Carregant...' : 'Continuar amb Google'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        {/* Botó Apple */}
+                        <TouchableOpacity 
+                            style={[styles.button, styles.appleButton]} 
+                            onPress={handleAppleLogin}
+                            disabled={isLoading}
+                        >
+                            <Text style={[styles.buttonText, styles.appleText]}>Continuar amb Apple</Text>
+                        </TouchableOpacity>
+
+                        {/* Link Email */}
+                        <TouchableOpacity 
+                            style={styles.emailLink}
+                            onPress={() => setShowEmailForm(true)}
+                        >
+                            <Text style={styles.emailText}>Continuar amb Email</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
+            </View>
+
+            {!showEmailForm && (
+                <Text style={styles.disclaimer}>
+                    En continuar, acceptes els nostres Termes de Servei i Política de Privacitat.
+                </Text>
+            )}
+        </View>
+      </ScrollView>
+      <StatusBar style="dark" />
+    </KeyboardAvoidingView>
   );
 };
 
@@ -72,7 +195,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
-    padding: 24,
   },
   closeButton: {
     position: 'absolute',
@@ -94,8 +216,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    padding: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 500,
   },
   header: {
       alignItems: 'center',
@@ -123,6 +247,7 @@ const styles = StyleSheet.create({
       width: '100%',
       gap: 16,
       marginBottom: 30,
+      alignItems: 'center',
   },
   button: {
       width: '100%',
@@ -158,6 +283,7 @@ const styles = StyleSheet.create({
   emailLink: {
       alignItems: 'center',
       padding: 10,
+      marginTop: 10,
   },
   emailText: {
       color: '#2196F3',
@@ -168,9 +294,37 @@ const styles = StyleSheet.create({
       fontSize: 12,
       color: '#999',
       textAlign: 'center',
-      position: 'absolute',
-      bottom: 20,
-  }
+      marginTop: 'auto',
+      marginBottom: 20,
+  },
+  
+  // Form Styles
+  formTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      textAlign: 'center',
+      color: '#333'
+  },
+  input: {
+      width: '100%',
+      backgroundColor: '#f5f5f5',
+      padding: 15,
+      borderRadius: 12,
+      marginBottom: 12,
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: '#eee'
+  },
+  emailSubmitButton: {
+      backgroundColor: '#2196F3',
+      marginTop: 10,
+  },
+  emailSubmitText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+  },
 });
 
 export default LoginModal;
