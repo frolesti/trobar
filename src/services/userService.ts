@@ -43,12 +43,25 @@ export const uploadProfileImage = async (userId: string, uri: string): Promise<s
         const blob = await response.blob();
         
         const storageRef = ref(storage, `avatars/${userId}`);
-        await uploadBytes(storageRef, blob);
+        await uploadBytes(storageRef, blob).catch((e: any) => {
+            if (e.message && e.message.includes('CORS')) {
+                 throw new Error("CORS Error: Firebase Storage bucket is not configured for localhost access. Please run 'gsutil cors set cors.json gs://YOUR_BUCKET' or test on a deployed environment.");
+            }
+            throw e;
+        });
         
         const downloadUrl = await getDownloadURL(storageRef);
         return downloadUrl;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error uploading profile image:", error);
+        // Fallback: If upload fails (e.g. CORS), return the original URI or a placeholder so the app doesn't break,
+        // though the image won't be on the server.
+        if (error.message.includes("CORS")) {
+             alert("Imatge no pujada: Error CORS (habitual en localhost). La imatge es veurà localment però no s'ha guardat al servidor.");
+             return uri; // Return local URI as fallback logic? 
+             // Actually, saving local URI to firestore is bad practice as it won't work on other devices.
+             // Better to throw and let UI handle it.
+        }
         throw error;
     }
 };

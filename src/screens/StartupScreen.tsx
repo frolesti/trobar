@@ -30,7 +30,7 @@ const StartupScreen = ({ navigation }: Props) => {
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         {/* Aquí aniria el logo (Image) */}
-        <Text style={styles.logoText}>TroBar</Text>
+        <Text style={styles.logoText}>troBar</Text>
         <ActivityIndicator size="small" color="#D32F2F" style={styles.loader} />
       </View>
       <Text style={styles.copyright}>© frolesti</Text>

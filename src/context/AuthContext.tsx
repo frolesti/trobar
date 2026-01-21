@@ -8,7 +8,8 @@ import {
     GoogleAuthProvider,
     OAuthProvider,
     signInWithPopup,
-    updateProfile
+    updateProfile,
+    sendEmailVerification
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { getUserProfile, UserProfile } from '../services/userService';
@@ -23,6 +24,7 @@ interface AuthContextType {
   loginApple: () => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
   isAuthenticated: boolean;
 }
 
@@ -34,13 +36,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchAndSetUser = async (firebaseUser: FirebaseUser) => {
     try {
+        // Enforce security: refreshing token ensures we have the latest claims and the user is not disabled
+        // Aquest token s'utilitza internament per les SDKs de Firebase (Firestore/Storage) per validar la seguretat
+        await firebaseUser.getIdToken(true);
+
         const firestoreProfile = await getUserProfile(firebaseUser.uid);
         
         const combinedUser: UserProfile = {
             id: firebaseUser.uid,
             name: firestoreProfile?.name || firebaseUser.displayName || 'Usuari',
             email: firebaseUser.email || '',
-            avatar: firestoreProfile?.avatar || firebaseUser.photoURL || undefined,
+            // Prioritize Firestore avatar if it exists; otherwise use Google photo; otherwise undefined
+            avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : (firebaseUser.photoURL || undefined),
             favoriteTeam: firestoreProfile?.favoriteTeam,
             favoriteSport: firestoreProfile?.favoriteSport
         };
@@ -76,6 +83,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
+  /**
+   * Obté el token de sessió actual (JWT) de manera segura.
+   * Si el token ha caducat (1h), Firebase el refresca automàticament utilitzant el Refresh Token emmagatzemat.
+   * Aquest mètode és útil si necessitem cridar a una API externa pròpia.
+   */
+  const getAccessToken = async (): Promise<string | null> => {
+      if (!auth.currentUser) return null;
+      try {
+          return await auth.currentUser.getIdToken();
+      } catch (error) {
+          console.error("Error getting access token:", error);
+          return null;
+      }
+  };
+
   const loginEmail = async (email: string, pass: string) => {
       setIsLoading(true);
       try {
@@ -93,6 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
         if (cred.user) {
             await updateProfile(cred.user, { displayName: name });
+            await sendEmailVerification(cred.user);
             await fetchAndSetUser(cred.user);
         }
     } catch (error: any) {
@@ -157,6 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loginGoogle,
         loginApple,
         logout,
+        getAccessToken,
         refreshProfile,
         isAuthenticated: !!user,
       }}

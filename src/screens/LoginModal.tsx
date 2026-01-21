@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
@@ -26,6 +27,7 @@ const LoginModal = ({ navigation }: Props) => {
     // UI State
     const [showEmailForm, setShowEmailForm] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
+    const [verificationSent, setVerificationSent] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
 
     // Form State
@@ -75,15 +77,32 @@ const LoginModal = ({ navigation }: Props) => {
 
         try {
             if (isRegistering) {
-                await registerEmail(email, password, name);
+                setVerificationSent(true);
             } else {
                 await loginEmail(email, password);
+                navigation.goBack();
             }
             navigation.goBack();
         } catch (e: any) {
             setLocalError(e?.message || 'Hi ha hagut un problema amb el correu.');
         }
     };
+
+    const renderVerificationMessage = () => (
+        <View style={{ width: '100%', alignItems: 'center' }}>
+            <Feather name="mail" size={64} color={SKETCH_THEME.colors.primary} style={{ marginBottom: 20 }} />
+            <Text style={styles.title}>Revisa el teu correu</Text>
+            <Text style={[styles.subtitle, { marginBottom: 30 }]}>
+                T'hem enviat un missatge de confirmació a <Text style={{ fontWeight: 'bold' }}>{email}</Text>. Recorda mirar la carpeta de correu brossa si no el trobes!
+            </Text>
+            <TouchableOpacity
+                style={[styles.button, styles.primaryButton]}
+                onPress={() => navigation.goBack()}
+            >
+                <Text style={styles.primaryButtonText}>Entesos!</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     const renderEmailForm = () => (
         <View style={{ width: '100%' }}>
@@ -168,7 +187,9 @@ const LoginModal = ({ navigation }: Props) => {
                     )}
 
                     <View style={styles.actions}>
-                        {showEmailForm ? (
+                        {verificationSent ? (
+                            renderVerificationMessage()
+                        ) : showEmailForm ? (
                             renderEmailForm()
                         ) : (
                             <>

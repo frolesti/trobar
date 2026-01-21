@@ -46,6 +46,7 @@ const SKETCHY_COLORS = {
     bg: '#FFFBF0', // Paper/Cream background
     primary: '#D32F2F', // Rust Red (Markers)
     text: '#3E2723', // Dark Brown/Black
+    textMuted: '#8D6E63', // Muted Brown 
     accent: '#8D6E63', // Secondary brown
     uiBg: 'rgba(255, 251, 240, 0.95)', // Semi-transparent paper
 };
@@ -78,6 +79,76 @@ const SKETCHY_PIN_PATH = "M 12 2 C 7 2 3 7 3 12 C 3 17 12 24 12 24 C 12 24 21 17
 // Base64 fallback if file asset fails for any reason
 const DEFAULT_BAR_IMAGE = require('../../assets/img/bar-fallout.jpg');
 
+// Helper Component for Sketchy Select
+interface SketchySelectProps {
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (val: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+const SketchySelect = ({ value, options, onChange, placeholder = 'Selecciona...', disabled = false }: SketchySelectProps) => {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const handleSelect = (val: string) => {
+        onChange(val);
+        setIsOpen(false);
+    }
+    
+    // Find label
+    const currentLabel = options.find(o => o.value === value)?.label || placeholder;
+
+    return (
+        <View style={{ zIndex: isOpen ? 1000 : 1 }}>
+            <TouchableOpacity
+                onPress={() => !disabled && setIsOpen(!isOpen)}
+                style={[
+                    styles.webSelectContainer, 
+                    disabled && { opacity: 0.6, backgroundColor: '#f0f0f0' },
+                    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
+                ]}
+                activeOpacity={0.8}
+            >
+                <Text style={{ fontFamily: 'Lora', fontWeight: 'bold', fontSize: 16, color: SKETCHY_COLORS.text }}>
+                    {currentLabel}
+                </Text>
+                <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={20} color={SKETCHY_COLORS.text} />
+            </TouchableOpacity>
+            
+            {isOpen && (
+                <View style={{
+                    position: 'absolute', top: 52, left: 0, right: 0, 
+                    backgroundColor: SKETCHY_COLORS.bg, 
+                    borderWidth: 2, borderColor: SKETCHY_COLORS.text,
+                    maxHeight: 200,
+                    zIndex: 2000, 
+                    ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } })
+                }}>
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                        {options.map((opt) => (
+                            <TouchableOpacity
+                                key={opt.value}
+                                onPress={() => handleSelect(opt.value)}
+                                style={{
+                                    paddingVertical: 12, paddingHorizontal: 16,
+                                    borderBottomWidth: 1,
+                                    borderBottomColor: '#eee',
+                                    backgroundColor: opt.value === value ? '#EFEBE9' : 'transparent'
+                                }}
+                            >
+                                <Text style={{ fontFamily: 'Lora', fontSize: 16, color: SKETCHY_COLORS.text, fontWeight: opt.value === value ? 'bold' : 'normal' }}>
+                                    {opt.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+        </View>
+    );
+}
+
 const getBarImageSource = (img: string | undefined | null) => {
     if (img && typeof img === 'string' && img.startsWith('http') && img !== 'null' && img !== 'undefined' && img.trim() !== '') {
         return { uri: img };
@@ -107,6 +178,7 @@ const MapScreen = () => {
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
 
     const [isSearchSettingsOpen, setIsSearchSettingsOpen] = useState(false);
+    const [isAvatarError, setIsAvatarError] = useState(false);
 
     // Force local placeholder if a remote image fails to load
     const [failedImages, setFailedImages] = useState<Record<string, true>>({});
@@ -133,6 +205,7 @@ const MapScreen = () => {
 
     // Draggable Bottom Sheet Logic (Animation)
     const bottomSheetHeight = useRef(new Animated.Value(120)).current; 
+    const bottomSheetTranslateY = useRef(new Animated.Value(500)).current; // Start hidden
     const lastHeight = useRef(120);
 
     const panResponder = useRef(
@@ -293,6 +366,24 @@ const MapScreen = () => {
         });
         setFilteredBars(nearbyBars);
 
+        // Animation: Hide bottom sheet if 0 bars, Slide up/bounce if > 0
+        if (!isDesktop) {
+            if (nearbyBars.length > 0) {
+                Animated.spring(bottomSheetTranslateY, {
+                    toValue: 0,
+                    useNativeDriver: Platform.OS !== 'web',
+                    friction: 5,
+                    tension: 20
+                }).start();
+            } else {
+                Animated.timing(bottomSheetTranslateY, {
+                    toValue: 500, // Hide downwards
+                    duration: 300,
+                    useNativeDriver: Platform.OS !== 'web',
+                }).start();
+            }
+        }
+
         // Update Platform Specifics
         if (Platform.OS === 'web') {
             updateWebMapVisuals(nearbyBars);
@@ -316,12 +407,16 @@ const MapScreen = () => {
                 }).start();
                 lastHeight.current = target;
             } else {
+                // If closing details but we have results, go to list view (45%) instead of minimizing
+                const hasResults = filteredBars.length > 0;
+                const target = hasResults ? Math.max(300, height * 0.45) : 120;
+                
                 Animated.timing(bottomSheetHeight, {
-                    toValue: 120, 
+                    toValue: target, 
                     duration: 300,
                     useNativeDriver: false
                 }).start();
-                lastHeight.current = 120;
+                lastHeight.current = target;
             }
          }
 
@@ -418,15 +513,28 @@ const MapScreen = () => {
     const updateWebMapVisuals = (barsToRender: Bar[]) => {
         if (!googleMapRef.current || !centerLocation) return;
         
-        // Cercle
-        if (circleRef.current) circleRef.current.setMap(null);
-        circleRef.current = new window.google.maps.Circle({
-            strokeColor: SKETCHY_COLORS.primary, strokeOpacity: 0.6, strokeWeight: 1, // Minimalist stroke
-            fillColor: SKETCHY_COLORS.primary, fillOpacity: 0.05, // Very faint fill
-            map: googleMapRef.current,
-            center: { lat: centerLocation.latitude, lng: centerLocation.longitude },
-            radius: radiusKm * 1000, clickable: false 
-        });
+        // Cercle: Reuse or Create
+        if (!circleRef.current) {
+            circleRef.current = new window.google.maps.Circle({
+                strokeColor: SKETCHY_COLORS.primary, strokeOpacity: 0.6, strokeWeight: 1, // Minimalist stroke
+                fillColor: SKETCHY_COLORS.primary, fillOpacity: 0.05, // Very faint fill
+                map: googleMapRef.current,
+                clickable: false,
+                center: { lat: centerLocation.latitude, lng: centerLocation.longitude },
+                radius: radiusKm * 1000
+            });
+        } else {
+            // Smooth update without flickering
+            circleRef.current.setCenter({ lat: centerLocation.latitude, lng: centerLocation.longitude });
+            
+            // Optional: Simple interpolation could go here, but frequent updates from slider are usually enough.
+            circleRef.current.setRadius(radiusKm * 1000);
+            
+            // Ensure map is set (in case it was nulled)
+            if (circleRef.current.getMap() !== googleMapRef.current) {
+                circleRef.current.setMap(googleMapRef.current);
+            }
+        }
 
         // Center Marker ("Pin" style)
         if (centerMarkerRef.current) centerMarkerRef.current.setMap(null);
@@ -612,45 +720,76 @@ const MapScreen = () => {
 
         return (
             <View style={{flex: 1}}>
-                <Text style={[styles.bottomSheetTitle, {marginBottom: 10}]}>
-                    {filteredBars.length} bars a la zona
-                </Text>
+                <View style={{alignItems: 'center', marginBottom: 15, marginTop: 10}}>
+                     <View style={{
+                         backgroundColor: SKETCHY_COLORS.text, 
+                         paddingVertical: 6, paddingHorizontal: 16, 
+                         borderRadius: 16, marginBottom: 8,
+                         transform: [{ rotate: '-1deg' }] // Tocs sketchy
+                     }}>
+                        <Text style={{color: SKETCHY_COLORS.bg, fontWeight: 'bold', fontSize: 13, fontFamily: 'Lora'}}>
+                            Hem trobat {filteredBars.length} bars
+                        </Text>
+                     </View>
+                </View>
+                
                 <ScrollView style={{flex: 1}} contentContainerStyle={{paddingBottom: 20}}>
-                    {filteredBars.map((bar, index) => (
+                    {filteredBars.length === 0 ? (
+                        <View style={{ alignItems: 'center', marginTop: 20 }}>
+                            <Feather name="search" size={32} color={SKETCHY_COLORS.text} style={{ opacity: 0.5 }} />
+                            <Text style={{textAlign:'center', color: SKETCHY_COLORS.textMuted, marginTop: 10, fontFamily: 'Lora'}}>
+                                Cap bar trobat a la zona.
+                            </Text>
+                            <TouchableOpacity onPress={() => setIsSearchSettingsOpen(true)} style={{ marginTop: 15 }}>
+                                <Text style={{ color: SKETCHY_COLORS.primary, fontWeight: 'bold', fontFamily: 'Lora', textDecorationLine: 'underline' }}>
+                                    Ajustar filtres
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        filteredBars.map((bar, index) => (
                         <TouchableOpacity 
                             key={index} 
                             style={{
                                 flexDirection:'row', padding: 10, marginBottom: 8, 
-                                backgroundColor:'#f9f9f9', borderRadius: 12, borderWidth: 1, borderColor:'#eee'
+                                backgroundColor: SKETCHY_COLORS.bg, borderRadius: 12, borderWidth: 1, borderColor: '#D7CCC8',
+                                ...Platform.select({
+                                    web: { boxShadow: '2px 2px 0px rgba(62,39,35,0.1)' },
+                                    default: { shadowColor: '#3E2723', shadowOffset: {width: 1, height: 1}, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
+                                })
                             }}
                             onPress={() => setSelectedBar(bar)}
                         >
                              <Image
                                  source={failedImages[bar.id] ? DEFAULT_BAR_IMAGE : getBarImageSource(bar.image)}
-                                 style={{width: 50, height: 50, borderRadius: 8, backgroundColor:'#eee'}}
+                                 style={{width: 60, height: 60, borderRadius: 8, backgroundColor:'#eee', borderWidth: 1, borderColor: '#D7CCC8'}}
                                  resizeMode="cover"
                                  onError={() => setFailedImages((prev) => (prev[bar.id] ? prev : { ...prev, [bar.id]: true }))}
                              />
-                             <View style={{marginLeft: 12, justifyContent:'center'}}>
-                                 <Text style={{fontWeight:'bold', fontSize: 14, fontFamily: 'Lora'}}>{getCleanBarName(bar.name)}</Text>
-                                 <Text style={{fontSize: 12, color:'#666', fontFamily: 'Lora'}}>
-                                    A {getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude).toFixed(1)} km
-                                 </Text>
-                                 <View style={{flexDirection:'row', marginTop: 2, alignItems: 'center'}}>
-                                     <Feather name="star" size={10} color="#888" style={{marginRight: 2}} />
-                                     <Text style={{fontSize: 10, color:'#888', fontFamily: 'Lora'}}>{bar.rating}</Text>
+                             <View style={{marginLeft: 12, justifyContent:'center', flex: 1}}>
+                                 <Text style={{fontWeight:'bold', fontSize: 16, fontFamily: 'Lora', color: SKETCHY_COLORS.text, marginBottom: 2}}>{getCleanBarName(bar.name)}</Text>
+                                 <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
+                                     <Feather name="map-pin" size={10} color={SKETCHY_COLORS.textMuted} style={{marginRight: 4}} />
+                                     <Text style={{fontSize: 12, color: SKETCHY_COLORS.textMuted, fontFamily: 'Lora'}}>
+                                        {getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude).toFixed(1)} km
+                                     </Text>
+                                 </View>
+                                 <View style={{flexDirection:'row', alignItems: 'center'}}>
+                                     <Feather name="star" size={12} color="#FFA000" style={{marginRight: 2}} />
+                                     <Text style={{fontSize: 12, color: SKETCHY_COLORS.text, fontFamily: 'Lora', fontWeight: 'bold'}}>{bar.rating}</Text>
                                      {bar.nextMatch && (
-                                         <View style={{flexDirection: 'row', alignItems: 'center', marginLeft: 8}}>
-                                             <Feather name="tv" size={10} color="red" style={{marginRight: 2}} />
-                                             <Text style={{fontSize: 10, color:'red', fontFamily: 'Lora'}}>Partit avui</Text>
+                                         <View style={{flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: SKETCHY_COLORS.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4}}>
+                                             <Feather name="tv" size={10} color="white" style={{marginRight: 4}} />
+                                             <Text style={{fontSize: 10, color:'white', fontFamily: 'Lora', fontWeight: 'bold'}}>PARTIT</Text>
                                          </View>
                                      )}
                                  </View>
                              </View>
+                             <View style={{justifyContent: 'center'}}>
+                                 <Feather name="chevron-right" size={20} color={SKETCHY_COLORS.accent} />
+                             </View>
                         </TouchableOpacity>
-                    ))}
-                    {filteredBars.length === 0 && (
-                        <Text style={{textAlign:'center', color:'#999', marginTop: 20}}>Cap bar trobat. Prova d'augmentar el radi.</Text>
+                        ))
                     )}
                 </ScrollView>
             </View>
@@ -717,70 +856,40 @@ const MapScreen = () => {
                     </Text>
 
                     {Platform.OS === 'web' ? (
-                        <>
+                        <View style={{zIndex: 50}}>
                             <Text style={styles.settingsLabel}>Esport</Text>
-                            <View style={styles.webSelectContainer}>
-                                {/* @ts-ignore */}
-                                <select
+                            <View style={{zIndex: 20}}>
+                                <SketchySelect
                                     value={selectedSport}
-                                    onChange={(e: any) => { setSelectedSport(e.target.value); setSelectedTeam(''); }}
-                                    style={{
-                                        width: '100%',
-                                        border: 'none',
-                                        background: 'transparent',
-                                        outline: 'none',
-                                        color: SKETCHY_COLORS.text,
-                                        fontSize: 16,
-                                        fontFamily: 'Lora',
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    <option value="">Qualsevol</option>
-                                    <option value="Futbol">Futbol</option>
-                                </select>
+                                    onChange={(val) => { setSelectedSport(val); setSelectedTeam(''); }}
+                                    options={[
+                                        { label: 'Qualsevol', value: '' },
+                                        { label: 'Futbol', value: 'Futbol' }
+                                    ]}
+                                />
                             </View>
 
                             <Text style={styles.settingsLabel}>Equip</Text>
-                            <View style={[styles.webSelectContainer, selectedSport === '' && { backgroundColor: '#f0f0f0', opacity: 0.6 }]}>
-                                {/* @ts-ignore */}
-                                <select
+                            <View style={{zIndex: 10}}>
+                                <SketchySelect
                                     value={selectedTeam}
-                                    onChange={(e: any) => setSelectedTeam(e.target.value)}
+                                    onChange={(val) => setSelectedTeam(val)}
                                     disabled={selectedSport === ''}
-                                    style={{
-                                        width: '100%',
-                                        border: 'none',
-                                        background: 'transparent',
-                                        outline: 'none',
-                                        color: SKETCHY_COLORS.text,
-                                        fontSize: 16,
-                                        fontFamily: 'Lora',
-                                        fontWeight: 'bold'
-                                    }}
-                                >
-                                    <option value="">Qualsevol</option>
-                                    {selectedSport === 'Futbol' && <option value="FC Barcelona">FC Barcelona</option>}
-                                    {selectedSport === 'Futbol' && <option value="Real Madrid">Real Madrid</option>}
-                                    {selectedSport === 'Futbol' && <option value="RCD Espanyol">RCD Espanyol</option>}
-                                    {selectedSport === 'Futbol' && <option value="Girona FC">Girona FC</option>}
-                                </select>
+                                    options={[
+                                        { label: 'Qualsevol', value: '' },
+                                        { label: 'FC Barcelona', value: 'FC Barcelona' },
+                                        { label: 'Real Madrid', value: 'Real Madrid' },
+                                        { label: 'RCD Espanyol', value: 'RCD Espanyol' },
+                                        { label: 'Girona FC', value: 'Girona FC' }
+                                    ].filter(o => o.value === '' || selectedSport === 'Futbol')}
+                                />
                             </View>
-                        </>
+                        </View>
                     ) : (
                         <Text style={styles.settingsHint}>Filtres avançats: pendent d’implementar a mòbil natiu.</Text>
                     )}
 
                     <View style={styles.settingsActions}>
-                        <TouchableOpacity onPress={resetFiltersToProfile} style={styles.settingsActionSecondary}>
-                            <Text style={styles.settingsActionSecondaryText}>{user ? 'Restablir (perfil)' : 'Reiniciar'}</Text>
-                        </TouchableOpacity>
-
-                        {user && (
-                            <TouchableOpacity onPress={() => { setIsSearchSettingsOpen(false); navigation.navigate('Profile'); }} style={styles.settingsActionSecondary}>
-                                <Text style={styles.settingsActionSecondaryText}>Editar perfil</Text>
-                            </TouchableOpacity>
-                        )}
-
                         <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={styles.settingsActionPrimary}>
                             <Text style={styles.settingsActionPrimaryText}>Fet</Text>
                         </TouchableOpacity>
@@ -822,8 +931,12 @@ const MapScreen = () => {
                     style={styles.avatarButton}
                     onPress={() => user ? navigation.navigate('Profile' as any) : navigation.navigate('Login' as any)}
                 >
-                    {user?.avatar 
-                        ? <Image source={{uri: user.avatar}} style={{width: 44, height: 44, borderRadius: 22}} />
+                    {user?.avatar && !isAvatarError
+                        ? <Image 
+                            source={{uri: user.avatar}} 
+                            style={{width: 44, height: 44, borderRadius: 22}} 
+                            onError={() => setIsAvatarError(true)}
+                          />
                         : <Feather name="user" size={24} color={SKETCHY_COLORS.text} />
                     }
                 </TouchableOpacity>
@@ -918,13 +1031,22 @@ const MapScreen = () => {
                         <Feather name="crosshair" size={24} color={SKETCHY_COLORS.text} />
                     </TouchableOpacity>
 
-                    <Animated.View style={[styles.bottomSheet, { height: bottomSheetHeight }]}>
+                    <Animated.View style={[
+                        styles.bottomSheet, 
+                        { height: bottomSheetHeight, transform: [{ translateY: bottomSheetTranslateY }] }
+                    ]}>
                         <View {...panResponder.panHandlers} style={styles.bottomSheetGrabArea}>
                             <View style={styles.bottomSheetHandle} />
                         </View>
                         <View style={{flex: 1, overflow: 'hidden'}}>
                             {renderContentPanel()}
                         </View>
+                        {/* Curtain to cover bouncy animation gaps */}
+                         <View style={{
+                             position: 'absolute', top: '100%', left: 0, right: 0, 
+                             height: 1000, backgroundColor: SKETCHY_COLORS.bg, 
+                             borderLeftWidth: 2, borderRightWidth: 2, borderColor: '#eee' 
+                         }} />
                     </Animated.View>
                 </>
             )}
@@ -1055,7 +1177,17 @@ const styles = StyleSheet.create({
         backgroundColor: SKETCHY_COLORS.bg, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: SKETCHY_COLORS.text,
         ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.05)' } })
     },
-    webSelectContainer: { flex: 1, backgroundColor: 'transparent', borderRadius: 0, height: 40, justifyContent: 'center', paddingHorizontal: 10, borderBottomWidth: 2, borderBottomColor: SKETCHY_COLORS.text },
+    webSelectContainer: { 
+        backgroundColor: SKETCHY_COLORS.bg, 
+        borderRadius: 10, 
+        borderWidth: 2, 
+        borderColor: SKETCHY_COLORS.text, 
+        height: 48, 
+        justifyContent: 'center', 
+        paddingHorizontal: 12, 
+        marginBottom: 8,
+        ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)' } })
+    },
 
     // Search settings overlay
     settingsOverlay: {
@@ -1099,18 +1231,18 @@ const styles = StyleSheet.create({
         fontFamily: 'Lora',
     },
     settingsLabel: {
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: 'bold',
         color: SKETCHY_COLORS.text,
-        marginTop: 10,
-        marginBottom: 6,
+        marginTop: 12,
+        marginBottom: 8,
         fontFamily: 'Lora',
     },
     settingsActions: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        marginTop: 16,
+        marginTop: 20,
         gap: 10,
         flexWrap: 'wrap',
     },
@@ -1154,7 +1286,19 @@ const styles = StyleSheet.create({
     statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12, overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1, borderColor: '#ccc' },
     open: { backgroundColor: '#E8F5E9', color: '#2E7D32' },
     closed: { backgroundColor: '#FFEBEE', color: '#C62828' },
-    matchCard: { backgroundColor: '#fff', padding: 12, borderRadius: 0, marginBottom: 16, borderWidth: 1, borderColor: SKETCHY_COLORS.text, borderStyle: 'dashed' },
+    matchCard: { 
+        backgroundColor: SKETCHY_COLORS.uiBg, 
+        padding: 16, 
+        borderRadius: 12, 
+        marginBottom: 16, 
+        marginTop: 5,
+        borderWidth: 2, 
+        borderColor: SKETCHY_COLORS.text,
+        ...Platform.select({
+            web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)' },
+            default: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 }
+        })
+    },
     matchTitle: { fontSize: 14, color: SKETCHY_COLORS.text, marginBottom: 8, fontFamily: 'Lora', fontWeight: 'bold' },
     matchTeams: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
     teamText: { fontSize: 18, fontWeight: 'bold', width: '40%', textAlign: 'center', fontFamily: 'Lora', color: SKETCHY_COLORS.text },
