@@ -16,6 +16,8 @@ import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import styles from './LoginModal.styles';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Login'>;
@@ -33,7 +35,8 @@ const LoginModal = ({ navigation }: Props) => {
     // Form State
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
 
     useEffect(() => {
         ensureLoraOnWeb();
@@ -45,7 +48,7 @@ const LoginModal = ({ navigation }: Props) => {
             await loginGoogle();
             navigation.goBack();
         } catch (e: any) {
-            setLocalError(e?.message || "No s'ha pogut iniciar sessió amb Google.");
+            setLocalError(getUserFriendlyError(e));
         }
     };
 
@@ -55,36 +58,61 @@ const LoginModal = ({ navigation }: Props) => {
             await loginApple();
             navigation.goBack();
         } catch (e: any) {
-            if (e?.code === 'auth/operation-not-allowed') {
-                setLocalError("L'inici de sessió amb Apple no està habilitat en aquest moment.");
-            } else {
-                setLocalError("No s'ha pogut iniciar sessió amb Apple.");
-            }
+            setLocalError(getUserFriendlyError(e));
         }
     };
 
     const handleEmailSubmit = async () => {
         setLocalError(null);
+        
+        const cleanEmail = email.trim();
+        const cleanFirstName = firstName.trim();
+        const cleanLastName = lastName.trim();
+        const fullName = `${cleanFirstName} ${cleanLastName}`.trim();
 
-        if (!email || !password) {
-            setLocalError('Si us plau, omple tots els camps.');
+        if (!cleanEmail || !password) {
+            setLocalError('Si us plau, omple tots els camps obligatoris.');
             return;
         }
-        if (isRegistering && !name) {
-            setLocalError('Necessitem el teu nom.');
+
+        // Validació bàsica de format d'email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(cleanEmail)) {
+            setLocalError("El format del correu electrònic no sembla vàlid.");
             return;
+        }
+
+        if (password.length < 6) {
+            setLocalError('La contrasenya ha de tenir almenys 6 caràcters.');
+            return;
+        }
+
+        if (isRegistering) {
+            if (!cleanFirstName) {
+                setLocalError('Necessitem el teu nom.');
+                return;
+            }
+            if (!cleanLastName) {
+                setLocalError('Necessitem el teu cognom.');
+                return;
+            }
+
+            if (cleanFirstName.length < 2 || cleanLastName.length < 2) {
+                setLocalError('El nom o cognom són massa curts.');
+                return;
+            }
         }
 
         try {
             if (isRegistering) {
+                await registerEmail(cleanEmail, password, fullName);
                 setVerificationSent(true);
             } else {
-                await loginEmail(email, password);
+                await loginEmail(cleanEmail, password);
                 navigation.goBack();
             }
-            navigation.goBack();
         } catch (e: any) {
-            setLocalError(e?.message || 'Hi ha hagut un problema amb el correu.');
+            setLocalError(getUserFriendlyError(e));
         }
     };
 
@@ -109,14 +137,26 @@ const LoginModal = ({ navigation }: Props) => {
             <Text style={styles.formTitle}>{isRegistering ? 'Crear Compte' : 'Iniciar Sessió'}</Text>
 
             {isRegistering && (
-                <TextInput
-                    style={styles.input}
-                    placeholder="Nom complet"
-                    placeholderTextColor={SKETCH_THEME.colors.textMuted}
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                />
+                <>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Nom"
+                        placeholderTextColor={SKETCH_THEME.colors.textMuted}
+                        value={firstName}
+                        onChangeText={setFirstName}
+                        autoCapitalize="words"
+                        autoComplete="name-given" // iOS/Android autocomplete hint
+                    />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Cognoms"
+                        placeholderTextColor={SKETCH_THEME.colors.textMuted}
+                        value={lastName}
+                        onChangeText={setLastName}
+                        autoCapitalize="words"
+                        autoComplete="name-family"
+                    />
+                </>
             )}
 
             <TextInput
@@ -230,171 +270,6 @@ const LoginModal = ({ navigation }: Props) => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: SKETCH_THEME.colors.bg,
-    },
-    scrollContent: {
-        flexGrow: 1,
-        padding: 18,
-        justifyContent: 'center',
-    },
-    panel: {
-        alignSelf: 'center',
-        width: '100%',
-        maxWidth: 420,
-        backgroundColor: SKETCH_THEME.colors.uiBg,
-        borderRadius: 22,
-        padding: 22,
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
-        ...(sketchShadow() as object),
-    },
-    closeButton: {
-        position: 'absolute',
-        top: Platform.OS === 'ios' ? 48 : 18,
-        right: 18,
-        zIndex: 10,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: SKETCH_THEME.colors.uiBg,
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
-        ...(sketchShadow() as object),
-    },
-    closeText: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: SKETCH_THEME.colors.text,
-        fontFamily: sketchFontFamily(),
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 18,
-    },
-    emoji: {
-        fontSize: 56,
-        marginBottom: 10,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: SKETCH_THEME.colors.text,
-        textAlign: 'center',
-        fontFamily: sketchFontFamily(),
-    },
-    subtitle: {
-        marginTop: 10,
-        fontSize: 15,
-        color: SKETCH_THEME.colors.textMuted,
-        textAlign: 'center',
-        lineHeight: 22,
-        fontFamily: sketchFontFamily(),
-    },
-    actions: {
-        marginTop: 16,
-        width: '100%',
-    },
-    button: {
-        width: '100%',
-        paddingVertical: 15,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
-        ...(sketchShadow() as object),
-    },
-    buttonText: {
-        fontSize: 16,
-        fontWeight: '800',
-        fontFamily: sketchFontFamily(),
-    },
-    secondaryButton: {
-        backgroundColor: SKETCH_THEME.colors.card,
-    },
-    darkButton: {
-        backgroundColor: SKETCH_THEME.colors.text,
-        borderColor: 'rgba(62, 39, 35, 0.55)',
-    },
-    primaryButton: {
-        backgroundColor: SKETCH_THEME.colors.primary,
-        borderColor: 'rgba(211, 47, 47, 0.35)',
-    },
-    primaryButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '800',
-        fontFamily: sketchFontFamily(),
-    },
-    emailLink: {
-        paddingVertical: 8,
-        alignItems: 'center',
-    },
-    emailText: {
-        color: SKETCH_THEME.colors.primary,
-        fontSize: 16,
-        fontWeight: '700',
-        fontFamily: sketchFontFamily(),
-    },
-    disclaimer: {
-        marginTop: 18,
-        fontSize: 12,
-        color: SKETCH_THEME.colors.accent,
-        textAlign: 'center',
-        lineHeight: 18,
-        fontFamily: sketchFontFamily(),
-    },
-    errorContainer: {
-        width: '100%',
-        padding: 12,
-        marginBottom: 14,
-        borderRadius: 14,
-        backgroundColor: 'rgba(198, 40, 40, 0.10)',
-        borderWidth: 1,
-        borderColor: 'rgba(198, 40, 40, 0.20)',
-    },
-    errorText: {
-        color: SKETCH_THEME.colors.danger,
-        fontSize: 14,
-        lineHeight: 20,
-        fontFamily: sketchFontFamily(),
-    },
-    formTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: SKETCH_THEME.colors.text,
-        marginBottom: 14,
-        textAlign: 'center',
-        fontFamily: sketchFontFamily(),
-    },
-    input: {
-        width: '100%',
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
-        borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        fontSize: 16,
-        marginBottom: 12,
-        backgroundColor: SKETCH_THEME.colors.card,
-        color: SKETCH_THEME.colors.text,
-        fontFamily: sketchFontFamily(),
-    },
-    inlineLink: {
-        marginTop: 12,
-        padding: 6,
-    },
-    inlineLinkText: {
-        textAlign: 'center',
-        color: SKETCH_THEME.colors.textMuted,
-        fontFamily: sketchFontFamily(),
-    },
-});
+
 
 export default LoginModal;
