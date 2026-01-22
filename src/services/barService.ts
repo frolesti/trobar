@@ -1,6 +1,7 @@
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Bar } from '../data/dummyData';
+import { executeRequest } from '../api/core';
 
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
 const mapDocToBar = (doc: any): Bar => {
@@ -34,40 +35,34 @@ const mapDocToBar = (doc: any): Bar => {
 };
 
 export const fetchBars = async (): Promise<Bar[]> => {
-    try {
-        const querySnapshot = await getDocs(collection(db, 'bars'));
+    // Utilitzem el nou wrapper 'executeRequest' per estandaritzar la crida
+    const result = await executeRequest(async () => {
+        const q = query(collection(db, 'bars'), where('nextMatch', '!=', null));
+        const querySnapshot = await getDocs(q);
+        
         const bars: Bar[] = [];
         const seenNames = new Set<string>();
         
         querySnapshot.forEach((doc) => {
             const bar = mapDocToBar(doc);
-            
-            // Deduplicate by name to prevent multiple markers for the same place
-            // AND Filter: Only show bars that have a match scheduled
-            if (!seenNames.has(bar.name) && bar.nextMatch) {
+            if (!seenNames.has(bar.name)) {
                 seenNames.add(bar.name);
                 bars.push(bar);
             }
         });
         return bars;
-    } catch (error) {
-        console.error("Error fetching bars:", error);
-        return [];
-    }
+    }, 'fetchBars');
+
+    // Si falla, retornem array buit (behavior per defecte en aquest servei)
+    return result.success && result.data ? result.data : [];
 };
 
 export const fetchBarById = async (id: string): Promise<Bar | null> => {
-    try {
+    const result = await executeRequest(async () => {
         const docRef = doc(db, 'bars', id);
         const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-            return mapDocToBar(docSnap);
-        } else {
-            return null;
-        }
-    } catch (error) {
-        console.error("Error fetching bar:", error);
-        return null;
-    }
+        return docSnap.exists() ? mapDocToBar(docSnap) : null;
+    }, `fetchBarById:${id}`);
+
+    return result.data;
 };

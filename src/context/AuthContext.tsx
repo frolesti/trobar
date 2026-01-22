@@ -14,6 +14,10 @@ import {
 import { auth } from '../config/firebase';
 import { getUserProfile, UserProfile } from '../services/userService';
 import { Platform, Alert } from 'react-native';
+import { executeRequest, executeOrThrow } from '../api/core';
+
+// Configurem l'idioma de les notificacions d'auth a Català
+auth.languageCode = 'ca';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -90,20 +94,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    */
   const getAccessToken = async (): Promise<string | null> => {
       if (!auth.currentUser) return null;
-      try {
-          return await auth.currentUser.getIdToken();
-      } catch (error) {
-          console.error("Error getting access token:", error);
-          return null;
-      }
+      const result = await executeRequest(() => auth.currentUser!.getIdToken(), 'getAccessToken');
+      return result.data;
   };
 
   const loginEmail = async (email: string, pass: string) => {
       setIsLoading(true);
       try {
-          await signInWithEmailAndPassword(auth, email, pass);
-      } catch (error: any) {
-          throw error;
+          await executeOrThrow(() => signInWithEmailAndPassword(auth, email, pass), 'loginEmail');
       } finally {
           setIsLoading(false);
       }
@@ -112,31 +110,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const registerEmail = async (email: string, pass: string, name: string) => {
     setIsLoading(true);
     try {
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
-        if (cred.user) {
-            await updateProfile(cred.user, { displayName: name });
-            await sendEmailVerification(cred.user);
-            await fetchAndSetUser(cred.user);
-        }
-    } catch (error: any) {
-        throw error;
+        await executeOrThrow(async () => {
+            const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            if (cred.user) {
+                await updateProfile(cred.user, { displayName: name });
+                await sendEmailVerification(cred.user);
+                await fetchAndSetUser(cred.user);
+            }
+        }, 'registerEmail');
     } finally {
         setIsLoading(false);
     }
   };
 
+  // Nota: Eliminem els Alerts interns. La UI (LoginModal) s'encarrega de mostrar l'error que llancem.
   const loginGoogle = async () => {
       setIsLoading(true);
       try {
-        if (Platform.OS === 'web') {
-            const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
-        } else {
-            Alert.alert("No disponible", "Login amb Google natiu requereix configuració addicional");
-        }
-      } catch (error: any) {
-          console.error(error);
-          Alert.alert("Error Google", error.message);
+        await executeOrThrow(async () => {
+            if (Platform.OS === 'web') {
+                const provider = new GoogleAuthProvider();
+                await signInWithPopup(auth, provider);
+            } else {
+                throw new Error("No disponible: Login amb Google natiu requereix configuració addicional");
+            }
+        }, 'loginGoogle');
       } finally {
           setIsLoading(false);
       }
@@ -145,15 +143,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loginApple = async () => {
     setIsLoading(true);
     try {
-      if (Platform.OS === 'web') {
-          const provider = new OAuthProvider('apple.com');
-          await signInWithPopup(auth, provider);
-      } else {
-          Alert.alert("No disponible", "Login amb Apple natiu requereix configuració addicional");
-      }
-    } catch (error: any) {
-        console.error(error);
-        Alert.alert("Error Apple", error.message);
+      await executeOrThrow(async () => {
+          if (Platform.OS === 'web') {
+              const provider = new OAuthProvider('apple.com');
+              await signInWithPopup(auth, provider);
+          } else {
+              throw new Error("No disponible: Login amb Apple natiu requereix configuració addicional");
+          }
+      }, 'loginApple');
     } finally {
         setIsLoading(false);
     }
@@ -162,9 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     setIsLoading(true);
     try {
-        await signOut(auth);
-    } catch (e) {
-        console.error(e);
+        await executeRequest(() => signOut(auth), 'logout');
     } finally {
         setIsLoading(false);
     }
