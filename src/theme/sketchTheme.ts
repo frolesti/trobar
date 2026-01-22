@@ -137,16 +137,5 @@ export const sketchShadow = () =>
     },
   });
 
-export const ensureLoraOnWeb = () => {
-  if (Platform.OS !== 'web') return;
-  if (typeof document === 'undefined') return;
 
-  const id = 'trobar-font-lora';
-  if (document.getElementById(id)) return;
 
-  const fontLink = document.createElement('link');
-  fontLink.id = id;
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap';
-  fontLink.rel = 'stylesheet';
-  document.head.appendChild(fontLink);
-};

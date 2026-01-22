@@ -65,7 +65,8 @@ export default function ProfileScreen() {
       if (!user) return;
       setIsLoading(true);
       try {
-          let downloadUrl = user.avatar;
+          // Important: Si user.avatar és undefined, posem null per evitar error de Firestore
+          let downloadUrl: string | null = user.avatar || null;
 
           // 1. Si hem canviat la imatge (és una URI local diferent de la remote)
           if (avatarUri && avatarUri !== user.avatar && !avatarUri.startsWith('http')) {
@@ -77,7 +78,7 @@ export default function ProfileScreen() {
               name: name,
               favoriteTeam: team,
               favoriteSport: sport,
-              avatar: downloadUrl
+              avatar: downloadUrl as string | undefined // Cast to match interface if needed, but value is clean
           });
 
           // 3. Refrescar context
@@ -117,7 +118,7 @@ export default function ProfileScreen() {
         {/* Avatar Section */}
         <View style={styles.avatarContainer}>
             <Image 
-                source={{ uri: avatarUri || 'https://via.placeholder.com/150' }} 
+                source={{ uri: avatarUri || 'https://placehold.co/150x150/png' }} 
                 style={styles.avatar} 
             />
             {isEditing && (

@@ -43,8 +43,11 @@ export const uploadProfileImage = async (userId: string, uri: string): Promise<s
             return await getDownloadURL(storageRef);
         } catch (error: any) {
             // Fallback específic per entorns de desenvolupament (CORS)
-            if (error.message && error.message.includes("CORS")) {
-                 console.warn("Imatge no pujada: Error CORS (habitual en localhost).");
+            // A Chrome "Failed to fetch" sol ser error de CORS o xarxa.
+            const isCorsOrNetwork = error.message && (error.message.includes("CORS") || error.message.includes("Failed to fetch"));
+            
+            if (isCorsOrNetwork) {
+                 console.warn("Imatge no pujada: Error CORS/Xarxa (habitual en localhost). S'usarà la URI local.");
                  return uri; 
             }
             throw error;

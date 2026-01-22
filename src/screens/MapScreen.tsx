@@ -11,6 +11,7 @@ import { seedDatabase } from '../utils/seedDatabase';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../utils/GoogleMaps';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
 import { executeRequest } from '../api/core';
+import { getNextMatch } from '../services/matchService';
 import styles from './MapScreen.styles';
 
 // DeclaraciÃ³ global per a TypeScript (Google Maps Web)
@@ -153,13 +154,14 @@ const MapScreen = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const navigation = useNavigation<any>();
 
-    // Location: UbicaciÃ³ REAL del dispositiu (GPS)
+    // Location: Ubicació REAL del dispositiu (GPS)
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
-    // CenterLocation: Punt central de la cerca (pot ser GPS o una adreÃ§a buscada)
+    // CenterLocation: Punt central de la cerca (pot ser GPS o una adreça buscada)
     const [centerLocation, setCenterLocation] = useState<{latitude: number, longitude: number} | null>(null);
     
-    // State comÃº
+    // State comú
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
     const [selectedBar, setSelectedBar] = useState<Bar | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [radiusKm, setRadiusKm] = useState(1); // Radi de cerca per defecte: 1km
@@ -180,13 +182,17 @@ const MapScreen = () => {
     const [bars, setBars] = useState<Bar[]>([]);
     const [filteredBars, setFilteredBars] = useState<Bar[]>([]);
 
+    // Specific Match / Competition State
+    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
+    const [nextMatchData, setNextMatchData] = useState<any>(null);
+
     // Refs (Web)
     const mapDivRef = useRef<View>(null);
     const googleMapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
     const circleRef = useRef<any>(null);
     const centerMarkerRef = useRef<any>(null);
-    const autocompleteInputRef = useRef<HTMLInputElement>(null);
+    const autocompleteInputRef = useRef<any>(null);
     const polylineRef = useRef<any>(null);
 
     // Refs (Native)
@@ -256,10 +262,11 @@ const MapScreen = () => {
              // Basic permission check
              let { status } = await Location.requestForegroundPermissionsAsync();
              if (status !== 'granted') {
-                 setErrorMsg('PermÃ­s de localitzaciÃ³ denegat');
+                 setErrorMsg('Permís de localització denegat');
                  const fallback = { latitude: 41.3874, longitude: 2.1686 };
                  setUserLocation({ coords: { ...fallback, altitude: 0, accuracy: 0, altitudeAccuracy: 0, heading: 0, speed: 0 }, timestamp: Date.now() });
                  setCenterLocation(fallback);
+
                  return;
              }
              let location = await Location.getCurrentPositionAsync({});
@@ -271,11 +278,49 @@ const MapScreen = () => {
     // 2. Load Bars + Sync Profile (Common)
     useEffect(() => {
         const loadBars = async () => {
+            // Load Bars first
             const firestoreBars = await fetchBars();
             setBars(firestoreBars);
         };
         loadBars();
     }, []);
+
+    // 3. Match Data Updater (Depends on selectedCompetition)
+    useEffect(() => {
+        const updateMatchData = async () => {
+             const nextBarcaMatch = await getNextMatch(selectedCompetition !== 'Qualsevol' ? selectedCompetition : undefined);
+             setNextMatchData(nextBarcaMatch);
+
+             if (nextBarcaMatch) {
+                const now = new Date();
+                const isToday = nextBarcaMatch.date.getDate() === now.getDate() && 
+                                nextBarcaMatch.date.getMonth() === now.getMonth() && 
+                                nextBarcaMatch.date.getFullYear() === now.getFullYear();
+                
+                const timeString = isToday 
+                    ? nextBarcaMatch.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : `${nextBarcaMatch.date.getDate()}/${nextBarcaMatch.date.getMonth()+1} ${nextBarcaMatch.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+                const updatedBars = bars.map(bar => ({
+                    ...bar,
+                    nextMatch: {
+                        teamHome: nextBarcaMatch.teamHome,
+                        teamAway: nextBarcaMatch.teamAway,
+                        time: timeString,
+                        competition: nextBarcaMatch.competition
+                    }
+                }));
+                // We update state only if bars are loaded, this triggers re-render of map
+                if (bars.length > 0) {
+                     // Force update logic (could be optimized)
+                     // Direct mutation of 'bars' state wouldn't trigger effect, so we use a temp var or just apply to filtered logic
+                     // But for this architecture, we might need to update the main 'bars' state
+                     setBars(updatedBars);
+                }
+             }
+        };
+        updateMatchData();
+    }, [selectedCompetition, bars.length === 0]); // Run when competition changes or initial bars load
 
     // Sync Profile
      useEffect(() => {
@@ -309,7 +354,8 @@ const MapScreen = () => {
             const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
             
             if (apiKey) {
-                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&loading=async`;
+                // Afegim 'marker' per utilitzar AdvancedMarkerElement i evitar warnings
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,marker&loading=async`;
                 script.async = true;
                 script.defer = true;
                 script.onload = loadMapAndAutocomplete;
@@ -345,10 +391,10 @@ const MapScreen = () => {
                 const away = (match.teamAway || '').toLowerCase();
                 
                 if (!home.includes(teamFilter) && !away.includes(teamFilter)) {
-                    // Check aliases like BarÃ§a
-                    const isBarca = teamFilter.includes('barcelona') || teamFilter.includes('barÃ§a');
+                    // Check aliases like Barça
+                    const isBarca = teamFilter.includes('barcelona') || teamFilter.includes('barça');
                     if (isBarca) {
-                        if (home.includes('barÃ§a') || away.includes('barÃ§a') || home.includes('barcelona') || away.includes('barcelona')) {
+                        if (home.includes('barça') || away.includes('barça') || home.includes('barcelona') || away.includes('barcelona')) {
                             return true; 
                         }
                     }
@@ -454,21 +500,29 @@ const MapScreen = () => {
             zoom: 14, 
             disableDefaultUI: true, 
             clickableIcons: false,
-            styles: PAPER_MAP_STYLE, // Apply Sketchy Paper Style
+            gestureHandling: 'greedy', // Forces one-finger pan (fixes "Use two fingers to move map")
+            // styles: PAPER_MAP_STYLE, // REMOVED: Cannot be used with mapId
             backgroundColor: SKETCH_THEME.colors.bg,
+            mapId: 'DEMO_MAP_ID', // Requerit per utilitzar AdvancedMarkerElement
         };
         const map = new window.google.maps.Map(mapDomNode, mapOptions);
         googleMapRef.current = map;
 
         // User Marker (Custom Dot)
         if (userLocation) {
-            new window.google.maps.Marker({
+            // Un cercle simple es pot fer amb un div i CSS
+            const userPinEl = document.createElement('div');
+            userPinEl.style.width = '12px';
+            userPinEl.style.height = '12px';
+            userPinEl.style.backgroundColor = SKETCH_THEME.colors.text;
+            userPinEl.style.opacity = '0.8';
+            userPinEl.style.borderRadius = '50%';
+            userPinEl.style.boxShadow = '0 0 0 2px white'; // Opcional, vora blanca
+
+            new window.google.maps.marker.AdvancedMarkerElement({
                 position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
                 map: map,
-                icon: {
-                    path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 6, fillColor: SKETCH_THEME.colors.text, fillOpacity: 0.8, strokeWeight: 0,
-                },
+                content: userPinEl,
                 title: "Tu", zIndex: 999
             });
         }
@@ -538,35 +592,44 @@ const MapScreen = () => {
              if (dist < 0.05) showCenter = false;
         }
         if (showCenter) {
-            centerMarkerRef.current = new window.google.maps.Marker({
+            const centerEl = document.createElement('div');
+            centerEl.style.width = '10px';
+            centerEl.style.height = '10px';
+            centerEl.style.borderRadius = '50%';
+            centerEl.style.border = `2px solid ${SKETCH_THEME.colors.text}`;
+            centerEl.style.backgroundColor = 'transparent';
+
+            centerMarkerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
                 position: { lat: centerLocation.latitude, lng: centerLocation.longitude },
                 map: googleMapRef.current,
-                icon: { 
-                    path: window.google.maps.SymbolPath.CIRCLE, 
-                    scale: 5, strokeColor: SKETCH_THEME.colors.text, strokeWeight: 2, 
-                    fillColor: 'transparent', fillOpacity: 0
-                },
+                content: centerEl,
                 zIndex: 900
             });
         }
 
         // Bar Markers (Custom Sketchy Pins)
-        markersRef.current.forEach(m => m.setMap(null));
+        markersRef.current.forEach(m => m.map = null);
         markersRef.current = [];
+        
         barsToRender.forEach(bar => {
-            const marker = new window.google.maps.Marker({
+            // Creem un element SVG pel marcador
+            const parser = new DOMParser();
+            const svgString = `
+                <svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="${SKETCHY_PIN_PATH}" fill="${SKETCH_THEME.colors.primary}" fill-opacity="0.9" />
+                </svg>
+            `;
+            const svgEl = parser.parseFromString(svgString, 'image/svg+xml').documentElement;
+            
+            const pinContainer = document.createElement('div');
+            pinContainer.appendChild(svgEl);
+            pinContainer.style.transform = 'translateY(-50%)'; 
+
+            const marker = new window.google.maps.marker.AdvancedMarkerElement({
                 position: { lat: bar.latitude, lng: bar.longitude },
                 map: googleMapRef.current,
                 title: getCleanBarName(bar.name),
-                icon: { 
-                    path: SKETCHY_PIN_PATH, 
-                    fillColor: SKETCH_THEME.colors.primary, 
-                    fillOpacity: 0.9, 
-                    strokeWeight: 0, 
-                    scale: 1.5, // Adjust size
-                    anchor: new window.google.maps.Point(12, 24) 
-                },
-                label: { text: " ", fontSize: "0px" } 
+                content: pinContainer,
             });
             marker.addListener("click", () => { setSelectedBar(bar); });
             markersRef.current.push(marker);
@@ -689,7 +752,7 @@ const MapScreen = () => {
 
                     {selectedBar.nextMatch && (
                         <View style={styles.matchCard}>
-                            <Text style={styles.matchTitle}>PrÃ²xim Partit ({selectedBar.nextMatch.competition})</Text>
+                            <Text style={styles.matchTitle}>Pròxim Partit ({selectedBar.nextMatch.competition})</Text>
                             <View style={styles.matchTeams}>
                                 <Text style={styles.teamText}>{selectedBar.nextMatch.teamHome}</Text>
                                 <Text style={styles.vsText}>vs</Text>
@@ -798,7 +861,7 @@ const MapScreen = () => {
                     <input
                         ref={autocompleteInputRef}
                         type="text"
-                        placeholder="Des d'on vols veure el BarÃ§a?"
+                        placeholder="Des d'on vols veure el Barça?"
                         style={{
                             flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: '#333', fontFamily: 'Lora'
                         }}
@@ -817,7 +880,7 @@ const MapScreen = () => {
              <View style={[styles.searchBar, {flex: 1}]}>
                 <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
                 <TextInput 
-                    placeholder="Des d'on vols veure el BarÃ§a?" 
+                    placeholder="Des d'on vols veure el Barça?" 
                     style={styles.searchInput}
                     placeholderTextColor="#999"
                     value={searchQuery}
@@ -845,21 +908,41 @@ const MapScreen = () => {
                     </View>
 
                     <Text style={styles.settingsHint}>
-                        Configura els filtres de cerca per aquesta sessiÃ³.
+                        Configura els filtres de cerca per aquesta sessió.
                     </Text>
 
                     {Platform.OS === 'web' ? (
                         <View style={{zIndex: 50}}>
-                            <Text style={styles.settingsLabel}>Esport</Text>
-                            <View style={{zIndex: 20}}>
-                                <SketchySelect
-                                    value={selectedSport}
-                                    onChange={(val) => { setSelectedSport(val); setSelectedTeam(''); }}
-                                    options={[
-                                        { label: 'Qualsevol', value: '' },
-                                        { label: 'Futbol', value: 'Futbol' }
-                                    ]}
-                                />
+                            <View style={{marginBottom: 15, zIndex: 100}}>
+                                <Text style={styles.settingsLabel}>Esport</Text>
+                                <View style={{zIndex: 101}}>
+                                    <SketchySelect
+                                        value={selectedSport}
+                                        onChange={(val) => { setSelectedSport(val); setSelectedTeam(''); setSelectedCompetition(''); }}
+                                        options={[
+                                            { label: 'Qualsevol', value: '' },
+                                            { label: 'Futbol', value: 'Futbol' }
+                                        ]}
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={{marginBottom: 15, zIndex: 90}}>
+                                 <Text style={styles.settingsLabel}>Competició</Text>
+                                 <View style={{zIndex: 91}}>
+                                     <SketchySelect 
+                                         value={selectedCompetition}
+                                         onChange={setSelectedCompetition}
+                                         placeholder="Qualsevol"
+                                         disabled={selectedSport === ''}
+                                         options={[
+                                             { label: 'Qualsevol', value: '' },
+                                             { label: 'La Liga', value: 'La Liga' },
+                                             { label: 'Champions League', value: 'Champions League' },
+                                             { label: 'Copa del Rey', value: 'Copa del Rey' }
+                                         ]}
+                                     />
+                                 </View>
                             </View>
 
                             <Text style={styles.settingsLabel}>Equip</Text>
@@ -879,7 +962,7 @@ const MapScreen = () => {
                             </View>
                         </View>
                     ) : (
-                        <Text style={styles.settingsHint}>Filtres avanÃ§ats: pendent dâ€™implementar a mÃ²bil natiu.</Text>
+                        <Text style={styles.settingsHint}>Filtres avançats: pendent d’implementar a mòbil natiu.</Text>
                     )}
 
                     <View style={styles.settingsActions}>
@@ -944,7 +1027,7 @@ const MapScreen = () => {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} />
-                <Text style={{marginTop:10}}>Obtenint la teva ubicaciÃ³ real...</Text>
+                <Text style={{marginTop:10}}>Obtenint la teva ubicació real...</Text>
             </View>
         );
     }
@@ -1012,10 +1095,15 @@ const MapScreen = () => {
             {/* MOBILE OVERLAYS */}
             {!isDesktop && (
                 <>
-                    <SafeAreaView pointerEvents="box-none" style={{position: 'absolute', top: 0, left: 0, right: 0, height: '100%', zIndex: 10}}>
+                    <View 
+                        style={{position: 'absolute', top: 0, left: 0, right: 0, height: '100%', zIndex: 10}} 
+                        pointerEvents="box-none"
+                    >
                          {/* Only show header if no bar selected OR if we want it persistent. In original Web it was persistent */}
-                         {renderHeader()}
-                    </SafeAreaView>
+                         <SafeAreaView style={{backgroundColor: 'transparent'}} pointerEvents="box-none">
+                            {renderHeader()}
+                         </SafeAreaView>
+                    </View>
 
                     <TouchableOpacity 
                         style={styles.fabGps}
