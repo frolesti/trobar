@@ -1,18 +1,97 @@
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
-export const SKETCH_THEME = {
-  colors: {
-    bg: '#FFFBF0',
+export const SKETCHY_COLORS = {
+    bg: '#FFFBF0', // Cream / Paper
     uiBg: 'rgba(255, 251, 240, 0.96)',
     card: '#FFFFFF',
-    text: '#3E2723',
+    text: '#3E2723', // Dark Brown / Ink
     textMuted: '#6D4C41',
     accent: '#8D6E63',
-    border: 'rgba(62, 39, 35, 0.18)',
-    primary: '#D32F2F',
+    border: 'rgba(62, 39, 35, 0.18)', // Ink wash
+    primary: '#D32F2F', // Red ink/stamp
     primarySoft: 'rgba(211, 47, 47, 0.12)',
     danger: '#C62828',
-  },
+};
+
+export const sketchFontFamily = () =>
+  Platform.select({
+    web: "'Lora', serif", // Ensure CSS syntax for web
+    ios: 'Georgia',
+    android: 'serif',
+    default: 'serif',
+  });
+
+// --- TIPOGRAFIA ESTÀNDARD ---
+// Defineix els estils de text base per reutilitzar-los i evitar repetir fontFamily
+const fontBase = { fontFamily: sketchFontFamily() };
+
+export const SKETCH_TYPOGRAPHY = StyleSheet.create({
+    display: {
+        ...fontBase,
+        fontSize: 48,
+        fontWeight: 'bold',
+        color: SKETCHY_COLORS.text,
+        letterSpacing: 1,
+    } as TextStyle,
+    h1: {
+        ...fontBase,
+        fontSize: 28,
+        fontWeight: '800',
+        color: SKETCHY_COLORS.text,
+    } as TextStyle,
+    h2: {
+        ...fontBase,
+        fontSize: 22,
+        fontWeight: '800',
+        color: SKETCHY_COLORS.text,
+        marginBottom: 10,
+    } as TextStyle,
+    h3: {
+        ...fontBase,
+        fontSize: 18,
+        fontWeight: '800',
+        color: SKETCHY_COLORS.text,
+    } as TextStyle,
+    body: {
+        ...fontBase,
+        fontSize: 16,
+        color: SKETCHY_COLORS.text,
+        lineHeight: 24,
+    } as TextStyle,
+    bodySmall: {
+        ...fontBase,
+        fontSize: 14,
+        color: SKETCHY_COLORS.text,
+        lineHeight: 20,
+    } as TextStyle,
+    caption: {
+        ...fontBase,
+        fontSize: 12,
+        color: SKETCHY_COLORS.textMuted,
+    } as TextStyle,
+});
+
+// --- LAYOUTS COMUNS ---
+export const SKETCH_LAYOUT = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: SKETCHY_COLORS.bg,
+    } as ViewStyle,
+    centerContent: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    } as ViewStyle,
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    } as ViewStyle,
+});
+
+export const SKETCH_THEME = {
+  colors: SKETCHY_COLORS,
+  typography: SKETCH_TYPOGRAPHY,
+  layout: SKETCH_LAYOUT,
   radius: {
     sm: 10,
     md: 14,
@@ -29,13 +108,22 @@ export const SKETCH_THEME = {
   },
 };
 
-export const sketchFontFamily = () =>
-  Platform.select({
-    web: 'Lora',
-    ios: 'Georgia',
-    android: 'serif',
-    default: undefined,
-  });
+export const ensureLoraOnWeb = () => {
+    if (Platform.OS === 'web') {
+        const fontLink = document.createElement('link');
+        fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap';
+        fontLink.rel = 'stylesheet';
+        document.head.appendChild(fontLink);
+
+        // Inject global styles for web
+        const style = document.createElement('style');
+        style.textContent = `
+          body { font-family: 'Lora', serif; background-color: ${SKETCHY_COLORS.bg}; }
+          input, textarea, select, button { font-family: 'Lora', serif !important; }
+        `;
+        document.head.appendChild(style);
+    }
+};
 
 export const sketchShadow = () =>
   Platform.select({
