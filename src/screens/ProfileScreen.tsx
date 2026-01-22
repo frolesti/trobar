@@ -9,7 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { updateUserProfile, uploadProfileImage } from '../services/userService';
-import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../theme/sketchTheme';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import styles from './ProfileScreen.styles';
 
 const SPORTS = ['Futbol'];
 const TEAMS = ['FC Barcelona', 'Real Madrid', 'RCD Espanyol', 'Girona FC'];
@@ -85,7 +87,7 @@ export default function ProfileScreen() {
           Alert.alert("Perfil actualitzat", "Les teves dades s'han guardat correctament.");
       } catch (error) {
           console.error(error);
-          Alert.alert("Error", "No s'ha pogut guardar el perfil.");
+          Alert.alert("Error", getUserFriendlyError(error, "No s'ha pogut guardar el perfil."));
       } finally {
           setIsLoading(false);
       }
@@ -209,161 +211,4 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: SKETCH_THEME.colors.bg,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: SKETCH_THEME.colors.uiBg,
-    borderBottomWidth: 1,
-    borderBottomColor: SKETCH_THEME.colors.border,
-    ...(sketchShadow() as object),
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: SKETCH_THEME.colors.text,
-    fontFamily: sketchFontFamily(),
-  },
-  editButton: {
-      padding: 8,
-  },
-  editButtonText: {
-      color: SKETCH_THEME.colors.primary,
-      fontWeight: '700',
-      fontSize: 16,
-      fontFamily: sketchFontFamily(),
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  avatarContainer: {
-      position: 'relative',
-      marginBottom: 16,
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#E1E1E1',
-    borderWidth: 3,
-    borderColor: SKETCH_THEME.colors.card,
-  },
-  changePhotoButton: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      backgroundColor: SKETCH_THEME.colors.primary,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: SKETCH_THEME.colors.card,
-  },
-  helperText: {
-      fontSize: 12,
-      color: SKETCH_THEME.colors.textMuted,
-      marginBottom: 20,
-      fontFamily: sketchFontFamily(),
-  },
-  formContainer: {
-      width: '100%',
-      backgroundColor: SKETCH_THEME.colors.uiBg,
-      borderRadius: 16,
-      padding: 24,
-      borderWidth: 1,
-      borderColor: SKETCH_THEME.colors.border,
-      ...(sketchShadow() as object),
-      marginBottom: 24
-  },
-  label: {
-      fontSize: 12,
-      color: SKETCH_THEME.colors.accent,
-      textTransform: 'uppercase',
-      marginBottom: 4,
-      marginTop: 12,
-      letterSpacing: 1,
-      fontFamily: sketchFontFamily(),
-  },
-  value: {
-      fontSize: 16,
-      color: SKETCH_THEME.colors.text,
-      paddingVertical: 4,
-      fontWeight: '600',
-      fontFamily: sketchFontFamily(),
-  },
-  input: {
-      fontSize: 16,
-      color: SKETCH_THEME.colors.text,
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: SKETCH_THEME.colors.border,
-      fontWeight: '600',
-      fontFamily: sketchFontFamily(),
-  },
-  readOnly: {
-      color: SKETCH_THEME.colors.textMuted,
-  },
-  divider: {
-      height: 1,
-      backgroundColor: SKETCH_THEME.colors.border,
-      marginVertical: 20
-  },
-  sectionTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      marginBottom: 8,
-      color: SKETCH_THEME.colors.text,
-      fontFamily: sketchFontFamily(),
-  },
-  logoutButton: {
-    width: '100%',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: SKETCH_THEME.colors.primarySoft,
-    borderWidth: 1,
-    borderColor: 'rgba(211, 47, 47, 0.25)',
-    alignItems: 'center',
-  },
-  logoutText: {
-    color: SKETCH_THEME.colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: sketchFontFamily(),
-  },
-  cancelButton: {
-      marginTop: 10,
-      padding: 12
-  },
-  cancelText: {
-      color: SKETCH_THEME.colors.textMuted,
-      fontSize: 14,
-      fontFamily: sketchFontFamily(),
-  },
-  pickerContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: SKETCH_THEME.colors.border,
-    // marginBottom: 8, 
-  },
-  picker: {
-    width: '100%',
-    ...Platform.select({
-      android: {
-         color: SKETCH_THEME.colors.text,
-      }
-    })
-  }
-});
+
