@@ -4,7 +4,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../theme/sketchTheme';
+import { submitBusinessClaim } from '../services/businessService';
+import { getUserFriendlyError } from '../utils/errorHandler';
+import styles from './ClaimBusinessScreen.styles';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ClaimBusiness'>;
@@ -13,6 +16,7 @@ type Props = {
 
 const ClaimBusinessScreen = ({ navigation, route }: Props) => {
   const { barId, barName } = route.params;
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
       name: '',
       phone: '',
@@ -24,15 +28,30 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
         ensureLoraOnWeb();
     }, []);
 
-  const handleSubmit = () => {
-    // Aquí aniria la lògica d'enviar al backend
-    Alert.alert(
-        "Sol·licitud Enviada",
-        "Hem rebut la teva sol·licitud. Revisarem la documentació i et contactarem en 24-48h.",
-        [
-            { text: "Entesos", onPress: () => navigation.goBack() }
-        ]
-    );
+  const handleSubmit = async () => {
+    // Validació bàsica
+    if (!formData.name || !formData.phone || !formData.email) {
+        Alert.alert("Falten dades", "Si us plau, omple com a mínim el nom, telèfon i email.");
+        return;
+    }
+
+    setIsSubmitting(true);
+    
+    // Fem servir el nou servei estandaritzat
+    const result = await submitBusinessClaim(barId, barName, formData);
+    
+    setIsSubmitting(false);
+
+    if (result.success) {
+        Alert.alert(
+            "Sol·licitud Enviada",
+            "Hem rebut la teva sol·licitud correctament. Revisarem la documentació i et contactarem en 24-48h.",
+            [{ text: "Entesos", onPress: () => navigation.goBack() }]
+        );
+    } else {
+        // En cas d'error, el 'result.error' ja ve traduït per getUserFriendlyError des del servei
+        Alert.alert("Error", result.error || "No s'ha pogut enviar la sol·licitud.");
+    }
   };
 
   return (
@@ -94,8 +113,14 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                     </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                    <Text style={styles.submitButtonText}>Enviar Sol·licitud</Text>
+                <TouchableOpacity 
+                    style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]} 
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                >
+                    <Text style={styles.submitButtonText}>
+                        {isSubmitting ? 'Enviant...' : 'Enviar Sol·licitud'}
+                    </Text>
                 </TouchableOpacity>
             </View>
 
@@ -107,105 +132,6 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: SKETCH_THEME.colors.bg,
-  },
-  scrollContent: {
-      padding: 20,
-      paddingBottom: 40,
-  },
-  header: {
-      marginBottom: 24,
-      marginTop: 20,
-  },
-  headerTitle: {
-      fontSize: 28,
-      fontWeight: 'bold',
-      color: SKETCH_THEME.colors.text,
-      marginBottom: 8,
-      fontFamily: sketchFontFamily(),
-  },
-  headerSubtitle: {
-      fontSize: 16,
-      color: SKETCH_THEME.colors.textMuted,
-      lineHeight: 22,
-      fontFamily: sketchFontFamily(),
-  },
-  formCard: {
-      backgroundColor: SKETCH_THEME.colors.uiBg,
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: SKETCH_THEME.colors.border,
-      ...(sketchShadow() as object),
-  },
-  sectionTitle: {
-      fontSize: 14,
-      fontWeight: 'bold',
-      color: SKETCH_THEME.colors.accent,
-      textTransform: 'uppercase',
-      marginBottom: 12,
-      marginTop: 8,
-      fontFamily: sketchFontFamily(),
-  },
-  input: {
-      backgroundColor: SKETCH_THEME.colors.card,
-      borderWidth: 1,
-      borderColor: SKETCH_THEME.colors.border,
-      borderRadius: 12,
-      padding: 14,
-      fontSize: 16,
-      marginBottom: 16,
-      color: SKETCH_THEME.colors.text,
-      fontFamily: sketchFontFamily(),
-  },
-  uploadButton: {
-      padding: 16,
-      borderWidth: 1,
-      borderColor: 'rgba(211, 47, 47, 0.45)',
-      borderStyle: 'dashed',
-      borderRadius: 12,
-      alignItems: 'center',
-      marginBottom: 24,
-      backgroundColor: SKETCH_THEME.colors.primarySoft,
-  },
-  uploadRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-  },
-  uploadButtonText: {
-      color: SKETCH_THEME.colors.primary,
-      fontWeight: '700',
-      fontFamily: sketchFontFamily(),
-  },
-  submitButton: {
-      backgroundColor: SKETCH_THEME.colors.primary,
-      padding: 16,
-      borderRadius: 12,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: 'rgba(211, 47, 47, 0.35)',
-      ...(sketchShadow() as object),
-  },
-  submitButtonText: {
-      color: 'white',
-      fontSize: 16,
-      fontWeight: 'bold',
-      fontFamily: sketchFontFamily(),
-  },
-  cancelButton: {
-      alignItems: 'center',
-      padding: 16,
-  },
-  cancelButtonText: {
-      color: SKETCH_THEME.colors.textMuted,
-      fontWeight: '700',
-      fontFamily: sketchFontFamily(),
-  },
-});
+
 
 export default ClaimBusinessScreen;
