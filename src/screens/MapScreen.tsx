@@ -11,7 +11,8 @@ import { seedDatabase } from '../utils/seedDatabase';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../utils/GoogleMaps';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
 import { executeRequest } from '../api/core';
-import { getNextMatch } from '../services/matchService';
+import { fetchAllMatches, Match } from '../services/matchService';
+import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
 
 // DeclaraciÃ³ global per a TypeScript (Google Maps Web)
@@ -73,75 +74,7 @@ const SKETCHY_PIN_PATH = "M 12 2 C 7 2 3 7 3 12 C 3 17 12 24 12 24 C 12 24 21 17
 // Base64 fallback if file asset fails for any reason
 const DEFAULT_BAR_IMAGE = require('../../assets/img/bar-fallout.jpg');
 
-// Helper Component for Sketchy Select
-interface SketchySelectProps {
-  value: string;
-  options: { label: string; value: string }[];
-  onChange: (val: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}
-
-const SketchySelect = ({ value, options, onChange, placeholder = 'Selecciona...', disabled = false }: SketchySelectProps) => {
-    const [isOpen, setIsOpen] = useState(false);
-    
-    const handleSelect = (val: string) => {
-        onChange(val);
-        setIsOpen(false);
-    }
-    
-    // Find label
-    const currentLabel = options.find(o => o.value === value)?.label || placeholder;
-
-    return (
-        <View style={{ zIndex: isOpen ? 1000 : 1 }}>
-            <TouchableOpacity
-                onPress={() => !disabled && setIsOpen(!isOpen)}
-                style={[
-                    styles.webSelectContainer, 
-                    disabled && { opacity: 0.6, backgroundColor: '#f0f0f0' },
-                    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
-                ]}
-                activeOpacity={0.8}
-            >
-                <Text style={{ fontFamily: 'Lora', fontWeight: 'bold', fontSize: 16, color: SKETCH_THEME.colors.text }}>
-                    {currentLabel}
-                </Text>
-                <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={20} color={SKETCH_THEME.colors.text} />
-            </TouchableOpacity>
-            
-            {isOpen && (
-                <View style={{
-                    position: 'absolute', top: 52, left: 0, right: 0, 
-                    backgroundColor: SKETCH_THEME.colors.bg, 
-                    borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
-                    maxHeight: 200,
-                    zIndex: 2000, 
-                    ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } })
-                }}>
-                    <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
-                        {options.map((opt) => (
-                            <TouchableOpacity
-                                key={opt.value}
-                                onPress={() => handleSelect(opt.value)}
-                                style={{
-                                    paddingVertical: 12, paddingHorizontal: 16,
-                                    borderBottomWidth: 1,
-                                    borderBottomColor: '#eee',
-                                    backgroundColor: opt.value === value ? '#EFEBE9' : 'transparent'
-                                }}
-                            >
-                                <Text style={{ fontFamily: 'Lora', fontSize: 16, color: SKETCH_THEME.colors.text, fontWeight: opt.value === value ? 'bold' : 'normal' }}>
-                                    {opt.label}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-            )}
-        </View>
-    );
-}
+// Match/league search UI removed
 
 const getBarImageSource = (img: string | undefined | null) => {
     if (img && typeof img === 'string' && img.startsWith('http') && img !== 'null' && img !== 'undefined' && img.trim() !== '') {
@@ -149,6 +82,21 @@ const getBarImageSource = (img: string | undefined | null) => {
     }
     return DEFAULT_BAR_IMAGE;
 };
+
+// Suppress Google Maps Deprecation Warnings
+const originalWarn = console.warn;
+const originalError = console.error;
+
+if (Platform.OS === 'web') {
+    console.warn = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('google.maps.places.Autocomplete') || args[0].includes('As of March 1st, 2025'))) return;
+        originalWarn(...args);
+    };
+    console.error = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('google.maps.places.Autocomplete') || args[0].includes('As of March 1st, 2025'))) return;
+        originalError(...args);
+    }
+}
 
 const MapScreen = () => {
     const { user, isAuthenticated, logout } = useAuth();
@@ -165,14 +113,30 @@ const MapScreen = () => {
     const [selectedBar, setSelectedBar] = useState<Bar | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [radiusKm, setRadiusKm] = useState(1); // Radi de cerca per defecte: 1km
-    
-    // State Web / Advanced Filters
-    const [selectedSport, setSelectedSport] = useState('');
-    const [selectedTeam, setSelectedTeam] = useState('');
-    // Filters UI removed from the initial screen; sport/team filters still apply from profile state.
-    const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
 
     const [isSearchSettingsOpen, setIsSearchSettingsOpen] = useState(false);
+    const [openPicker, setOpenPicker] = useState<string | null>(null); // 'sport', 'comp', 'team'
+
+    // Match filters (restored)
+    const [pickerModal, setPickerModal] = useState<{
+        visible: boolean;
+        label: string;
+        options: string[];
+        selectedValue: string;
+        onSelect: (val: string) => void;
+    }>({ visible: false, label: '', options: [], selectedValue: '', onSelect: () => {} });
+
+    // Match filters (restored)
+    const [selectedSport, setSelectedSport] = useState<string>('Futbol');
+    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
+    const [selectedTeam, setSelectedTeam] = useState<string>('');
+    
+    // Data for filters
+    const [allMatches, setAllMatches] = useState<Match[]>([]);
+    const [availableCompetitions, setAvailableCompetitions] = useState<string[]>([]);
+    const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+    
+    const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
     const [isAvatarError, setIsAvatarError] = useState(false);
 
     // Force local placeholder if a remote image fails to load
@@ -181,10 +145,6 @@ const MapScreen = () => {
     // Dades
     const [bars, setBars] = useState<Bar[]>([]);
     const [filteredBars, setFilteredBars] = useState<Bar[]>([]);
-
-    // Specific Match / Competition State
-    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
-    const [nextMatchData, setNextMatchData] = useState<any>(null);
 
     // Refs (Web)
     const mapDivRef = useRef<View>(null);
@@ -197,6 +157,9 @@ const MapScreen = () => {
 
     // Refs (Native)
     const mapRefNative = useRef<any>(null);
+    
+    // Instruction Animation
+    const instructionOpacity = useRef(new Animated.Value(1)).current;
 
     // Responsive
     const { width, height } = useWindowDimensions();
@@ -275,60 +238,15 @@ const MapScreen = () => {
         })();
     }, []);
 
-    // 2. Load Bars + Sync Profile (Common)
+    // 2. Load Bars
     useEffect(() => {
-        const loadBars = async () => {
-            // Load Bars first
+        const loadInitialData = async () => {
+            // Load Bars
             const firestoreBars = await fetchBars();
             setBars(firestoreBars);
         };
-        loadBars();
+        loadInitialData();
     }, []);
-
-    // 3. Match Data Updater (Depends on selectedCompetition)
-    useEffect(() => {
-        const updateMatchData = async () => {
-             const nextBarcaMatch = await getNextMatch(selectedCompetition !== 'Qualsevol' ? selectedCompetition : undefined);
-             setNextMatchData(nextBarcaMatch);
-
-             if (nextBarcaMatch) {
-                const now = new Date();
-                const isToday = nextBarcaMatch.date.getDate() === now.getDate() && 
-                                nextBarcaMatch.date.getMonth() === now.getMonth() && 
-                                nextBarcaMatch.date.getFullYear() === now.getFullYear();
-                
-                const timeString = isToday 
-                    ? nextBarcaMatch.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : `${nextBarcaMatch.date.getDate()}/${nextBarcaMatch.date.getMonth()+1} ${nextBarcaMatch.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-                const updatedBars = bars.map(bar => ({
-                    ...bar,
-                    nextMatch: {
-                        teamHome: nextBarcaMatch.teamHome,
-                        teamAway: nextBarcaMatch.teamAway,
-                        time: timeString,
-                        competition: nextBarcaMatch.competition
-                    }
-                }));
-                // We update state only if bars are loaded, this triggers re-render of map
-                if (bars.length > 0) {
-                     // Force update logic (could be optimized)
-                     // Direct mutation of 'bars' state wouldn't trigger effect, so we use a temp var or just apply to filtered logic
-                     // But for this architecture, we might need to update the main 'bars' state
-                     setBars(updatedBars);
-                }
-             }
-        };
-        updateMatchData();
-    }, [selectedCompetition, bars.length === 0]); // Run when competition changes or initial bars load
-
-    // Sync Profile
-     useEffect(() => {
-        if (user) {
-            setSelectedSport(user.favoriteSport || '');
-            setSelectedTeam(user.favoriteTeam || '');
-        }
-    }, [user]);
 
     // 3. Web Specific Initialization (Google Maps JS)
     useEffect(() => {
@@ -366,7 +284,7 @@ const MapScreen = () => {
         }
     }, [centerLocation]); 
 
-    // 4. Filtering Logic (Centralized for both platforms logic state)
+    // 4. Filtering Logic (distance-only)
      useEffect(() => {
         if (!centerLocation) return; // Wait for location
 
@@ -381,26 +299,26 @@ const MapScreen = () => {
             
             if (dist > radiusKm) return false;
 
-            // Filtre Equip (Opcional)
+            // Match filters: rely on bar.nextMatch (seeded / stored in Firestore)
+            if (selectedSport && selectedSport !== '' && selectedSport !== 'Futbol') {
+                return false;
+            }
+
+            if (selectedCompetition && selectedCompetition !== '') {
+                const comp = (bar.nextMatch?.competition || '').trim();
+                if (!comp) return false;
+                if (comp.toLowerCase() !== selectedCompetition.toLowerCase()) return false;
+            }
+
             if (selectedTeam && selectedTeam !== '') {
                 const match = bar.nextMatch;
                 if (!match) return false;
-
-                const teamFilter = selectedTeam.toLowerCase();
+                const tf = selectedTeam.toLowerCase();
                 const home = (match.teamHome || '').toLowerCase();
                 const away = (match.teamAway || '').toLowerCase();
-                
-                if (!home.includes(teamFilter) && !away.includes(teamFilter)) {
-                    // Check aliases like Barça
-                    const isBarca = teamFilter.includes('barcelona') || teamFilter.includes('barça');
-                    if (isBarca) {
-                        if (home.includes('barça') || away.includes('barça') || home.includes('barcelona') || away.includes('barcelona')) {
-                            return true; 
-                        }
-                    }
-                    return false;
-                }
+                if (!home.includes(tf) && !away.includes(tf)) return false;
             }
+
             return true;
         });
         setFilteredBars(nearbyBars);
@@ -430,7 +348,70 @@ const MapScreen = () => {
              // Native Map automatically updates via 'filteredBars' prop to MapView
         }
 
-    }, [centerLocation, radiusKm, bars, selectedSport, selectedTeam]);
+    }, [centerLocation, radiusKm, bars, selectedSport, selectedCompetition, selectedTeam]);
+
+    // Load match-derived filter options when opening the filters panel
+    useEffect(() => {
+        if (!isSearchSettingsOpen) return;
+        
+        // If we already have data, don't refetch broadly unless necessary
+        if (allMatches.length > 0) return;
+
+        let isMounted = true;
+        const loadOptions = async () => {
+            try {
+                const { matches, teams, competitions } = await fetchAllMatches();
+                if (!isMounted) return;
+
+                setAllMatches(matches);
+                // Initial Competitions (Available regardless of team selection, or could limit?)
+                // Usually Competition is a top-level filter.
+                setAvailableCompetitions(competitions.sort());
+                
+                // Initial Teams (All teams if no competition selected)
+                // We will let the dependency effect handle 'availableTeams' but we can seed it here first.
+                // Actually, let's just trigger the effect by setting allMatches.
+            } catch (e) {
+                // Keep options empty if fail
+            }
+        };
+
+        loadOptions();
+        return () => {
+            isMounted = false;
+        };
+    }, [isSearchSettingsOpen]);
+
+    // Update Teams based on Competition
+    useEffect(() => {
+        if (allMatches.length === 0) return;
+
+        let teamSet = new Set<string>();
+
+        if (selectedCompetition === '') {
+            // All teams from all matches
+            allMatches.forEach(m => {
+                teamSet.add(m.teamHome);
+                teamSet.add(m.teamAway);
+            });
+        } else {
+            // Filter teams by competition
+            const relevantMatches = allMatches.filter(m => m.competition === selectedCompetition);
+            relevantMatches.forEach(m => {
+                teamSet.add(m.teamHome);
+                teamSet.add(m.teamAway);
+            });
+        }
+
+        const sortedTeams = Array.from(teamSet).sort();
+        setAvailableTeams(sortedTeams);
+
+        // Auto-clear invalid team selection
+        if (selectedTeam && !teamSet.has(selectedTeam)) {
+            setSelectedTeam('');
+        }
+
+    }, [selectedCompetition, allMatches]);
 
     // 5. Selected Bar Animation (Synced)
     useEffect(() => {
@@ -480,16 +461,6 @@ const MapScreen = () => {
          }
 
     }, [selectedBar, isDesktop]);
-
-    const resetFiltersToProfile = () => {
-        if (!user) {
-            setSelectedSport('');
-            setSelectedTeam('');
-            return;
-        }
-        setSelectedSport(user.favoriteSport || '');
-        setSelectedTeam(user.favoriteTeam || '');
-    };
 
     // --- WEB HELPERS ---
     const initWebMap = () => {
@@ -740,8 +711,8 @@ const MapScreen = () => {
                             </View>
                             <Text style={{fontSize:12, color:'#666', marginTop:4, fontFamily: 'Lora'}}>
                                 {routeInfo 
-                                    ? `â±ï¸ ${routeInfo.duration} caminant (${routeInfo.distance})`
-                                    : `ðŸ“ A ${getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, selectedBar.latitude, selectedBar.longitude).toFixed(1)} km`
+                                    ? `⏱️ ${routeInfo.duration} caminant (${routeInfo.distance})`
+                                    : `📍 A ${getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, selectedBar.latitude, selectedBar.longitude).toFixed(1)} km`
                                 }
                             </Text>
                         </View>
@@ -796,11 +767,6 @@ const MapScreen = () => {
                             <Text style={{textAlign:'center', color: SKETCH_THEME.colors.textMuted, marginTop: 10, fontFamily: 'Lora'}}>
                                 Cap bar trobat a la zona.
                             </Text>
-                            <TouchableOpacity onPress={() => setIsSearchSettingsOpen(true)} style={{ marginTop: 15 }}>
-                                <Text style={{ color: SKETCH_THEME.colors.primary, fontWeight: 'bold', fontFamily: 'Lora', textDecorationLine: 'underline' }}>
-                                    Ajustar filtres
-                                </Text>
-                            </TouchableOpacity>
                         </View>
                     ) : (
                         filteredBars.map((bar, index) => (
@@ -890,119 +856,202 @@ const MapScreen = () => {
             </View>
         );
     };
-    
-    // Filters UI removed from the initial screen.
-    const renderFilters = () => null;
 
+    const renderPickerModal = () => {
+        if (!pickerModal.visible) return null;
+        
+        return (
+             <View style={{
+                position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                zIndex: 3000,
+                justifyContent: 'center',
+                alignItems: 'center'
+             }}>
+                <View style={{
+                    width: '85%',
+                    maxHeight: '70%',
+                    backgroundColor: SKETCH_THEME.colors.bg,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: SKETCH_THEME.colors.text,
+                    ...sketchShadow
+                }}>
+                    <View style={{
+                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                        padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)'
+                    }}>
+                        <Text style={styles.settingsTitle}>{pickerModal.label}</Text>
+                        <TouchableOpacity onPress={() => setPickerModal(prev => ({...prev, visible: false}))}>
+                             <Feather name="x" size={24} color={SKETCH_THEME.colors.text} />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <ScrollView contentContainerStyle={{padding: 8}}>
+                        {pickerModal.options.map(opt => (
+                            <TouchableOpacity 
+                                key={opt}
+                                style={{
+                                    paddingVertical: 12, 
+                                    paddingHorizontal: 16,
+                                    borderRadius: 8,
+                                    backgroundColor: pickerModal.selectedValue === opt ? SKETCH_THEME.colors.primarySoft : 'transparent'
+                                }}
+                                onPress={() => pickerModal.onSelect(opt)}
+                            >
+                                <Text style={{
+                                    fontFamily: Platform.OS === 'web' ? 'Lora, serif' : undefined,
+                                    fontSize: 16,
+                                    color: pickerModal.selectedValue === opt ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.text,
+                                    fontWeight: pickerModal.selectedValue === opt ? 'bold' : 'normal'
+                                }}>{opt}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+             </View>
+        );
+    }
+    
+    const renderRadiusSlider = () => {
+        if (Platform.OS === 'web') {
+            return (
+                <View style={[styles.radiusContainer, { width: '100%', paddingHorizontal: 4, marginTop: 12 }]}>
+                        <View style={{ width: '100%', height: 20, justifyContent: 'center' }}>
+                             {/* @ts-ignore */}
+                             <input type="range" min="0.1" max="5" step="0.1" value={radiusKm} onChange={(e: any) => setRadiusKm(parseFloat(e.target.value))} 
+                                style={{ width: '100%', accentColor: SKETCH_THEME.colors.primary, cursor: 'pointer', height: 6 }} 
+                             />
+                        </View>
+                        <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: -4}}>
+                             <Text style={{fontSize: 10, color: '#999', fontFamily: 'Lora'}}>0.1 km</Text>
+                             <Text style={styles.radiusLabel}>{radiusKm < 1 ? `${Math.round(radiusKm*1000)} m` : `${radiusKm} km`}</Text>
+                             <Text style={{fontSize: 10, color: '#999', fontFamily: 'Lora'}}>5 km</Text>
+                        </View>
+                </View>
+            )
+        }
+        return null; // Native fallback
+    }
     const renderSearchSettingsOverlay = () => {
         if (!isSearchSettingsOpen) return null;
 
+        const sports = ['Futbol'];
+        
+        // Render Button that opens the Central Modal
+        const renderSketchyPicker = (
+            label: string, 
+            value: string, 
+            options: string[], 
+            onSelect: (val: string) => void
+        ) => {
+            return (
+                <View style={{ marginBottom: 16 }}>
+                    <Text style={styles.settingsLabel}>{label}</Text>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setPickerModal({
+                            visible: true,
+                            label,
+                            options,
+                            selectedValue: value,
+                            onSelect: (val) => {
+                                onSelect(val);
+                                setPickerModal(prev => ({ ...prev, visible: false }));
+                            }
+                        })}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            borderWidth: 2,
+                            borderColor: SKETCH_THEME.colors.text,
+                            borderRadius: 12,
+                            backgroundColor: SKETCH_THEME.colors.bg,
+                            height: 40,
+                            paddingHorizontal: 12,
+                        }}
+                    >
+                        <Text style={{
+                            color: value ? SKETCH_THEME.colors.text : SKETCH_THEME.colors.textMuted,
+                            fontFamily: Platform.OS === 'web' ? 'Lora, serif' : undefined,
+                            fontSize: 15
+                        }} numberOfLines={1}>
+                            {value || 'Qualsevol'}
+                        </Text>
+                        <Feather name="chevron-down" size={18} color={SKETCH_THEME.colors.text} />
+                    </TouchableOpacity>
+                </View>
+            )
+        };
+
         return (
             <View style={styles.settingsOverlay}>
-                <View style={styles.settingsCard}>
+                <View style={[styles.settingsCard, { zIndex: 1, minHeight: 450 }]}>
                     <View style={styles.settingsHeader}>
-                        <Text style={styles.settingsTitle}>Cerca de partits</Text>
+                        <Text style={styles.settingsTitle}>Filtres</Text>
                         <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={{ padding: 6 }}>
                             <Feather name="x" size={18} color={SKETCH_THEME.colors.text} />
                         </TouchableOpacity>
                     </View>
 
                     <Text style={styles.settingsHint}>
-                        Configura els filtres de cerca per aquesta sessió.
+                        Filtra per esport, competició i equip.
                     </Text>
 
-                    {Platform.OS === 'web' ? (
-                        <View style={{zIndex: 50}}>
-                            <View style={{marginBottom: 15, zIndex: 100}}>
-                                <Text style={styles.settingsLabel}>Esport</Text>
-                                <View style={{zIndex: 101}}>
-                                    <SketchySelect
-                                        value={selectedSport}
-                                        onChange={(val) => { setSelectedSport(val); setSelectedTeam(''); setSelectedCompetition(''); }}
-                                        options={[
-                                            { label: 'Qualsevol', value: '' },
-                                            { label: 'Futbol', value: 'Futbol' }
-                                        ]}
-                                    />
-                                </View>
-                            </View>
+                    <View>
+                        {renderSketchyPicker('Esport', selectedSport, sports, (v) => {
+                                setSelectedSport(v);
+                                setSelectedCompetition('');
+                                setSelectedTeam('');
+                        })}
+                    </View>
 
-                            <View style={{marginBottom: 15, zIndex: 90}}>
-                                 <Text style={styles.settingsLabel}>Competició</Text>
-                                 <View style={{zIndex: 91}}>
-                                     <SketchySelect 
-                                         value={selectedCompetition}
-                                         onChange={setSelectedCompetition}
-                                         placeholder="Qualsevol"
-                                         disabled={selectedSport === ''}
-                                         options={[
-                                             { label: 'Qualsevol', value: '' },
-                                             { label: 'La Liga', value: 'La Liga' },
-                                             { label: 'Champions League', value: 'Champions League' },
-                                             { label: 'Copa del Rey', value: 'Copa del Rey' }
-                                         ]}
-                                     />
-                                 </View>
-                            </View>
+                    <View>
+                        {renderSketchyPicker('Competició', selectedCompetition, availableCompetitions, (v) => setSelectedCompetition(v))}
+                    </View>
 
-                            <Text style={styles.settingsLabel}>Equip</Text>
-                            <View style={{zIndex: 10}}>
-                                <SketchySelect
-                                    value={selectedTeam}
-                                    onChange={(val) => setSelectedTeam(val)}
-                                    disabled={selectedSport === ''}
-                                    options={[
-                                        { label: 'Qualsevol', value: '' },
-                                        { label: 'FC Barcelona', value: 'FC Barcelona' },
-                                        { label: 'Real Madrid', value: 'Real Madrid' },
-                                        { label: 'RCD Espanyol', value: 'RCD Espanyol' },
-                                        { label: 'Girona FC', value: 'Girona FC' }
-                                    ].filter(o => o.value === '' || selectedSport === 'Futbol')}
-                                />
-                            </View>
-                        </View>
-                    ) : (
-                        <Text style={styles.settingsHint}>Filtres avançats: pendent d’implementar a mòbil natiu.</Text>
-                    )}
+                    <View>
+                        {renderSketchyPicker('Equip', selectedTeam, availableTeams, (v) => setSelectedTeam(v))}
+                    </View>
 
                     <View style={styles.settingsActions}>
-                        <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={styles.settingsActionPrimary}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setSelectedSport('Futbol');
+                                setSelectedCompetition('');
+                                setSelectedTeam('');
+                            }}
+                            style={styles.settingsActionSecondary}
+                        >
+                            <Text style={styles.settingsActionSecondaryText}>Restablir</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => setIsSearchSettingsOpen(false)}
+                            style={styles.settingsActionPrimary}
+                        >
                             <Text style={styles.settingsActionPrimaryText}>Fet</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                {/* Render the modal inside the overlay to be on top of the card */}
+                {renderPickerModal()}
             </View>
         );
     };
-
-    const renderRadiusSlider = () => {
-        if (Platform.OS === 'web') {
-            return (
-                <View style={styles.radiusContainer}>
-                        <View style={{ width: '100%', height: 30, justifyContent: 'center' }}>
-                             {/* @ts-ignore */}
-                             <input type="range" min="0.1" max="5" step="0.1" value={radiusKm} onChange={(e: any) => setRadiusKm(parseFloat(e.target.value))} style={{ width: '100%', accentColor: SKETCH_THEME.colors.primary, cursor: 'pointer', height: 8 }} />
-                        </View>
-                        <View style={{alignItems: 'center', marginTop: 6}}>
-                            <Text style={styles.radiusLabel}>{radiusKm < 1 ? `${Math.round(radiusKm*1000)} m` : `${radiusKm} km`}</Text>
-                        </View>
-                </View>
-            )
-        }
-        // Native Slider not implemented
-        return null;
-    }
 
     const renderHeader = () => (
         <View style={isDesktop ? styles.desktopSidebarContent : styles.topBarContainer}>
              <View style={{flexDirection: 'row', alignItems: 'center'}}>
                  {renderSearchBarInput()}
-                 <TouchableOpacity 
-                    style={styles.headerIconButton}
-                    onPress={() => setIsSearchSettingsOpen(true)}
-                 >
-                    <Feather name="sliders" size={22} color={SKETCH_THEME.colors.text} />
-                 </TouchableOpacity>
+                      <TouchableOpacity
+                          style={styles.headerIconButton}
+                          onPress={() => setIsSearchSettingsOpen(true)}
+                      >
+                          <Feather name="sliders" size={22} color={SKETCH_THEME.colors.text} />
+                      </TouchableOpacity>
                  <TouchableOpacity 
                     style={styles.avatarButton}
                     onPress={() => user ? navigation.navigate('Profile' as any) : navigation.navigate('Login' as any)}
@@ -1017,7 +1066,6 @@ const MapScreen = () => {
                     }
                 </TouchableOpacity>
              </View>
-             { (!selectedBar || isDesktop) && renderFilters() }
              { (!selectedBar || isDesktop) && renderRadiusSlider() }
         </View>
     );
@@ -1081,7 +1129,7 @@ const MapScreen = () => {
                                 >
                                      <View style={[styles.markerContainer]}>
                                         <View style={[styles.markerBubble, selectedBar?.id === bar.id && styles.markerBubbleSelected]}>
-                                            <Text style={styles.markerText}>ðŸº</Text>
+                                            <Text style={styles.markerText}>🍺</Text>
                                         </View>
                                         <View style={styles.markerArrow} />
                                     </View>
