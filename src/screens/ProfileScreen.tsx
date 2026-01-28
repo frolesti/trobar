@@ -9,12 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { updateUserProfile, uploadProfileImage } from '../services/userService';
+import { fetchAllMatches } from '../services/matchService';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../theme/sketchTheme';
 import { getUserFriendlyError } from '../utils/errorHandler';
 import styles from './ProfileScreen.styles';
 
 const SPORTS = ['Futbol'];
-const TEAMS = ['FC Barcelona', 'Real Madrid', 'RCD Espanyol', 'Girona FC'];
 
 export default function ProfileScreen() {
   const { user, logout, refreshProfile } = useAuth();
@@ -29,6 +29,8 @@ export default function ProfileScreen() {
   const [sport, setSport] = useState(user?.favoriteSport || '');
   const [avatarUri, setAvatarUri] = useState(user?.avatar || '');
 
+    const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+
   // Reset form when user changes or we toggle edit off (cancel)
   useEffect(() => {
     if (!isEditing && user) {
@@ -42,6 +44,25 @@ export default function ProfileScreen() {
   useEffect(() => {
     ensureLoraOnWeb();
   }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadTeams = async () => {
+            try {
+                const { teams } = await fetchAllMatches();
+                const merged = new Set<string>([...(teams || []), team].filter(Boolean) as string[]);
+                if (isMounted) setAvailableTeams(Array.from(merged).sort());
+            } catch {
+                // If offline/proxy not running, keep empty and fall back to free-text input.
+            }
+        };
+
+        loadTeams();
+        return () => {
+            isMounted = false;
+        };
+    }, [team]);
 
   const handleLogout = async () => {
     await logout();
@@ -173,18 +194,27 @@ export default function ProfileScreen() {
 
             <Text style={styles.label}>Equip preferit</Text>
             {isEditing ? (
-                <View style={styles.pickerContainer}>
-                    <Picker
-                        selectedValue={team}
-                        onValueChange={(itemValue) => setTeam(itemValue)}
-                        style={styles.picker}
-                    >
-                        <Picker.Item label="Selecciona un equip" value="" />
-                        {TEAMS.map((t) => (
-                            <Picker.Item key={t} label={t} value={t} />
-                        ))}
-                    </Picker>
-                </View>
+                availableTeams.length > 0 ? (
+                    <View style={styles.pickerContainer}>
+                        <Picker
+                            selectedValue={team}
+                            onValueChange={(itemValue) => setTeam(itemValue)}
+                            style={styles.picker}
+                        >
+                            <Picker.Item label="Selecciona un equip" value="" />
+                            {availableTeams.map((t) => (
+                                <Picker.Item key={t} label={t} value={t} />
+                            ))}
+                        </Picker>
+                    </View>
+                ) : (
+                    <TextInput
+                        style={styles.input}
+                        value={team}
+                        onChangeText={setTeam}
+                        placeholder="Escriu el teu equip"
+                    />
+                )
             ) : (
                 <Text style={styles.value}>{user?.favoriteTeam || 'No especificat'}</Text>
             )}

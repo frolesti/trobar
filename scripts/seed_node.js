@@ -130,41 +130,7 @@ const seed = async () => {
             snapshot = await getDocs(barsCollection);
         }
 
-        console.log(`Found ${snapshot.size} bars. Updating with matches...`);
-
-        const matches = [
-            {
-                teamHome: 'SL Benfica',
-                teamAway: 'FC Barcelona',
-                competition: 'UEFA Champions League',
-                time: '21:00'
-            },
-            {
-                teamHome: 'FC Barcelona',
-                teamAway: 'Real Madrid',
-                competition: 'La Liga',
-                time: '20:45'
-            },
-            {
-                 teamHome: 'Espanyol',
-                 teamAway: 'Girona',
-                 competition: 'La Liga',
-                 time: '18:00'
-            }
-        ];
-
-        let updatedCount = 0;
-        for (const d of snapshot.docs) {
-            const barRef = doc(db, 'bars', d.id);
-            const randomMatch = matches[Math.floor(Math.random() * matches.length)];
-
-            await updateDoc(barRef, {
-                nextMatch: randomMatch
-            });
-            updatedCount++;
-        }
-
-        console.log(`Success! Updated ${updatedCount} bars with fake matches.`);
+        console.log(`Success! Found ${snapshot.size} bars.`);
     } catch (error) {
         console.error("Error seeding:", error);
     }

@@ -23,12 +23,6 @@ const barsData = [
         hasTerrace: true,
         hasProjector: true,
         isOpenNow: true
-    },
-    nextMatch: {
-      teamHome: 'FC Barcelona',
-      teamAway: 'Real Madrid',
-      time: '21:00',
-      competition: 'La Liga'
     }
   },
   {
@@ -59,12 +53,6 @@ const barsData = [
         hasTerrace: false,
         hasProjector: true,
         isOpenNow: true
-    },
-    nextMatch: {
-      teamHome: 'Manchester City',
-      teamAway: 'Liverpool',
-      time: '18:30',
-      competition: 'Premier League'
     }
   }
 ];

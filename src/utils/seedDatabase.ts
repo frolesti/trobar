@@ -1,29 +1,29 @@
 import { doc, writeBatch, collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { fetchAllMatches } from '../services/matchService';
 
 export const seedDatabase = async () => {
     // console.log("Iniciant sembra de dades Estesa...");
     try {
         const batch = writeBatch(db);
-        
-        // 1. Definim una llista extensa de partits per testejar filtres
-        const matches = [
-            // BARÇA MATCHES (per test el filtre 'FC Barcelona')
-            { teamHome: 'FC Barcelona', teamAway: 'Real Madrid', competition: 'La Liga', time: '21:00' },
-            { teamHome: 'Napoli', teamAway: 'FC Barcelona', competition: 'Champions League', time: '21:00' },
-            { teamHome: 'FC Barcelona', teamAway: 'Valencia CF', competition: 'La Liga', time: '16:15' },
-            { teamHome: 'Athletic Club', teamAway: 'FC Barcelona', competition: 'Copa del Rey', time: '21:30' },
-            
-            // ALTRES EQUIPS (per verificar que s'amaguen amb el filtre)
-            { teamHome: 'RCD Espanyol', teamAway: 'Girona FC', competition: 'La Liga', time: '18:00' },
-            { teamHome: 'Girona FC', teamAway: 'Real Betis', competition: 'La Liga', time: '16:00' },
-            { teamHome: 'Atletico Madrid', teamAway: 'Sevilla', competition: 'La Liga', time: '21:00' },
-            { teamHome: 'Manchester City', teamAway: 'Liverpool', competition: 'Premier League', time: '17:30' },
-            { teamHome: 'PSG', teamAway: 'Marseille', competition: 'Ligue 1', time: '20:45' },
-            { teamHome: 'Bayern Munich', teamAway: 'Dortmund', competition: 'Bundesliga', time: '18:30' },
-            { teamHome: 'Arsenal', teamAway: 'Tottenham', competition: 'Premier League', time: '15:00' },
-            { teamHome: 'Inter', teamAway: 'AC Milan', competition: 'Serie A', time: '20:45' }
-        ];
+
+        // 1. Carregar partits reals des d'una font online (sense fixtures hardcodejats)
+        let remoteNextMatches: Array<{ teamHome: string; teamAway: string; competition: string; time: string }> = [];
+        try {
+            const { matches } = await fetchAllMatches();
+            remoteNextMatches = matches
+                .filter(m => m?.teamHome && m?.teamAway && m?.competition && m?.date)
+                .slice(0, 200)
+                .map(m => ({
+                    teamHome: m.teamHome,
+                    teamAway: m.teamAway,
+                    competition: m.competition,
+                    time: m.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }));
+        } catch (e) {
+            // If offline or fetch fails, we seed bars without nextMatch.
+            remoteNextMatches = [];
+        }
 
         // 2. Noms de bars aleatoris
         const barNames = [
@@ -48,7 +48,9 @@ export const seedDatabase = async () => {
             const latOffset = (Math.random() - 0.5) * 0.06; 
             const lngOffset = (Math.random() - 0.5) * 0.06;
 
-            const match = matches[i % matches.length];
+            const match = remoteNextMatches.length > 0
+                ? remoteNextMatches[Math.floor(Math.random() * remoteNextMatches.length)]
+                : undefined;
             // Fix: Clean name without random number suffix for better Google Maps integration
             const name = barNames[i % barNames.length]; 
 
@@ -62,7 +64,7 @@ export const seedDatabase = async () => {
                 isOpen: true,
                 image: `https://source.unsplash.com/random/800x600/?bar,pub,${i}`,
                 tags: ['Tv', 'Terrassa', 'Tapes'],
-                nextMatch: match
+                ...(match ? { nextMatch: match } : {})
             };
             
             batch.set(barRef, barData);
