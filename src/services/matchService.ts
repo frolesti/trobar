@@ -10,19 +10,59 @@ export interface Match {
     location?: string;
 }
 
-const ICS_URL = 'https://ics.fixtur.es/v2/fc-barcelona.ics';
+// We intentionally do NOT hardcode team lists or fixtures.
+// Instead we fetch competition-level calendars and derive teams + matchups from them.
+// Source: fixtur.es (ics.fixtur.es)
+
+type CompetitionSpec = {
+    name: string;
+    slug: string;
+};
+
+// Important competitions (Spain national + Champions League)
+// (Only slugs are fixed; teams + fixtures come from the remote calendars.)
+const IMPORTANT_COMPETITIONS: CompetitionSpec[] = [
+    { name: 'La Liga', slug: 'primera-division' },
+    { name: 'Copa del Rey', slug: 'copa-del-rey' },
+    { name: 'Champions League', slug: 'champions-league' },
+];
+
+const leagueIcsUrl = (leagueSlug: string) => `https://ics.fixtur.es/v2/league/${leagueSlug}.ics`;
 
 // --- CACHE SYSTEM ---
-let cachedMatches: Match[] | null = null;
-let lastFetchTime: number = 0;
-const CACHE_DURATION = 1000 * 60 * 60; // 1 Hour
+let cachedMatches: Record<string, Match[]> = {};
+let lastFetchTime: Record<string, number> = {};
+const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 Hours (Calendar doesn't change that often)
 
-// Helper to handle CORS on web
-const getFetchUrl = () => {
-    if (Platform.OS === 'web') {
-        return `https://api.allorigins.win/raw?url=${encodeURIComponent(ICS_URL)}`;
-    }
-    return ICS_URL;
+// Helper to handle CORS on web.
+// Public proxies are unreliable (CORS/429). Prefer a local or deployed proxy you control.
+// Configure via EXPO_PUBLIC_ICS_PROXY, e.g. "http://localhost:8787/ics".
+const getFetchUrl = (icsUrl: string) => {
+    if (Platform.OS !== 'web') return icsUrl;
+
+    // Expo exposes EXPO_PUBLIC_* env vars to the app.
+    const proxyBase = (process.env.EXPO_PUBLIC_ICS_PROXY || 'http://127.0.0.1:8787/ics').trim();
+    return `${proxyBase}?url=${encodeURIComponent(icsUrl)}`;
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const mapWithConcurrency = async <T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> => {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+
+    const worker = async () => {
+        while (true) {
+            const current = index;
+            index += 1;
+            if (current >= items.length) return;
+            results[current] = await mapper(items[current]);
+        }
+    };
+
+    const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+    await Promise.all(workers);
+    return results;
 };
 
 // Simple helper to parse ICS date string (e.g., 20260125T200000Z)
@@ -40,147 +80,298 @@ const parseICSDate = (icsDate: string): Date => {
     return new Date(Date.UTC(year, month, day, hour, minute, second));
 };
 
+// --- CONFIGURACIÓ DE NORMALITZACIÓ ---
+
+// Mapeig de noms alternatius o mal escrits a la seva forma canònica.
+// Clau: nom en minúscules rebut de l'ICS. Valor: Nom oficial que volem mostrar.
+const TEAM_NAME_MAPPINGS: Record<string, string> = {
+    'paphos': 'Pafos FC',
+    'paphos fc': 'Pafos FC',
+    'pafos': 'Pafos FC',
+    'atlético de madrid': 'Atlético Madrid',
+    'athletic club': 'Athletic Club',
+    'fc bayern münchen': 'Bayern München',
+    'inter milan': 'Inter',
+    'internazionale': 'Inter',
+    'sporting cp': 'Sporting Portugal',
+};
+
 const cleanTeamName = (name: string) => {
-    return name.replace('FC Barcelona', 'Barça').trim();
-};
+    let cleaned = (name || '').trim();
 
-const guessCompetition = (summary: string, description: string): string => {
-    const text = (summary + " " + description).toLowerCase();
+    // Remove status markers anywhere (not only prefix)
+    cleaned = cleaned.replace(/\b(suspended|postponed|canceled|cancelled|delayed)\s*:\s*/gi, '');
 
-    // Champions League variants
-    if (text.includes('[cl]') || text.includes('champions') || text.includes('ucl')) {
-        return 'Champions League';
+    // Remove leading non-letter symbols (warning icons, bullets, etc.)
+    cleaned = cleaned.replace(/^[^A-Za-z0-9À-ÿ]+/g, '').trim();
+
+    // Remove suffixes like [CL], [Copa], (0-0)
+    cleaned = cleaned.replace(/\[.*?\]/g, '').trim(); // Remove brackets content
+    cleaned = cleaned.replace(/\(.*?\)/g, '').trim(); // Remove score parenthesis
+
+    // Collapse whitespace
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+    // Comprovació directa al diccionari de mappings
+    const lower = cleaned.toLowerCase();
+    
+    // 1. Mapeig directe (gestiona errors ortogràfics concrets i preferències)
+    if (TEAM_NAME_MAPPINGS[lower]) {
+        return TEAM_NAME_MAPPINGS[lower];
     }
     
-    // Copa del Rey variants
-    if (text.includes('[copa]') || text.includes('copa del rey') || text.includes('king')) {
-        return 'Copa del Rey';
-    }
+    // 2. Neteja genèrica de sufixos comuns si no hi ha mapeig (Opcional, per neteja general)
+    // Ex: "Girona FC" -> "Girona", "Chelsea FC" -> "Chelsea"
+    // Però mantenint-ho segur per evitar col·lisions si no es vol.
+    // De moment ho deixem sense agressivitat per respectar noms curts, 
+    // però el diccionari de dalt mana.
 
-    // Supercopa
-    if (text.includes('supercopa') || text.includes('super cup')) {
-        return 'Supercopa';
-    }
-    
-    // Europa League
-    if (text.includes('[el]') || text.includes('europa league')) {
-        return 'Europa League';
-    }
-
-    // Friendlies
-    if (text.includes('friendly') || text.includes('amistós')) {
-        return 'Amistós';
-    }
-
-    // Default to La Liga for this specific calendar as it omits the tag for league matches
-    return 'La Liga';
+    return cleaned;
 };
 
-export const fetchBarcaMatches = async (forceRefresh = false): Promise<Match[]> => {
-    // Return cache if valid
+// Helper to decode text properly (fix "caracters raros" like Ã³)
+const decodeICSText = (text: string): string => {
+    try {
+        // First, check if it looks like UTF-8 bytes interpreted as ISO-8859-1.
+        // This is a common pattern for "Ã³" (ó), "Ã©" (é), etc.
+        // We can try to "reverse" this by encoding to ISO-8859-1 (binary string) and decoding as UTF-8.
+        return decodeURIComponent(escape(text));
+    } catch (e) {
+        // If that fails (e.g. it was already correct), return original
+        return text;
+    }
+};
+
+export const fetchMatches = async (teamName: string = 'FC Barcelona', forceRefresh = false): Promise<Match[]> => {
+    const cacheKey = `team:${teamName}`;
     const nowTime = Date.now();
-    if (!forceRefresh && cachedMatches && (nowTime - lastFetchTime < CACHE_DURATION)) {
-        return cachedMatches;
+    if (!forceRefresh && cachedMatches[cacheKey] && (nowTime - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
+        return cachedMatches[cacheKey];
     }
+
+    const { matches } = await fetchAllMatches();
+    const tf = teamName.trim().toLowerCase();
+    const filtered = matches.filter(m => {
+        const home = (m.teamHome || '').toLowerCase();
+        const away = (m.teamAway || '').toLowerCase();
+        return home.includes(tf) || away.includes(tf);
+    });
+
+    cachedMatches[cacheKey] = filtered;
+    lastFetchTime[cacheKey] = Date.now();
+    return filtered;
+};
+
+const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = false): Promise<Match[]> => {
+    const cacheKey = `league:${spec.slug}`;
+    const nowTime = Date.now();
+    if (!forceRefresh && cachedMatches[cacheKey] && (nowTime - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
+        return cachedMatches[cacheKey];
+    }
+
+    const targetUrl = leagueIcsUrl(spec.slug);
+    let icsData = '';
 
     try {
-        const result = await executeRequest(async () => {
-            const response = await fetch(getFetchUrl());
-            if (!response.ok) throw new Error("Failed to fetch ICS data");
-            const text = await response.text();
-            return text;
-        }, 'fetchBarcaMatches');
+        if (Platform.OS === 'web') {
+            // WEB: Attempt 1 - Local Proxy (Preferred)
+            try {
+                const proxyUrl = getFetchUrl(targetUrl);
+                const response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text.includes('BEGIN:VCALENDAR')) {
+                        icsData = decodeICSText(text);
+                    }
+                }
+            } catch (e) {
+                console.warn(`[MatchService] Local proxy failed for ${spec.slug}. Attempting fallback...`);
+            }
 
-        const icsData = result.data;
-        
+            // WEB: Attempt 2 - Public Proxy (Fallback - allorigins)
+            if (!icsData) {
+                try {
+                    console.log(`[MatchService] Trying allorigins fallback for ${spec.slug}`);
+                    const fallbackUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                    const res = await fetch(fallbackUrl);
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.contents) {
+                            icsData = decodeICSText(json.contents);
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.warn(`[MatchService] allorigins failed for ${spec.slug}`, fallbackError);
+                }
+            }
+
+            // WEB: Attempt 3 - Public Proxy (Backup - corsproxy.io)
+            if (!icsData) {
+                try {
+                    console.log(`[MatchService] Trying corsproxy.io fallback for ${spec.slug}`);
+                    // corsproxy.io simply takes the target URL as a query param (often without encoding, or decoded by them)
+                    // Usage: https://corsproxy.io/?https://...
+                    const backupUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+                    const res = await fetch(backupUrl);
+                    if (res.ok) {
+                        const text = await res.text();
+                        if (text.includes('BEGIN:VCALENDAR')) {
+                            icsData = decodeICSText(text);
+                        }
+                    }
+                } catch (backupError) {
+                    console.warn(`[MatchService] corsproxy.io failed for ${spec.slug}`, backupError);
+                }
+            }
+        } else {
+            // NATIVE: Direct fetch
+            const response = await fetch(targetUrl);
+            if (response.ok) {
+                icsData = decodeICSText(await response.text());
+            }
+        }
+
         if (!icsData) {
-            console.error("No ICS data received");
-            // If fetch fails but we have old cache, return it rather than empty
-            return cachedMatches || [];
+            console.error(`[MatchService] Could not fetch data for ${spec.slug} (Proxy & Fallback failed).`);
+            return cachedMatches[cacheKey] || [];
         }
 
         const matches: Match[] = [];
-        
-        // Split by events
         const events = icsData.split('BEGIN:VEVENT');
 
         events.forEach((eventBlock) => {
             if (!eventBlock.includes('END:VEVENT')) return;
 
-            // Extract fields
             const summaryMatch = eventBlock.match(/SUMMARY:(.*)/);
             const startMatch = eventBlock.match(/DTSTART:(.*)/);
             const locationMatch = eventBlock.match(/LOCATION:(.*)/);
-            const descMatch = eventBlock.match(/DESCRIPTION:(.*)/);
             const uidMatch = eventBlock.match(/UID:(.*)/);
 
-            if (summaryMatch && startMatch) {
-                const summary = summaryMatch[1].trim();
-                const startDateStr = startMatch[1].trim();
-                const location = locationMatch ? locationMatch[1].trim() : undefined;
-                const description = descMatch ? descMatch[1].trim() : '';
-                const id = uidMatch ? uidMatch[1].trim() : Math.random().toString();
+            if (!summaryMatch || !startMatch) return;
 
-                const date = parseICSDate(startDateStr);
+            const summary = summaryMatch[1].trim();
+            const startDateStr = startMatch[1].trim();
+            const location = locationMatch ? locationMatch[1].trim() : undefined;
+            const id = uidMatch ? uidMatch[1].trim() : Math.random().toString();
 
-                // Parse Teams from Summary (Usually "Home - Away" or "Home vs Away")
-                // Fixtur.es often uses "Home - Away"
-                let teamHome = 'Unknown';
-                let teamAway = 'Unknown';
+            const date = parseICSDate(startDateStr);
 
-                const separators = [' - ', ' vs ', ' v '];
-                for (const sep of separators) {
-                    if (summary.includes(sep)) {
-                        const parts = summary.split(sep);
-                        teamHome = parts[0].trim();
-                        teamAway = parts[1].trim();
-                        break;
-                    }
-                }
-
-                // Filter only FC Barcelona matches (just in case)
-                if (teamHome.includes('Barcelona') || teamAway.includes('Barcelona')) {
-                    matches.push({
-                        id,
-                        teamHome,
-                        teamAway,
-                        date,
-                        competition: guessCompetition(summary, description),
-                        location
-                    });
+            let teamHome = 'Unknown';
+            let teamAway = 'Unknown';
+            const separators = [' - ', ' vs ', ' v '];
+            for (const sep of separators) {
+                if (summary.includes(sep)) {
+                    const parts = summary.split(sep);
+                    teamHome = cleanTeamName(parts[0]);
+                    teamAway = cleanTeamName(parts[1]);
+                    break;
                 }
             }
+
+            if (!teamHome || !teamAway || teamHome === 'Unknown' || teamAway === 'Unknown') return;
+
+            matches.push({
+                id,
+                teamHome,
+                teamAway,
+                date,
+                competition: spec.name,
+                location,
+            });
         });
 
-        // Sort by date properties
         matches.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-        // Return only future matches or recent past (e.g., today)
         const now = new Date();
-        now.setHours(now.getHours() - 4); // Include matches from just a few hours ago
-
+        now.setHours(now.getHours() - 4);
         const finalMatches = matches.filter(m => m.date >= now);
-        
-        // Update Cache
-        cachedMatches = finalMatches;
-        lastFetchTime = Date.now();
+
+        cachedMatches[cacheKey] = finalMatches;
+        lastFetchTime[cacheKey] = Date.now();
 
         return finalMatches;
-
     } catch (error) {
-        console.error("Failed to scrape matches:", error);
-        // Fallback to cache on error
-        return cachedMatches || [];
+        console.error('Failed to fetch competition matches:', error);
+        return cachedMatches[cacheKey] || [];
     }
 };
 
-export const getNextMatch = async (competitionFilter?: string): Promise<Match | null> => {
-    const matches = await fetchBarcaMatches();
+// --- MULTI-COMPETITION FETCHING ---
+
+export const fetchAllMatches = async (): Promise<{ matches: Match[], teams: string[], competitions: string[] }> => {
+    // 1. Fetch competition calendars with a concurrency cap
+    const concurrency = Platform.OS === 'web' ? 3 : 6;
+    const results = await mapWithConcurrency(IMPORTANT_COMPETITIONS, concurrency, (spec) => fetchCompetitionMatches(spec));
+
+    // 2. Flatten and Deduplicate
+    const allMatches: Match[] = [];
+    const seenMatchIds = new Set<string>();
+
+    results.forEach(teamMatches => {
+        teamMatches.forEach(filterMatch => {
+            // Create a unique ID/fingerprint (Date + Teams) to avoid "Barça vs Madrid" showing twice
+            const fingerprint = `${filterMatch.date.getTime()}_${[filterMatch.teamHome, filterMatch.teamAway].sort().join('_')}`;
+            
+            if (!seenMatchIds.has(fingerprint)) {
+                seenMatchIds.add(fingerprint);
+                allMatches.push(filterMatch);
+            }
+        });
+    });
+
+    // 3. Sort by Date
+    allMatches.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // 4. Filter for Future Matches ONLY (Context: "Where to watch")
+    // We only want teams and competitions relevant to UPCOMING fixtures.
+    const now = new Date();
+    // Optional buffer: include matches from 2 hours ago (currently playing)
+    const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+    const futureMatches = allMatches.filter(m => m.date >= activeThreshold);
+
+    // 5. Extract Unique Lists from FUTURE matches only
+    const teamsSet = new Set<string>();
+    const compsSet = new Set<string>();
+
+    futureMatches.forEach(m => {
+        teamsSet.add(m.teamHome);
+        teamsSet.add(m.teamAway);
+        compsSet.add(m.competition);
+    });
+
+    // Return ALL matches (history + future) for the full list, but the teams/comps
+    // lists are restricted to what is actually playable/watchable now/soon.
+    // OR: Should we restrict the returned 'matches' too? 
+    // The user says: "Els camps selectors... necessito que treguis els equips dels partits futurs"
+    // implies the selectors should only have future teams.
+    // If we return all matches in 'matches', the client might filter later?
+    // Let's return only future matches in 'matches' to be safe and consistent with the app's purpose.
     
-    if (competitionFilter && competitionFilter !== '') {
-        const filtered = matches.find(m => m.competition === competitionFilter);
-        return filtered || null;
+    return {
+        matches: futureMatches,
+        teams: Array.from(teamsSet).sort(),
+        competitions: Array.from(compsSet).sort()
+    };
+};
+
+// Backwards compatibility alias if needed, but better to refactor usages.
+export const fetchBarcaMatches = (forceRefresh = false) => fetchMatches('FC Barcelona', forceRefresh);
+
+export const getNextMatch = async (competitionFilter?: string, teamFilter?: string): Promise<Match | null> => {
+    // Otherwise, search in "All Matches" (or default to Barça if we want to save data, 
+    // but user requested ALL matches capability).
+    // Let's rely on cached data.
+    const { matches } = await fetchAllMatches(); // Takes advantage of internal caching
+    
+    let filtered = matches;
+    if (teamFilter) {
+        const tf = teamFilter.toLowerCase();
+        filtered = filtered.filter(m => m.teamHome.toLowerCase().includes(tf) || m.teamAway.toLowerCase().includes(tf));
+    }
+    if (competitionFilter) {
+        filtered = filtered.filter(m => m.competition === competitionFilter);
     }
 
-    return matches.length > 0 ? matches[0] : null;
+    return filtered.length > 0 ? filtered[0] : null;
 };
