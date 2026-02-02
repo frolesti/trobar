@@ -49,6 +49,19 @@ Per iniciar el projecte en mode desenvolupament:
 npm start
 ```
 
+`npm start` arrenca Expo i també el proxy local d'ICS (CORS) a `http://localhost:8787`.
+
+Si tens algun procés vell ocupant ports (p. ex. Metro a `8081`), `npm start` els intenta tancar automàticament.
+Si algun port l'està ocupant una altra cosa “desconeguda”, pots forçar-ho amb:
+
+```bash
+# Mata processos node desconeguts en aquests ports
+$env:TROBAR_DEV_FORCE=1; npm start
+
+# (perillós) Mata qualsevol procés en aquests ports
+$env:TROBAR_DEV_KILL_ALL=1; npm start
+```
+
 Això obrirà el Metro Bundler. Des del terminal pots introduir les opcions:
 - **`w`** : Per obrir la versió **Web** al navegador.
 - **Escanejar QR** : Utilitza l'app **Expo Go** al teu mòbil (Android/iOS).
