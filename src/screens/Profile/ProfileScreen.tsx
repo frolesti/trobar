@@ -14,6 +14,7 @@ import { ensureLoraOnWeb, SKETCH_THEME, sketchShadow } from '../../theme/sketchT
 import { getUserFriendlyError } from '../../utils/errorHandler';
 import styles from './ProfileScreen.styles';
 import { SPORTS_DATA } from '../../data/leagues';
+import { formatTeamNameForDisplay } from '../../utils/teamName';
 
 const SPORTS = SPORTS_DATA.map(s => s.sport);
 
@@ -284,11 +285,11 @@ export default function ProfileScreen() {
                         <ActivityIndicator style={{marginVertical: 10}} color={SKETCH_THEME.colors.primary} />
                     ) : (
                         renderPickerTrigger(
-                            team,
+                            team ? formatTeamNameForDisplay(team) : undefined,
                             "Busca o selecciona equip...",
                             () => {
                                 // Prepare options: if availableTeams, use them. Else empty.
-                                const opts = availableTeams.map(t => ({label: t, value: t}));
+                                const opts = availableTeams.map(t => ({label: formatTeamNameForDisplay(t), value: t}));
                                 openPickerModal(
                                     availableTeams.length > 0 ? 'Equip' : 'Equip (Introdueix manualment si cal)', 
                                     opts, 
@@ -311,7 +312,7 @@ export default function ProfileScreen() {
             ) : (
                 <View>
                     <Text style={styles.label}>Equip preferit</Text>
-                    <Text style={styles.value}>{user?.favoriteTeam || 'No especificat'}</Text>
+                    <Text style={styles.value}>{user?.favoriteTeam ? formatTeamNameForDisplay(user.favoriteTeam) : 'No especificat'}</Text>
                 </View>
             )}
 
@@ -415,11 +416,11 @@ export default function ProfileScreen() {
                         <ActivityIndicator style={{marginVertical: 10}} color={SKETCH_THEME.colors.primary} />
                     ) : (
                         renderPickerTrigger(
-                            team,
+                            team ? formatTeamNameForDisplay(team) : undefined,
                             "Busca o selecciona equip...",
                             () => {
                                 // Prepare options: if availableTeams, use them. Else empty.
-                                const opts = availableTeams.map(t => ({label: t, value: t}));
+                                const opts = availableTeams.map(t => ({label: formatTeamNameForDisplay(t), value: t}));
                                 openPickerModal(
                                     availableTeams.length > 0 ? 'Equip' : 'Equip (Introdueix manualment si cal)', 
                                     opts, 
@@ -442,7 +443,7 @@ export default function ProfileScreen() {
             ) : (
                 <View>
                     <Text style={styles.label}>Equip preferit</Text>
-                    <Text style={styles.value}>{user?.favoriteTeam || 'No especificat'}</Text>
+                    <Text style={styles.value}>{user?.favoriteTeam ? formatTeamNameForDisplay(user.favoriteTeam) : 'No especificat'}</Text>
                 </View>
             )}
 

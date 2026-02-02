@@ -14,6 +14,7 @@ import { executeRequest } from '../../api/core';
 import { fetchAllMatches, Match } from '../../services/matchService';
 import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
+import { formatTeamNameForDisplay } from '../../utils/teamName';
 
 // DeclaraciÃ³ global per a TypeScript (Google Maps Web)
 declare global {
@@ -888,7 +889,7 @@ const MapScreen = () => {
 
     const renderSearchBarInput = () => {
         const placeholderText = user?.favoriteTeam 
-            ? `On vols veure el ${user.favoriteTeam}?` 
+            ? `On vols veure el ${formatTeamNameForDisplay(user.favoriteTeam)}?` 
             : "On vols veure el partit?";
 
         if (Platform.OS === 'web') {
@@ -979,7 +980,7 @@ const MapScreen = () => {
                                     fontSize: 16,
                                     color: pickerModal.selectedValue === opt ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.text,
                                     fontWeight: pickerModal.selectedValue === opt ? 'bold' : 'normal'
-                                }}>{opt}</Text>
+                                }}>{pickerModal.label === 'Equip' ? formatTeamNameForDisplay(opt) : opt}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -1020,6 +1021,7 @@ const MapScreen = () => {
             options: string[], 
             onSelect: (val: string) => void
         ) => {
+            const displayedValue = label === 'Equip' ? formatTeamNameForDisplay(value) : value;
             return (
                 <View style={{ marginBottom: 16 }}>
                     <Text style={styles.settingsLabel}>{label}</Text>
@@ -1052,7 +1054,7 @@ const MapScreen = () => {
                             fontFamily: Platform.OS === 'web' ? 'Lora, serif' : undefined,
                             fontSize: 15
                         }} numberOfLines={1}>
-                            {value || 'Qualsevol'}
+                            {displayedValue || 'Qualsevol'}
                         </Text>
                         <Feather name="chevron-down" size={18} color={SKETCH_THEME.colors.text} />
                     </TouchableOpacity>
