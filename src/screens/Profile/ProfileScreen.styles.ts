@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
+import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
   container: {
@@ -28,20 +28,28 @@ export default StyleSheet.create({
   editButtonText: {
     ...SKETCH_THEME.typography.body,
     color: SKETCH_THEME.colors.primary,
-    fontWeight: 'bold',
+    fontWeight: 'bold' },
+  scrollContainer: {
+    height: '100%',
+    width: '100%',
+    flex: 1,
   },
   content: {
-    padding: SKETCH_THEME.spacing.xl,
+    width: '100%',
+    paddingHorizontal: SKETCH_THEME.spacing.md,
+    paddingTop: SKETCH_THEME.spacing.md,
+    paddingBottom: 120, 
     alignItems: 'center',
+    flexGrow: 1, 
   },
   avatarContainer: {
       position: 'relative',
-      marginBottom: 16,
+      marginBottom: 12,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     backgroundColor: '#E1E1E1',
     borderWidth: 3,
     borderColor: SKETCH_THEME.colors.card,
@@ -61,25 +69,31 @@ export default StyleSheet.create({
   },
   helperText: {
       ...SKETCH_THEME.typography.caption,
-      marginBottom: 20,
+      marginBottom: 12,
   },
   formContainer: {
       width: '100%',
+      // WEB FIX: Limit width on large screens
+      maxWidth: 600,
+      alignSelf: 'center',
+      // Removed flex: 1 to prevent forced stretching leaving empty space
+      // Replaced with flexShrink + flexGrow but limited
       backgroundColor: SKETCH_THEME.colors.uiBg,
       borderRadius: SKETCH_THEME.radius.lg,
-      padding: 24,
+      padding: 16,
       borderWidth: 1,
       borderColor: SKETCH_THEME.colors.border,
       ...(sketchShadow() as object),
-      marginBottom: 24
+      marginBottom: 20 // Space between card and logout button
   },
   label: {
       ...SKETCH_THEME.typography.caption,
       color: SKETCH_THEME.colors.accent,
       textTransform: 'uppercase',
-      marginBottom: 4,
-      marginTop: 12,
+      marginBottom: 2,
+      marginTop: 8,
       letterSpacing: 1,
+      fontSize: 10, // Slightly smaller labels
   },
   value: {
       ...SKETCH_THEME.typography.body,
@@ -107,12 +121,16 @@ export default StyleSheet.create({
   },
   logoutButton: {
     width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
     padding: 16,
     borderRadius: SKETCH_THEME.radius.md,
     backgroundColor: SKETCH_THEME.colors.primarySoft,
     borderWidth: 1,
     borderColor: 'rgba(211, 47, 47, 0.25)',
     alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 20, 
   },
   logoutText: {
     ...SKETCH_THEME.typography.body,

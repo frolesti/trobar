@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { SKETCH_THEME } from '../theme/sketchTheme';
+import { SKETCH_THEME } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
   container: {

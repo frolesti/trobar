@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ensureLoraOnWeb, SKETCH_THEME } from '../theme/sketchTheme';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
 import styles from './StartupScreen.styles';
 
 // Define the navigation types (we can move this to a types file later)

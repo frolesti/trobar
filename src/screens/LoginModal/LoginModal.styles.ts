@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME, sketchFontFamily, sketchShadow } from '../theme/sketchTheme';
+import { SKETCH_THEME, sketchFontFamily, sketchShadow } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
     container: {

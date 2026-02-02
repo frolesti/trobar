@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { ensureLoraOnWeb, SKETCH_THEME } from '../theme/sketchTheme';
-import { submitBusinessClaim } from '../services/businessService';
-import { getUserFriendlyError } from '../utils/errorHandler';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
+import { submitBusinessClaim } from '../../services/businessService';
+import { getUserFriendlyError } from '../../utils/errorHandler';
 import styles from './ClaimBusinessScreen.styles';
 
 type Props = {

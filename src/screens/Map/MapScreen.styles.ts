@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME } from '../theme/sketchTheme';
+import { SKETCH_THEME } from '../../theme/sketchTheme';
 
 // Note: MapScreen was using a local definition of SKETCHY_COLORS which matches SKETCH_THEME.colors
 // We are switching to the standard SKETCH_THEME.colors

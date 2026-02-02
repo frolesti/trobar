@@ -13,10 +13,10 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { RootStackParamList } from '../navigation/AppNavigator';
-import { useAuth } from '../context/AuthContext';
-import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
-import { getUserFriendlyError } from '../utils/errorHandler';
+import { RootStackParamList } from '../../navigation/AppNavigator';
+import { useAuth } from '../../context/AuthContext';
+import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
+import { getUserFriendlyError } from '../../utils/errorHandler';
 import styles from './LoginModal.styles';
 
 type Props = {

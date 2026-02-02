@@ -1,5 +1,5 @@
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
+import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
   container: {
@@ -8,10 +8,13 @@ export default StyleSheet.create({
   scrollContent: {
       padding: SKETCH_THEME.spacing.xl,
       paddingBottom: 40,
+      alignItems: 'center', // Center content on web
   },
   header: {
       marginBottom: SKETCH_THEME.spacing.xl,
       marginTop: SKETCH_THEME.spacing.xl,
+      width: '100%',
+      maxWidth: 600,
   },
   headerTitle: {
       ...SKETCH_THEME.typography.h1,
@@ -22,6 +25,8 @@ export default StyleSheet.create({
       color: SKETCH_THEME.colors.textMuted,
   },
   formCard: {
+      width: '100%',
+      maxWidth: 600,
       backgroundColor: SKETCH_THEME.colors.uiBg,
       borderRadius: SKETCH_THEME.radius.lg,
       padding: 20,
@@ -80,6 +85,8 @@ export default StyleSheet.create({
       color: 'white',
   },
   cancelButton: {
+      width: '100%',
+      maxWidth: 600,
       padding: 16,
       alignItems: 'center',
       marginBottom: 20,

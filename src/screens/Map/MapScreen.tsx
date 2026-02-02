@@ -1,17 +1,17 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, ActivityIndicator, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, ActivityIndicator, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing } from 'react-native';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons'; // Import Vector Icons
-import { fetchBars } from '../services/barService';
-import { useAuth } from '../context/AuthContext';
+import { fetchBars } from '../../services/barService';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { Bar } from '../data/dummyData';
-import { seedDatabase } from '../utils/seedDatabase';
-import MapView, { Marker, PROVIDER_GOOGLE } from '../utils/GoogleMaps';
-import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../theme/sketchTheme';
-import { executeRequest } from '../api/core';
-import { fetchAllMatches, Match } from '../services/matchService';
+import { Bar } from '../../data/dummyData';
+import { seedDatabase } from '../../utils/seedDatabase';
+import MapView, { Marker, PROVIDER_GOOGLE } from '../../utils/GoogleMaps';
+import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
+import { executeRequest } from '../../api/core';
+import { fetchAllMatches, Match } from '../../services/matchService';
 import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
 
@@ -72,7 +72,7 @@ const PAPER_MAP_STYLE = [
 const SKETCHY_PIN_PATH = "M 12 2 C 7 2 3 7 3 12 C 3 17 12 24 12 24 C 12 24 21 17 21 12 C 21 7 17 2 12 2 Z";
 
 // Base64 fallback if file asset fails for any reason
-const DEFAULT_BAR_IMAGE = require('../../assets/img/bar-fallout.jpg');
+const DEFAULT_BAR_IMAGE = require('../../../assets/img/bar-fallout.jpg');
 
 // Match/league search UI removed
 
@@ -101,6 +101,14 @@ if (Platform.OS === 'web') {
 const MapScreen = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const navigation = useNavigation<any>();
+    
+    // Animations for Popup Effects
+    const settingsAnim = useRef(new Animated.Value(0)).current;
+    const pickerAnim = useRef(new Animated.Value(0)).current;
+    
+    // Visibility state for animations (keeps component mounted during exit animation)
+    const [showSettings, setShowSettings] = useState(false);
+    const [showPicker, setShowPicker] = useState(false);
 
     // Location: Ubicació REAL del dispositiu (GPS)
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
@@ -238,6 +246,44 @@ const MapScreen = () => {
         })();
     }, []);
 
+    // Animation Effects
+    useEffect(() => {
+        if (isSearchSettingsOpen) {
+            setShowSettings(true);
+            Animated.spring(settingsAnim, {
+                toValue: 1,
+                useNativeDriver: Platform.OS !== 'web',
+                friction: 7,
+                tension: 40
+            }).start();
+        } else {
+            Animated.timing(settingsAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: Platform.OS !== 'web'
+            }).start(() => setShowSettings(false));
+        }
+    }, [isSearchSettingsOpen]);
+
+    useEffect(() => {
+        if (pickerModal.visible) {
+            setShowPicker(true);
+            pickerAnim.setValue(0);
+            Animated.timing(pickerAnim, {
+                toValue: 1,
+                duration: 300,
+                easing: Easing.out(Easing.back(1.2)),
+                useNativeDriver: Platform.OS !== 'web'
+            }).start();
+        } else {
+            Animated.timing(pickerAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: Platform.OS !== 'web'
+            }).start(() => setShowPicker(false));
+        }
+    }, [pickerModal.visible]);
+
     // 2. Load Bars
     useEffect(() => {
         const loadInitialData = async () => {
@@ -258,6 +304,27 @@ const MapScreen = () => {
         fontLink.rel = 'stylesheet';
         document.head.appendChild(fontLink);
 
+        // Inject Custom Scrollbar Styles (Sketch/Hand-drawn Style)
+        const style = document.createElement('style');
+        style.innerHTML = `
+            ::-webkit-scrollbar {
+                width: 10px;
+                height: 10px;
+            }
+            ::-webkit-scrollbar-track {
+                background: ${SKETCH_THEME.colors.bg}; 
+            }
+            ::-webkit-scrollbar-thumb {
+                background-color: ${SKETCH_THEME.colors.textMuted};
+                border-radius: 5px;
+                border: 2px solid ${SKETCH_THEME.colors.bg};
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background-color: ${SKETCH_THEME.colors.text};
+            }
+        `;
+        document.head.appendChild(style);
+
         const loadMapAndAutocomplete = () => {
             if (centerLocation && mapDivRef.current && !googleMapRef.current && window.google) {
                 initWebMap();
@@ -269,7 +336,7 @@ const MapScreen = () => {
 
         if (!window.google) {
             const script = document.createElement('script');
-            const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+            const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
             
             if (apiKey) {
                 // Afegim 'marker' per utilitzar AdvancedMarkerElement i evitar warnings
@@ -427,9 +494,10 @@ const MapScreen = () => {
                 }).start();
                 lastHeight.current = target;
             } else {
-                // If closing details but we have results, go to list view (45%) instead of minimizing
+                // If closing details but we have results, go to list view (25%) instead of minimizing
                 const hasResults = filteredBars.length > 0;
-                const target = hasResults ? Math.max(300, height * 0.45) : 120;
+                // Reduced from 45% -> 25% (and min 300 -> 160) to be less intrusive initially
+                const target = hasResults ? Math.max(160, height * 0.25) : 120;
                 
                 Animated.timing(bottomSheetHeight, {
                     toValue: target, 
@@ -609,7 +677,7 @@ const MapScreen = () => {
 
     const fetchWebRoute = async (bar: Bar) => {
         if (!centerLocation || !googleMapRef.current) return;
-        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
         if (!apiKey) return;
 
         await executeRequest(async () => {
@@ -819,6 +887,10 @@ const MapScreen = () => {
     };
 
     const renderSearchBarInput = () => {
+        const placeholderText = user?.favoriteTeam 
+            ? `On vols veure el ${user.favoriteTeam}?` 
+            : "On vols veure el partit?";
+
         if (Platform.OS === 'web') {
              return (
                  <View style={[styles.searchBar, {flex: 1}]}>
@@ -827,7 +899,7 @@ const MapScreen = () => {
                     <input
                         ref={autocompleteInputRef}
                         type="text"
-                        placeholder="Des d'on vols veure el Barça?"
+                        placeholder={placeholderText}
                         style={{
                             flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: '#333', fontFamily: 'Lora'
                         }}
@@ -846,7 +918,7 @@ const MapScreen = () => {
              <View style={[styles.searchBar, {flex: 1}]}>
                 <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
                 <TextInput 
-                    placeholder="Des d'on vols veure el Barça?" 
+                    placeholder={placeholderText} 
                     style={styles.searchInput}
                     placeholderTextColor="#999"
                     value={searchQuery}
@@ -858,7 +930,7 @@ const MapScreen = () => {
     };
 
     const renderPickerModal = () => {
-        if (!pickerModal.visible) return null;
+        if (!showPicker) return null;
         
         return (
              <View style={{
@@ -868,14 +940,17 @@ const MapScreen = () => {
                 justifyContent: 'center',
                 alignItems: 'center'
              }}>
-                <View style={{
-                    width: '85%',
+                <Animated.View style={{
+                    width: isDesktop ? 600 : '85%',
                     maxHeight: '70%',
+                    maxWidth: '100%',
                     backgroundColor: SKETCH_THEME.colors.bg,
                     borderRadius: 12,
                     borderWidth: 2,
                     borderColor: SKETCH_THEME.colors.text,
-                    ...sketchShadow
+                    ...sketchShadow,
+                    transform: [{ scale: pickerAnim }],
+                    opacity: pickerAnim
                 }}>
                     <View style={{
                         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -908,7 +983,7 @@ const MapScreen = () => {
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
-                </View>
+                </Animated.View>
              </View>
         );
     }
@@ -934,7 +1009,7 @@ const MapScreen = () => {
         return null; // Native fallback
     }
     const renderSearchSettingsOverlay = () => {
-        if (!isSearchSettingsOpen) return null;
+        if (!showSettings) return null;
 
         const sports = ['Futbol'];
         
@@ -987,7 +1062,24 @@ const MapScreen = () => {
 
         return (
             <View style={styles.settingsOverlay}>
-                <View style={[styles.settingsCard, { zIndex: 1, minHeight: 450 }]}>
+                <Animated.View style={[
+                    styles.settingsCard, 
+                    { 
+                        zIndex: 1, 
+                        minHeight: 450,
+                        opacity: settingsAnim,
+                        transform: [
+                            { scale: settingsAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.9, 1]
+                            })},
+                            { translateY: settingsAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [20, 0]
+                            })}
+                        ]
+                    }
+                ]}>
                     <View style={styles.settingsHeader}>
                         <Text style={styles.settingsTitle}>Filtres</Text>
                         <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={{ padding: 6 }}>
@@ -1034,7 +1126,7 @@ const MapScreen = () => {
                             <Text style={styles.settingsActionPrimaryText}>Fet</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </Animated.View>
 
                 {/* Render the modal inside the overlay to be on top of the card */}
                 {renderPickerModal()}
