@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { executeRequest } from '../api/core';
+import { SPORTS_DATA, CompetitionSpec } from '../data/leagues';
 
 export interface Match {
     id: string;
@@ -14,38 +15,29 @@ export interface Match {
 // Instead we fetch competition-level calendars and derive teams + matchups from them.
 // Source: fixtur.es (ics.fixtur.es)
 
-type CompetitionSpec = {
-    name: string;
-    slug: string;
-};
-
 // Important competitions (Spain national + Champions League)
-// (Only slugs are fixed; teams + fixtures come from the remote calendars.)
-const IMPORTANT_COMPETITIONS: CompetitionSpec[] = [
-    { name: 'La Liga', slug: 'primera-division' },
-    { name: 'Copa del Rey', slug: 'copa-del-rey' },
-    { name: 'Champions League', slug: 'champions-league' },
-];
 
 const leagueIcsUrl = (leagueSlug: string) => `https://ics.fixtur.es/v2/league/${leagueSlug}.ics`;
 
 // --- CACHE SYSTEM ---
 let cachedMatches: Record<string, Match[]> = {};
 let lastFetchTime: Record<string, number> = {};
+let lastFailTime: Record<string, number> = {};
+let localProxyFailed = false; // Circuit breaker for web proxy
 const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 Hours (Calendar doesn't change that often)
+const FAILURE_CACHE_DURATION = 1000 * 60 * 15; // 15 min (avoid spam when an ICS is temporarily unavailable)
 
-// Helper to handle CORS on web.
-// Public proxies are unreliable (CORS/429). Prefer a local or deployed proxy you control.
-// Configure via EXPO_PUBLIC_ICS_PROXY, e.g. "http://localhost:8787/ics".
+// Helper to handle CORS on web via Proxy
 const getFetchUrl = (icsUrl: string) => {
-    if (Platform.OS !== 'web') return icsUrl;
+    // NATIVE (iOS/Android): Fetch directly. No CORS issues, faster performance.
+    if (Platform.OS !== 'web') {
+        return icsUrl;
+    }
 
-    // Expo exposes EXPO_PUBLIC_* env vars to the app.
-    const proxyBase = (process.env.EXPO_PUBLIC_ICS_PROXY || 'http://127.0.0.1:8787/ics').trim();
-    return `${proxyBase}?url=${encodeURIComponent(icsUrl)}`;
+    // WEB: Use centralized proxy config or fallback to localhost
+    const proxyUrl = process.env.EXPO_PUBLIC_ICS_PROXY || 'http://127.0.0.1:8787/ics';
+    return `${proxyUrl}?url=${encodeURIComponent(icsUrl)}`;
 };
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const mapWithConcurrency = async <T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> => {
     const results: R[] = new Array(items.length);
@@ -142,31 +134,15 @@ const decodeICSText = (text: string): string => {
     }
 };
 
-export const fetchMatches = async (teamName: string = 'FC Barcelona', forceRefresh = false): Promise<Match[]> => {
-    const cacheKey = `team:${teamName}`;
-    const nowTime = Date.now();
-    if (!forceRefresh && cachedMatches[cacheKey] && (nowTime - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
-        return cachedMatches[cacheKey];
-    }
-
-    const { matches } = await fetchAllMatches();
-    const tf = teamName.trim().toLowerCase();
-    const filtered = matches.filter(m => {
-        const home = (m.teamHome || '').toLowerCase();
-        const away = (m.teamAway || '').toLowerCase();
-        return home.includes(tf) || away.includes(tf);
-    });
-
-    cachedMatches[cacheKey] = filtered;
-    lastFetchTime[cacheKey] = Date.now();
-    return filtered;
-};
-
 const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = false): Promise<Match[]> => {
     const cacheKey = `league:${spec.slug}`;
     const nowTime = Date.now();
     if (!forceRefresh && cachedMatches[cacheKey] && (nowTime - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
         return cachedMatches[cacheKey];
+    }
+
+    if (!forceRefresh && (nowTime - (lastFailTime[cacheKey] || 0) < FAILURE_CACHE_DURATION)) {
+        return cachedMatches[cacheKey] || [];
     }
 
     const targetUrl = leagueIcsUrl(spec.slug);
@@ -175,21 +151,29 @@ const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = fal
     try {
         if (Platform.OS === 'web') {
             // WEB: Attempt 1 - Local Proxy (Preferred)
-            try {
-                const proxyUrl = getFetchUrl(targetUrl);
-                const response = await fetch(proxyUrl);
-                if (response.ok) {
+            if (!localProxyFailed) {
+                try {
+                    const proxyUrl = getFetchUrl(targetUrl);
+                    const response = await fetch(proxyUrl);
                     const text = await response.text();
-                    if (text.includes('BEGIN:VCALENDAR')) {
+                    if (response.ok && text.includes('BEGIN:VCALENDAR')) {
                         icsData = decodeICSText(text);
+                    } else if (!response.ok) {
+                        console.warn(`[MatchService] Proxy returned ${response.status} for ${spec.slug}`);
                     }
+                } catch (e) {
+                    console.warn(`[MatchService] Local proxy failed for ${spec.slug}. Attempting fallback...`);
+                    localProxyFailed = true;
                 }
-            } catch (e) {
-                console.warn(`[MatchService] Local proxy failed for ${spec.slug}. Attempting fallback...`);
             }
 
-            // WEB: Attempt 2 - Public Proxy (Fallback - allorigins)
-            if (!icsData) {
+            // NOTE: We intentionally do not use public CORS proxies by default.
+            // They are frequently blocked/unreliable and can break the app even when our local proxy works.
+            // If you really need them (e.g. web prod without your own proxy), enable:
+            //   EXPO_PUBLIC_ENABLE_PUBLIC_ICS_FALLBACKS=1
+            const enablePublicFallbacks = String(process.env.EXPO_PUBLIC_ENABLE_PUBLIC_ICS_FALLBACKS || '') === '1';
+            if (enablePublicFallbacks && !icsData) {
+                // Attempt 2 - Public Proxy (Fallback - allorigins)
                 try {
                     console.log(`[MatchService] Trying allorigins fallback for ${spec.slug}`);
                     const fallbackUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
@@ -203,24 +187,22 @@ const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = fal
                 } catch (fallbackError) {
                     console.warn(`[MatchService] allorigins failed for ${spec.slug}`, fallbackError);
                 }
-            }
 
-            // WEB: Attempt 3 - Public Proxy (Backup - corsproxy.io)
-            if (!icsData) {
-                try {
-                    console.log(`[MatchService] Trying corsproxy.io fallback for ${spec.slug}`);
-                    // corsproxy.io simply takes the target URL as a query param (often without encoding, or decoded by them)
-                    // Usage: https://corsproxy.io/?https://...
-                    const backupUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-                    const res = await fetch(backupUrl);
-                    if (res.ok) {
-                        const text = await res.text();
-                        if (text.includes('BEGIN:VCALENDAR')) {
-                            icsData = decodeICSText(text);
+                // Attempt 3 - Public Proxy (Backup - corsproxy.io)
+                if (!icsData) {
+                    try {
+                        console.log(`[MatchService] Trying corsproxy.io fallback for ${spec.slug}`);
+                        const backupUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+                        const res = await fetch(backupUrl);
+                        if (res.ok) {
+                            const text = await res.text();
+                            if (text.includes('BEGIN:VCALENDAR')) {
+                                icsData = decodeICSText(text);
+                            }
                         }
+                    } catch (backupError) {
+                        console.warn(`[MatchService] corsproxy.io failed for ${spec.slug}`, backupError);
                     }
-                } catch (backupError) {
-                    console.warn(`[MatchService] corsproxy.io failed for ${spec.slug}`, backupError);
                 }
             }
         } else {
@@ -233,6 +215,10 @@ const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = fal
 
         if (!icsData) {
             console.error(`[MatchService] Could not fetch data for ${spec.slug} (Proxy & Fallback failed).`);
+            lastFailTime[cacheKey] = nowTime;
+            if (!cachedMatches[cacheKey]) {
+                cachedMatches[cacheKey] = [];
+            }
             return cachedMatches[cacheKey] || [];
         }
 
@@ -301,7 +287,11 @@ const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = fal
 export const fetchAllMatches = async (): Promise<{ matches: Match[], teams: string[], competitions: string[] }> => {
     // 1. Fetch competition calendars with a concurrency cap
     const concurrency = Platform.OS === 'web' ? 3 : 6;
-    const results = await mapWithConcurrency(IMPORTANT_COMPETITIONS, concurrency, (spec) => fetchCompetitionMatches(spec));
+
+    // Get all competitions from all sports
+    const allCompetitions = SPORTS_DATA.flatMap(sport => sport.competitions);
+
+    const results = await mapWithConcurrency(allCompetitions, concurrency, (spec) => fetchCompetitionMatches(spec));
 
     // 2. Flatten and Deduplicate
     const allMatches: Match[] = [];
@@ -355,8 +345,17 @@ export const fetchAllMatches = async (): Promise<{ matches: Match[], teams: stri
     };
 };
 
-// Backwards compatibility alias if needed, but better to refactor usages.
-export const fetchBarcaMatches = (forceRefresh = false) => fetchMatches('FC Barcelona', forceRefresh);
+export const getTeamsFromLeague = async (leagueSlug: string): Promise<string[]> => {
+    // Reuse existing logic to fetch matches for a specific league
+    // We use the slug as the name temporarily since we only care about the team names
+    const matches = await fetchCompetitionMatches({ name: leagueSlug, slug: leagueSlug });
+    const teams = new Set<string>();
+    matches.forEach(m => {
+        teams.add(m.teamHome);
+        teams.add(m.teamAway);
+    });
+    return Array.from(teams).sort();
+};
 
 export const getNextMatch = async (competitionFilter?: string, teamFilter?: string): Promise<Match | null> => {
     // Otherwise, search in "All Matches" (or default to Barça if we want to save data, 

@@ -73,7 +73,11 @@ async function fetchWithTimeout(url) {
 }
 
 const app = express();
-app.use(cors({ origin: true }));
+app.use(cors({ 
+  origin: true,
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-Requested-With']
+}));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, active, queued: queue.length, cacheSize: cache.size });
@@ -160,7 +164,7 @@ app.get('/ics', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console
   console.log(`ICS proxy listening on http://localhost:${PORT}`);
   console.log(`Health: http://localhost:${PORT}/health`);
