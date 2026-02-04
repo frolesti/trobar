@@ -6,6 +6,8 @@ import MapScreen from '../screens/Map/MapScreen';
 import LoginModal from '../screens/LoginModal/LoginModal';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import ClaimBusinessScreen from '../screens/ClaimBusiness/ClaimBusinessScreen';
+import ReportBarScreen from '../screens/ReportBar/ReportBarScreen';
+import { OSMBar } from '../services/osmService';
 
 // Define the root stack param list
 export type RootStackParamList = {
@@ -14,6 +16,7 @@ export type RootStackParamList = {
   Login: undefined;
   Profile: undefined;
   ClaimBusiness: { barId: string; barName: string };
+  ReportBar: { osmBar: OSMBar };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -35,7 +38,9 @@ export default function AppNavigator() {
           name="Profile" 
           component={ProfileScreen} 
         />
-        <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: 'Alta de Negoci', headerBackTitleVisible: false }} />
+        <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: '', headerBackTitleVisible: false, headerShadowVisible: false, headerStyle: { backgroundColor: '#F0F7F4' } }} />
+
+        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ presentation: 'transparentModal', headerShown: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
         
         <Stack.Screen 
           name="Login" 

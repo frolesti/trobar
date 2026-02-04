@@ -1,6 +1,7 @@
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Bar } from '../data/dummyData';
+import { OSMBar } from './osmService';
 import { executeRequest } from '../api/core';
 
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
@@ -65,4 +66,25 @@ export const fetchBarById = async (id: string): Promise<Bar | null> => {
     }, `fetchBarById:${id}`);
 
     return result.data;
+};
+
+export const addUserReportedBar = async (osmBar: OSMBar, userId: string): Promise<void> => {
+    // @ts-ignore
+    return await executeRequest(async () => {
+        const barRef = doc(db, 'bars', osmBar.id); // Use OSM ID as Document ID
+        await setDoc(barRef, {
+            name: osmBar.name,
+            location: { latitude: osmBar.lat, longitude: osmBar.lon }, // Store as map for consistency with mapDocToBar
+            address: '', // OSM doesn't always give address
+            amenities: [osmBar.type],
+            source: 'user_reported',
+            reportedBy: userId,
+            createdAt: serverTimestamp(),
+            isActive: false, // "estat desactivat" - Needs admin/owner confirmation to become full verified
+            isOpen: true,
+            rating: 0 // No rating yet
+        }, { merge: true });
+    }, 'addUserReportedBar').then(res => {
+        if (!res.success) throw res.error;
+    });
 };

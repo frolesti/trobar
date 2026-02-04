@@ -8,6 +8,7 @@ export interface Bar {
   isOpen: boolean;
   image: string;
   tags: string[];
+  source?: 'verified' | 'user_reported';
   nextMatch?: {
     teamHome: string;
     teamAway: string;

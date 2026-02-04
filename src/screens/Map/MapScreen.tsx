@@ -14,6 +14,7 @@ import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '.
 import { CUSTOM_MAP_STYLE } from '../../theme/mapStyle';
 import { executeRequest } from '../../api/core';
 import { fetchAllMatches, Match } from '../../services/matchService';
+import { fetchBarsFromOSM, OSMBar } from '../../services/osmService';
 import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
 import { formatTeamNameForDisplay } from '../../utils/teamName';
@@ -120,11 +121,16 @@ const MapScreen = () => {
     // Dades
     const [bars, setBars] = useState<Bar[]>([]);
     const [filteredBars, setFilteredBars] = useState<Bar[]>([]);
+    
+    // OSM / Scanning Logic
+    const [scannedBars, setScannedBars] = useState<OSMBar[]>([]);
+    const [isScanning, setIsScanning] = useState(false);
 
     // Refs (Web)
     const mapDivRef = useRef<View>(null);
     const googleMapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
+    const osmMarkersRef = useRef<any[]>([]);
     const circleRef = useRef<any>(null);
     const centerMarkerRef = useRef<any>(null);
     const autocompleteInputRef = useRef<any>(null);
@@ -297,6 +303,40 @@ const MapScreen = () => {
             return true;
         });
         setFilteredBars(nearbyBars);
+    }, [centerLocation, radiusKm, bars]);
+
+    // 5. Automatic OSM Scanning (Debounced)
+    useEffect(() => {
+        if (!centerLocation) return;
+        
+        let isActive = true;
+        const timer = setTimeout(async () => {
+             if (isActive) {
+                 setIsScanning(true);
+                 // Scan slightly wider than the user's view radius to be safe? 
+                 // Or stick to 1:1. Let's do 1:1 but capped at 1.5km inside the service.
+                 const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, radiusKm);
+                 
+                 // Deduplicate: Remove OSM nodes that are already in our 'bars' DB (approx match < 50m)
+                 const newScanned = osmData.filter(osmItem => {
+                      const alreadyExists = bars.some(b => {
+                          const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
+                          return dist < 0.05; // 50 meters
+                      });
+                      return !alreadyExists;
+                 });
+                 
+                 if (isActive) {
+                     setScannedBars(newScanned);
+                     setIsScanning(false);
+                 }
+             }
+        }, 1200); // 1.2s Debounce to avoid spamming while sliding slider
+
+        return () => {
+            isActive = false;
+            clearTimeout(timer);
+        };
     }, [centerLocation, radiusKm, bars]);
         
     // 3. Load Matches for Banner
@@ -592,6 +632,43 @@ const MapScreen = () => {
         });
     };
 
+    // Helper to render OSM markers on Web
+    const updateWebOSMMarkers = (osmData: OSMBar[]) => {
+        if (!googleMapRef.current) return;
+
+        // Clear old
+        if (osmMarkersRef.current) {
+            osmMarkersRef.current.forEach(m => m.setMap(null));
+        }
+        osmMarkersRef.current = [];
+
+        osmData.forEach(osmItem => {
+             const marker = new window.google.maps.Marker({
+                position: { lat: osmItem.lat, lng: osmItem.lon },
+                map: googleMapRef.current,
+                title: osmItem.name,
+                icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    scale: 5,
+                    fillColor: '#bbb',
+                    fillOpacity: 0.8,
+                    strokeColor: 'white',
+                    strokeWeight: 1
+                },
+                zIndex: 50 // Behind real bars
+            });
+
+            marker.addListener("click", () => {
+                navigation.navigate('ReportBar' as any, { osmBar: osmItem });
+            });
+            osmMarkersRef.current.push(marker);
+        });
+    };
+
+    useEffect(() => {
+        if (Platform.OS === 'web') updateWebOSMMarkers(scannedBars);
+    }, [scannedBars]);
+
     const fetchWebRoute = async (bar: Bar) => {
         if (!centerLocation || !googleMapRef.current) return;
         const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -880,19 +957,28 @@ const MapScreen = () => {
         <View style={isDesktop ? styles.desktopSidebarContent : styles.topBarContainer}>
              <View style={{flexDirection: 'row', alignItems: 'center'}}>
                  {renderSearchBarInput()}
-                 <TouchableOpacity 
-                    style={styles.avatarButton}
-                    onPress={() => user ? navigation.navigate('Profile' as any) : navigation.navigate('Login' as any)}
-                >
-                    {user?.avatar && !isAvatarError
-                        ? <Image 
-                            source={{uri: user.avatar}} 
-                            style={{width: 44, height: 44, borderRadius: 22}} 
-                            onError={() => setIsAvatarError(true)}
-                          />
-                        : <Feather name="user" size={24} color={SKETCH_THEME.colors.text} />
-                    }
-                </TouchableOpacity>
+                 {user ? (
+                    <TouchableOpacity 
+                        style={styles.avatarButton}
+                        onPress={() => navigation.navigate('Profile' as any)}
+                    >
+                        {user.avatar && !isAvatarError
+                            ? <Image 
+                                source={{uri: user.avatar}} 
+                                style={{width: 44, height: 44, borderRadius: 22}} 
+                                onError={() => setIsAvatarError(true)}
+                            />
+                            : <Feather name="user" size={24} color={SKETCH_THEME.colors.text} />
+                        }
+                    </TouchableOpacity>
+                 ) : (
+                    <TouchableOpacity 
+                        style={{ marginLeft: 10, padding: 8 }}
+                        onPress={() => navigation.navigate('Login' as any)}
+                    >
+                        <Feather name="log-in" size={24} color={SKETCH_THEME.colors.text} />
+                    </TouchableOpacity>
+                 )}
              </View>
              
              {/* Global Next Match Info Banner */}
@@ -970,6 +1056,26 @@ const MapScreen = () => {
                         toolbarEnabled={false}
                         onPress={() => setSelectedBar(null)}
                     >
+                         {/* OSM Scanned Bars */}
+                         {scannedBars.map(osmBar => (
+                            <Marker
+                                key={osmBar.id}
+                                coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
+                                onPress={() => navigation.navigate('ReportBar' as any, { osmBar })}
+                                zIndex={1}
+                            >
+                                <View style={{ 
+                                    width: 12, height: 12, borderRadius: 6, 
+                                    backgroundColor: '#bbb', 
+                                    borderWidth: 1, borderColor: 'white',
+                                    ...Platform.select({
+                                        ios: { shadowColor: 'black', shadowOffset: {width:0, height:1}, shadowOpacity: 0.2, shadowRadius: 1 },
+                                        android: { elevation: 2 }
+                                    })
+                                }} />
+                            </Marker>
+                         ))}
+
                          {filteredBars.map((bar) => {
                              // Basic Native Marker
                              return (
