@@ -1,13 +1,11 @@
 import { collection, doc, writeBatch, serverTimestamp, getDoc, setDoc, Timestamp, getDocs, QuerySnapshot } from 'firebase/firestore';
 import { Platform } from 'react-native';
 import { db } from '../config/firebase';
-import { SPORTS_DATA } from '../data/leagues';
+import { BARCA_CALENDARS } from '../data/leagues';
 // @ts-ignore
 import ICAL from 'ical.js';
 
 const MATCHES_COLLECTION = 'matches';
-const COMPETITIONS_COLLECTION = 'competitions';
-const TEAMS_COLLECTION = 'teams';
 const METADATA_COLLECTION = 'system';
 const SYNC_METADATA_DOC = 'sync_status';
 
@@ -23,9 +21,7 @@ const generateHashId = (str: string): string => {
     return Math.abs(hash).toString(16).padStart(8, '0');
 };
 
-const slugify = (str: string) => str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-const SYNC_COOLDOWN_MS = 1000 * 5; // Debug mode
+const SYNC_COOLDOWN_MS = 1000 * 60 * 60; // 1 Hour
 
 interface MatchData {
     leagueSlug: string;
@@ -45,48 +41,58 @@ const parseICSDate = (icalTime: any): Date => {
     }
 };
 
-const parseMatch = (vevent: any, leagueSlug: string, sport: string): MatchData | null => {
+const parseMatch = (vevent: any, calendarId: string): MatchData | null => {
     try {
-        const summary = vevent.getFirstPropertyValue('summary');
+        const summary = vevent.getFirstPropertyValue('summary') || '';
         const dtstart = vevent.getFirstPropertyValue('dtstart');
         const location = vevent.getFirstPropertyValue('location') || '';
         const description = vevent.getFirstPropertyValue('description') || '';
 
         if (!summary || !dtstart) return null;
 
-        let homeTeam = '';
-        let awayTeam = '';
-
-        // Robust separator handling
-        const separators = [' - ', ' vs ', ' v ', ' vs. ', ' V '];
+        let homeTeam = 'FC Barcelona';
+        let awayTeam = 'Unknown';
+        
+        // Parse "Home v Away" or "Home - Away"
+        // Fixtur.es format: "HomeTeam - AwayTeam"
+        const separators = [' - ', ' v ', ' vs '];
         let foundSep = false;
-
+        
         for (const sep of separators) {
-            if (summary.includes(sep)) {
-                const parts = summary.split(sep);
-                if (parts.length >= 2) {
-                    homeTeam = parts[0].trim();
-                     // Join the rest in case team name has the separator
-                    let rawAway = parts.slice(1).join(sep).trim();
-                    
-                    // Clean scores from team names (e.g. "Team A (2-1)")
-                    const scoreRegex = /\s*\(\d+[-:]\d+\.*\)$|\s*\([A-Z]+\)$/i; 
-                    homeTeam = homeTeam.replace(scoreRegex, '').trim();
-                    awayTeam = rawAway.replace(scoreRegex, '').trim();
-
-                    foundSep = true;
-                    break;
-                }
-            }
+             if (summary.includes(sep)) {
+                 const parts = summary.split(sep);
+                 homeTeam = parts[0].trim();
+                 awayTeam = parts[1].trim();
+                 
+                 // Clean scores e.g. "Team (2)"
+                 homeTeam = homeTeam.replace(/\s*\(\d+\)$/, '').trim();
+                 awayTeam = awayTeam.replace(/\s*\(\d+\)$/, '').trim();
+                 foundSep = true;
+                 break;
+             }
         }
         
-        if (!foundSep) return null;
+        // If no separator found, use summary as is (might be specific event name)
+        if (!foundSep) {
+             // Heuristic: If calendar is Barca, and Barca is not in title, maybe title is the opponent?
+             // But usually fixtur.es is consistent.
+        }
 
         const dateObj = parseICSDate(dtstart);
+        
+        // Competition Detection (often in description or summary suffix)
+        // For now, we identify competition by the calendarId or keep it simple.
+        let competition = "Unknown";
+        if (calendarId === 'fc-barcelona') competition = "Masculí"; 
+        if (calendarId === 'fc-barcelona-women') competition = "Femení";
+        
+        // Try to extract real competition from description if available (e.g. "Champions League")
+        if (description && description.includes('Champions League')) competition += ' (UCL)';
+        if (description && description.includes('La Liga')) competition += ' (Liga)';
 
         return {
-            leagueSlug,
-            sport,
+            leagueSlug: competition, 
+            sport: 'Futbol',
             homeTeam,
             awayTeam,
             date: dateObj,
@@ -97,22 +103,6 @@ const parseMatch = (vevent: any, leagueSlug: string, sport: string): MatchData |
         console.warn('Error parsing event:', e);
         return null;
     }
-};
-
-const clearCollection = async (collectionName: string) => {
-    console.log(`🧹 Clearing ${collectionName}...`);
-    const ref = collection(db, collectionName);
-    const snapshot = await getDocs(ref);
-    if (snapshot.empty) return;
-
-    const batchSize = 400;
-    const docs = snapshot.docs;
-    for (let i = 0; i < docs.length; i += batchSize) {
-        const batch = writeBatch(db);
-        docs.slice(i, i + batchSize).forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-    }
-    console.log(`✅ Cleared ${collectionName}`);
 };
 
 export const checkForUpdatesAndSync = async (): Promise<string> => {
@@ -135,15 +125,8 @@ export const checkForUpdatesAndSync = async (): Promise<string> => {
         }
 
         if (shouldSync) {
-            console.log('🚀 Starting automated sync (Merge Strategy)...');
-            
-            // NOTE: We do NOT clear collections anymore to prevent data loss on network failure.
-            // Old data remains until overwritten or we implement a "prune" strategy later.
-            
-            // 2. RUN SYNC
+            console.log('🚀 Starting automated sync (Barça Only)...');
             await performFullSync();
-            
-            // Update metadata
             await setDoc(metaRef, {
                 lastUpdated: serverTimestamp(),
                 updatedBy: 'app-auto-sync'
@@ -153,8 +136,7 @@ export const checkForUpdatesAndSync = async (): Promise<string> => {
         return 'skipped';
     } catch (error: any) {
         if (error.code === 'permission-denied') {
-            console.error('🚫 PERMISSION DENIED: Unable to sync database.');
-            console.error('👉 ACTION REQUIRED: Go to Firebase Console > Firestore > Rules and change "allow read, write: if false;" to "if true;" (for development).');
+            console.warn('Sync permission denied (Rules). Skipping.');
         } else {
             console.error('❌ Sync Logic Error:', error);
         }
@@ -163,153 +145,83 @@ export const checkForUpdatesAndSync = async (): Promise<string> => {
 };
 
 const performFullSync = async () => {
-    // Stage 1: Gather all data in memory (Teams, Matches, Competitions)
-    // Map<TeamSlug, TeamData>
-    const globalTeams = new Map<string, { id: string, name: string, sport: string, competitions: Set<string> }>();
     const allMatches: any[] = [];
-    const competitionsToWrite: any[] = [];
 
-    // Helper to get or create team ID
-    const registerTeam = (name: string, sport: string, leagueSlug: string): string | null => {
-        if (!name || name.trim().length === 0 || name === '...' || name === '.') return null;
+    for (const calendar of BARCA_CALENDARS) {
+        console.log(`📅 Fetching ${calendar.name}...`);
         
-        const id = slugify(name); 
-        if (!id || id.length === 0) return null;
+        // Native fetches directly. Web tries directly (CORS might fail, but let's try).
+        // If web fails, we handle it gracefully.
+        let url = calendar.url;
+        // if (Platform.OS === 'web') {
+        //     // Use a public proxy if strictly needed or rely on no-cors mode (opaque, cant read)
+        //     // For now, we assume direct fetch or local dev proxy if configured.
+        //     // url = `https://cors-anywhere.herokuapp.com/${url}`; 
+        // }
 
-        if (!globalTeams.has(id)) {
-            globalTeams.set(id, {
-                id,
-                name,
-                sport,
-                competitions: new Set([leagueSlug])
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const icsText = await response.text();
+
+            const jcalData = ICAL.parse(icsText);
+            const comp = new ICAL.Component(jcalData);
+            const vevents = comp.getAllSubcomponents('vevent');
+
+            const now = new Date();
+            // Allow showing matches from yesterday (to show results or "just finished")
+            const yesterday = new Date();
+            yesterday.setDate(now.getDate() - 1);
+
+            vevents.forEach((vevent: any) => {
+                const matchData = parseMatch(vevent, calendar.id);
+                if (!matchData) return;
+
+                if (matchData.date >= yesterday) {
+                    // ID: Date + Home + Away
+                    const rawIdString = `${matchData.date.toISOString()}-${matchData.homeTeam}-${matchData.awayTeam}`;
+                    const matchId = generateHashId(rawIdString);
+
+                    allMatches.push({
+                        id: matchId,
+                        competition: matchData.leagueSlug, // Using simplified "Masculí/Femení" as competition or category
+                        sport: 'Futbol',
+                        teamHome: matchData.homeTeam,
+                        teamAway: matchData.awayTeam,
+                        date: Timestamp.fromDate(matchData.date),
+                        location: matchData.location,
+                        updatedAt: serverTimestamp()
+                    });
+                }
             });
-        } else {
-            globalTeams.get(id)?.competitions.add(leagueSlug);
-        }
-        return id;
-    };
-
-    for (const category of SPORTS_DATA) {
-        for (const league of category.competitions) {
-            let url = `https://ics.fixtur.es/v2/league/${league.slug}.ics`;
-            if (Platform.OS === 'web') {
-                url = `http://localhost:8787/ics?url=${encodeURIComponent(url)}`;
-            }
-
-            console.log(`📅 Fetching ${league.name}...`);
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const icsText = await response.text();
-
-                const jcalData = ICAL.parse(icsText);
-                const comp = new ICAL.Component(jcalData);
-                const vevents = comp.getAllSubcomponents('vevent');
-
-                const leagueTeamIds = new Set<string>();
-                let leagueMatchCount = 0;
-                
-                const now = new Date();
-                const yesterday = new Date();
-                yesterday.setDate(now.getDate() - 1);
-
-                vevents.forEach((vevent: any) => {
-                    const matchData = parseMatch(vevent, league.slug, category.sport);
-                    if (!matchData) return;
-
-                    // REGISTER TEAMS & GET IDs
-                    const homeId = registerTeam(matchData.homeTeam, category.sport, league.slug);
-                    const awayId = registerTeam(matchData.awayTeam, category.sport, league.slug);
-                    
-                    if (homeId && awayId) {
-                        leagueTeamIds.add(homeId);
-                        leagueTeamIds.add(awayId);
-
-                        if (matchData.date >= yesterday) {
-                            // GENERATE SHORT DETERMINISTIC MATCH ID
-                            // Hash(Date + HomeID + AwayID)
-                            const rawIdString = `${matchData.date.toISOString()}-${homeId}-${awayId}`;
-                            const matchId = generateHashId(rawIdString);
-
-                            allMatches.push({
-                                id: matchId,
-                                leagueSlug: league.slug,
-                                sport: category.sport,
-                                homeTeamId: homeId,
-                                awayTeamId: awayId,
-                                homeTeamName: matchData.homeTeam,
-                                awayTeamName: matchData.awayTeam,
-                                date: Timestamp.fromDate(matchData.date),
-                                location: matchData.location,
-                                updatedAt: serverTimestamp()
-                            });
-                            leagueMatchCount++;
-                        }
-                    }
-                });
-
-                competitionsToWrite.push({
-                    id: league.slug, 
-                    data: {
-                        name: league.name,
-                        slug: league.slug,
-                        type: league.type || 'domestic_league',
-                        sport: category.sport,
-                        teamIds: Array.from(leagueTeamIds), // Store IDs only
-                        lastUpdated: serverTimestamp()
-                    }
-                });
-                console.log(`   Processed ${leagueMatchCount} matches.`);
-
-            } catch (err) {
-                console.warn(`⚠️ Failed to sync ${league.name}:`, err);
-            }
+        } catch (e) {
+            console.error(`Failed to sync calendar ${calendar.name}:`, e);
         }
     }
 
-    // WRITE TEAMS
-    console.log(`💾 Saving ${globalTeams.size} teams...`);
-    const teamOps: Promise<any>[] = [];
-    let currentBatch = writeBatch(db);
-    let count = 0;
-
-    for (const team of globalTeams.values()) {
-        const teamRef = doc(db, TEAMS_COLLECTION, team.id);
-        currentBatch.set(teamRef, {
-            name: team.name,
-            sport: team.sport,
-            competitions: Array.from(team.competitions),
-            updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        count++;
-        if (count >= 400) {
-            teamOps.push(currentBatch.commit());
-            currentBatch = writeBatch(db);
-            count = 0;
-        }
-    }
-    if (count > 0) teamOps.push(currentBatch.commit());
-    await Promise.all(teamOps);
-
-    // WRITE COMPETITIONS
-    const compBatch = writeBatch(db);
-    competitionsToWrite.forEach(c => {
-        compBatch.set(doc(db, COMPETITIONS_COLLECTION, c.id), c.data, { merge: true });
-    });
-    await compBatch.commit();
-
-    // WRITE MATCHES
-    console.log(`💾 Saving ${allMatches.length} matches...`);
-    for (let i = 0; i < allMatches.length; i += 400) {
-        const chunk = allMatches.slice(i, i + 400);
+    if (allMatches.length > 0) {
+        console.log(`💾 Saving ${allMatches.length} Barça matches...`);
         const batch = writeBatch(db);
-        chunk.forEach(m => {
-            const { id, ...data } = m;
-            batch.set(doc(db, MATCHES_COLLECTION, id), data, { merge: true });
-        });
-        await batch.commit();
-        console.log(`   Written matches chunk ${i}`);
+        
+        // We overwrite matches with same ID. 
+        // We do not delete old "Barça" matches yet unless we clear collection.
+        // But since we pivot, we might want to clear EVERYTHING first if we can?
+        // Let's just upsert.
+        
+        let operationCount = 0;
+        for (const match of allMatches) {
+            const ref = doc(db, MATCHES_COLLECTION, match.id);
+            batch.set(ref, match, { merge: true });
+            operationCount++;
+            
+            if (operationCount >= 450) {
+                await batch.commit();
+                operationCount = 0;
+            }
+        }
+        if (operationCount > 0) await batch.commit();
+        console.log('✅ Sync Complete');
+    } else {
+        console.log('⚠️ No matches found to sync.');
     }
 };
