@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, ActivityIndicator, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing } from 'react-native';
+import { LoadingIndicator } from '../../components/LoadingIndicator';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons'; // Import Vector Icons
@@ -114,7 +115,11 @@ const MapScreen = () => {
     // Location: Ubicació REAL del dispositiu (GPS)
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
     // CenterLocation: Punt central de la cerca (pot ser GPS o una adreça buscada)
-    const [centerLocation, setCenterLocation] = useState<{latitude: number, longitude: number} | null>(null);
+    // Inicialitzar amb Barcelona per defecte per evitar pantalla de càrrega bloquejant
+    const [centerLocation, setCenterLocation] = useState<{latitude: number, longitude: number} | null>({
+        latitude: 41.3851, 
+        longitude: 2.1734
+    });
     
     // State comú
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -1164,15 +1169,8 @@ const MapScreen = () => {
         </View>
     );
 
-    // Initial Loading State
-    if (!userLocation && !centerLocation) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} />
-                <Text style={{marginTop:10}}>Obtenint la teva ubicació real...</Text>
-            </View>
-        );
-    }
+    // Initial Loading State REMOVED
+    // if (!userLocation && !centerLocation) { ... }
 
     return (
         <View style={[styles.container, isDesktop && { flexDirection: 'row' }]}>

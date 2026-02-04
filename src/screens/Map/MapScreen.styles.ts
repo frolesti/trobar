@@ -8,7 +8,7 @@ export default StyleSheet.create({
     container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg },
     mapContainer: { flex: 1, width: '100%', height: '100%' },
     map: { width: '100%', height: '100%' },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.bg },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
     
     // Top Bar & Header
     topBarContainer: {
