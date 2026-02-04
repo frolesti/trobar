@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Plat
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons'; // Import Vector Icons
+import { Feather, Ionicons } from '@expo/vector-icons'; // Import Vector Icons
 import { fetchBars } from '../../services/barService';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import { Bar } from '../../data/dummyData';
 import { seedDatabase } from '../../utils/seedDatabase';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../../utils/GoogleMaps';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
+import { CUSTOM_MAP_STYLE } from '../../theme/mapStyle';
 import { executeRequest } from '../../api/core';
 import { fetchAllMatches, Match } from '../../services/matchService';
 import { Picker } from '@react-native-picker/picker';
@@ -47,28 +48,6 @@ const deg2rad = (deg: number) => {
 const getCleanBarName = (name: string) => {
     return name.replace(/\s\d+$/, '');
 };
-
-// Custom "Paper" Map Style
-const PAPER_MAP_STYLE = [
-  { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
-  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-  { "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
-  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
-  { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
-  { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
-  { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-  { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
-  { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
-  { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-  { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
-  { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
-  { "featureType": "road.local", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] },
-  { "featureType": "transit.line", "elementType": "geometry", "stylers": [{ "color": "#e5e5e5" }] },
-  { "featureType": "transit.station", "elementType": "geometry", "stylers": [{ "color": "#eeeeee" }] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9c9c9" }] },
-  { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
-];
 
 // SVG Path for Hand-Drawn Pin (Approximate)
 const SKETCHY_PIN_PATH = "M 12 2 C 7 2 3 7 3 12 C 3 17 12 24 12 24 C 12 24 21 17 21 12 C 21 7 17 2 12 2 Z";
@@ -128,27 +107,9 @@ const MapScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [radiusKm, setRadiusKm] = useState(1); // Radi de cerca per defecte: 1km
 
-    const [isSearchSettingsOpen, setIsSearchSettingsOpen] = useState(false);
-    const [openPicker, setOpenPicker] = useState<string | null>(null); // 'sport', 'comp', 'team'
-
-    // Match filters (restored)
-    const [pickerModal, setPickerModal] = useState<{
-        visible: boolean;
-        label: string;
-        options: string[];
-        selectedValue: string;
-        onSelect: (val: string) => void;
-    }>({ visible: false, label: '', options: [], selectedValue: '', onSelect: () => {} });
-
-    // Match filters (restored)
-    const [selectedSport, setSelectedSport] = useState<string>('Futbol');
-    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
-    const [selectedTeam, setSelectedTeam] = useState<string>('');
-    
-    // Data for filters
+    // Data for Next Match Display
     const [allMatches, setAllMatches] = useState<Match[]>([]);
-    const [availableCompetitions, setAvailableCompetitions] = useState<string[]>([]);
-    const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+    const [nextMatch, setNextMatch] = useState<Match | null>(null);
     
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
     const [isAvatarError, setIsAvatarError] = useState(false);
@@ -252,44 +213,6 @@ const MapScreen = () => {
         })();
     }, []);
 
-    // Animation Effects
-    useEffect(() => {
-        if (isSearchSettingsOpen) {
-            setShowSettings(true);
-            Animated.spring(settingsAnim, {
-                toValue: 1,
-                useNativeDriver: Platform.OS !== 'web',
-                friction: 7,
-                tension: 40
-            }).start();
-        } else {
-            Animated.timing(settingsAnim, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: Platform.OS !== 'web'
-            }).start(() => setShowSettings(false));
-        }
-    }, [isSearchSettingsOpen]);
-
-    useEffect(() => {
-        if (pickerModal.visible) {
-            setShowPicker(true);
-            pickerAnim.setValue(0);
-            Animated.timing(pickerAnim, {
-                toValue: 1,
-                duration: 300,
-                easing: Easing.out(Easing.back(1.2)),
-                useNativeDriver: Platform.OS !== 'web'
-            }).start();
-        } else {
-            Animated.timing(pickerAnim, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: Platform.OS !== 'web'
-            }).start(() => setShowPicker(false));
-        }
-    }, [pickerModal.visible]);
-
     // 2. Load Bars
     useEffect(() => {
         const loadInitialData = async () => {
@@ -371,34 +294,85 @@ const MapScreen = () => {
             );
             
             if (dist > radiusKm) return false;
-
-            // Match filters: rely on bar.nextMatch (seeded / stored in Firestore)
-            if (selectedSport && selectedSport !== '' && selectedSport !== 'Futbol') {
-                return false;
-            }
-
-            if (selectedCompetition && selectedCompetition !== '') {
-                const comp = (bar.nextMatch?.competition || '').trim();
-                if (!comp) return false;
-                if (comp.toLowerCase() !== selectedCompetition.toLowerCase()) return false;
-            }
-
-            if (selectedTeam && selectedTeam !== '') {
-                const match = bar.nextMatch;
-                if (!match) return false;
-                const tf = selectedTeam.toLowerCase();
-                const home = (match.teamHome || '').toLowerCase();
-                const away = (match.teamAway || '').toLowerCase();
-                if (!home.includes(tf) && !away.includes(tf)) return false;
-            }
-
             return true;
         });
         setFilteredBars(nearbyBars);
+    }, [centerLocation, radiusKm, bars]);
+        
+    // 3. Load Matches for Banner
+    useEffect(() => {
+        let isMounted = true;
+        const loadMatches = async () => {
+            try {
+                const { matches } = await fetchAllMatches();
+                if (isMounted && matches && matches.length > 0) {
+                    const now = new Date();
+                    const upcoming = matches
+                        .filter(m => {
+                            // @ts-ignore
+                            const d = m.date && m.date.toDate ? m.date.toDate() : new Date(m.date);
+                            return d > now;
+                        })
+                        .sort((a, b) => {
+                            // @ts-ignore
+                            const dA = a.date && a.date.toDate ? a.date.toDate() : new Date(a.date);
+                            // @ts-ignore
+                            const dB = b.date && b.date.toDate ? b.date.toDate() : new Date(b.date);
+                            return dA.getTime() - dB.getTime();
+                        });
 
+                    if (upcoming.length > 0) {
+                        setNextMatch(upcoming[0]);
+                    } else {
+                        setNextMatch(null);
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to load matches for map banner", e);
+            }
+        };
+        loadMatches();
+        return () => { isMounted = false; };
+    }, []);
+
+    // RENDER HELPERS
+    const renderNextMatchBanner = () => {
+        if (!nextMatch) return null;
+        
+        // Safe check for dates
+        let dateStr = "Avui";
+        if (nextMatch.date) {
+            // @ts-ignore
+            const d = nextMatch.date.toDate ? nextMatch.date.toDate() : new Date(nextMatch.date);
+            const isToday = new Date().toDateString() === d.toDateString();
+            dateStr = isToday ? 
+                `AVUI ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}h` : 
+                `${d.toLocaleDateString('ca-ES', {weekday: 'short', day: 'numeric'})} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}h`;
+        }
+
+        return (
+            <View style={styles.nextMatchContainer}>
+                <View style={{flex: 1}}>
+                    <Text style={styles.nextMatchTitle}>Propers Partits</Text>
+                    <Text style={styles.nextMatchTeams}>
+                        {formatTeamNameForDisplay(nextMatch.teamHome)} vs {formatTeamNameForDisplay(nextMatch.teamAway)}
+                    </Text>
+                    <Text style={styles.nextMatchInfo}>
+                        {nextMatch.competition} • {dateStr}
+                    </Text>
+                </View>
+                <View style={{ backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 20, padding: 6 }}>
+                     <Ionicons name="football" size={20} color="white" />
+                </View>
+            </View>
+        );
+    };
+
+    // 4. Update Map Visuals & Animation
+    useEffect(() => {
         // Animation: Hide bottom sheet if 0 bars, Slide up/bounce if > 0
         if (!isDesktop) {
-            if (nearbyBars.length > 0) {
+            if (filteredBars.length > 0) {
                 Animated.spring(bottomSheetTranslateY, {
                     toValue: 0,
                     useNativeDriver: Platform.OS !== 'web',
@@ -416,75 +390,12 @@ const MapScreen = () => {
 
         // Update Platform Specifics
         if (Platform.OS === 'web') {
-            updateWebMapVisuals(nearbyBars);
+            updateWebMapVisuals(filteredBars);
         } else {
-             // Native Map automatically updates via 'filteredBars' prop to MapView
+            // Native Map automatically updates via 'filteredBars' prop to MapView
         }
+    }, [filteredBars, isDesktop, bottomSheetTranslateY]); // Added dependencies properly
 
-    }, [centerLocation, radiusKm, bars, selectedSport, selectedCompetition, selectedTeam]);
-
-    // Load match-derived filter options when opening the filters panel
-    useEffect(() => {
-        if (!isSearchSettingsOpen) return;
-        
-        // If we already have data, don't refetch broadly unless necessary
-        if (allMatches.length > 0) return;
-
-        let isMounted = true;
-        const loadOptions = async () => {
-            try {
-                const { matches, teams, competitions } = await fetchAllMatches();
-                if (!isMounted) return;
-
-                setAllMatches(matches);
-                // Initial Competitions (Available regardless of team selection, or could limit?)
-                // Usually Competition is a top-level filter.
-                setAvailableCompetitions(competitions.sort());
-                
-                // Initial Teams (All teams if no competition selected)
-                // We will let the dependency effect handle 'availableTeams' but we can seed it here first.
-                // Actually, let's just trigger the effect by setting allMatches.
-            } catch (e) {
-                // Keep options empty if fail
-            }
-        };
-
-        loadOptions();
-        return () => {
-            isMounted = false;
-        };
-    }, [isSearchSettingsOpen]);
-
-    // Update Teams based on Competition
-    useEffect(() => {
-        if (allMatches.length === 0) return;
-
-        let teamSet = new Set<string>();
-
-        if (selectedCompetition === '') {
-            // All teams from all matches
-            allMatches.forEach(m => {
-                teamSet.add(m.teamHome);
-                teamSet.add(m.teamAway);
-            });
-        } else {
-            // Filter teams by competition
-            const relevantMatches = allMatches.filter(m => m.competition === selectedCompetition);
-            relevantMatches.forEach(m => {
-                teamSet.add(m.teamHome);
-                teamSet.add(m.teamAway);
-            });
-        }
-
-        const sortedTeams = Array.from(teamSet).sort();
-        setAvailableTeams(sortedTeams);
-
-        // Auto-clear invalid team selection
-        if (selectedTeam && !teamSet.has(selectedTeam)) {
-            setSelectedTeam('');
-        }
-
-    }, [selectedCompetition, allMatches]);
 
     // 5. Selected Bar Animation (Synced)
     useEffect(() => {
@@ -546,29 +457,28 @@ const MapScreen = () => {
             disableDefaultUI: true, 
             clickableIcons: false,
             gestureHandling: 'greedy', // Forces one-finger pan (fixes "Use two fingers to move map")
-            // styles: PAPER_MAP_STYLE, // REMOVED: Cannot be used with mapId
+            styles: CUSTOM_MAP_STYLE,
             backgroundColor: SKETCH_THEME.colors.bg,
-            mapId: 'DEMO_MAP_ID', // Requerit per utilitzar AdvancedMarkerElement
+            // mapId removed to allow 'styles' (JSON) to work. AdvancedMarkerElement disabled.
         };
         const map = new window.google.maps.Map(mapDomNode, mapOptions);
         googleMapRef.current = map;
 
-        // User Marker (Custom Dot)
+        // User Marker (Legacy Marker for JSON styles compatibility)
         if (userLocation) {
-            // Un cercle simple es pot fer amb un div i CSS
-            const userPinEl = document.createElement('div');
-            userPinEl.style.width = '12px';
-            userPinEl.style.height = '12px';
-            userPinEl.style.backgroundColor = SKETCH_THEME.colors.text;
-            userPinEl.style.opacity = '0.8';
-            userPinEl.style.borderRadius = '50%';
-            userPinEl.style.boxShadow = '0 0 0 2px white'; // Opcional, vora blanca
-
-            new window.google.maps.marker.AdvancedMarkerElement({
+            new window.google.maps.Marker({
                 position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
                 map: map,
-                content: userPinEl,
-                title: "Tu", zIndex: 999
+                title: "Tu", 
+                zIndex: 999,
+                icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    scale: 6,
+                    fillColor: SKETCH_THEME.colors.text,
+                    fillOpacity: 0.8,
+                    strokeColor: 'white',
+                    strokeWeight: 2,
+                }
             });
         }
         
@@ -637,44 +547,45 @@ const MapScreen = () => {
              if (dist < 0.05) showCenter = false;
         }
         if (showCenter) {
-            const centerEl = document.createElement('div');
-            centerEl.style.width = '10px';
-            centerEl.style.height = '10px';
-            centerEl.style.borderRadius = '50%';
-            centerEl.style.border = `2px solid ${SKETCH_THEME.colors.text}`;
-            centerEl.style.backgroundColor = 'transparent';
-
-            centerMarkerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
+            centerMarkerRef.current = new window.google.maps.Marker({
                 position: { lat: centerLocation.latitude, lng: centerLocation.longitude },
                 map: googleMapRef.current,
-                content: centerEl,
-                zIndex: 900
+                zIndex: 900,
+                icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    scale: 5,
+                    fillColor: 'transparent',
+                    fillOpacity: 0,
+                    strokeColor: SKETCH_THEME.colors.text,
+                    strokeWeight: 2
+                }
             });
         }
 
         // Bar Markers (Custom Sketchy Pins)
-        markersRef.current.forEach(m => m.map = null);
+        if (markersRef.current) {
+            markersRef.current.forEach(m => m.setMap(null));
+        }
         markersRef.current = [];
         
         barsToRender.forEach(bar => {
-            // Creem un element SVG pel marcador
-            const parser = new DOMParser();
+            // Legacy Marker with SVG Icon
             const svgString = `
                 <svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="${SKETCHY_PIN_PATH}" fill="${SKETCH_THEME.colors.primary}" fill-opacity="0.9" />
                 </svg>
             `;
-            const svgEl = parser.parseFromString(svgString, 'image/svg+xml').documentElement;
-            
-            const pinContainer = document.createElement('div');
-            pinContainer.appendChild(svgEl);
-            pinContainer.style.transform = 'translateY(-50%)'; 
+            const svgIcon = {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgString),
+                scaledSize: new window.google.maps.Size(36, 36),
+                anchor: new window.google.maps.Point(18, 36) 
+            };
 
-            const marker = new window.google.maps.marker.AdvancedMarkerElement({
+            const marker = new window.google.maps.Marker({
                 position: { lat: bar.latitude, lng: bar.longitude },
                 map: googleMapRef.current,
                 title: getCleanBarName(bar.name),
-                content: pinContainer,
+                icon: svgIcon,
             });
             marker.addListener("click", () => { setSelectedBar(bar); });
             markersRef.current.push(marker);
@@ -795,14 +706,20 @@ const MapScreen = () => {
                         </TouchableOpacity>
                     </View>
 
-                    {selectedBar.nextMatch && (
+                    {/* ALWAYS SHOW GLOBAL NEXT MATCH FOR BARCA APP */}
+                    {nextMatch && (
                         <View style={styles.matchCard}>
-                            <Text style={styles.matchTitle}>Pròxim Partit ({selectedBar.nextMatch.competition})</Text>
+                            <Text style={styles.matchTitle}>
+                                Pròxim Partit ({nextMatch.competition === 'Masculí' ? 'M' : 'F'})
+                            </Text>
                             <View style={styles.matchTeams}>
-                                <Text style={styles.teamText}>{selectedBar.nextMatch.teamHome}</Text>
+                                <Text style={styles.teamText}>{nextMatch.teamHome}</Text>
                                 <Text style={styles.vsText}>vs</Text>
-                                <Text style={styles.teamText}>{selectedBar.nextMatch.teamAway}</Text>
+                                <Text style={styles.teamText}>{nextMatch.teamAway}</Text>
                             </View>
+                             <Text style={{color: SKETCH_THEME.colors.textMuted, fontSize: 11, textAlign:'center', marginTop: 4, fontStyle:'italic'}}>
+                                {selectedBar.name} emetrà aquest partit.
+                            </Text>
                         </View>
                     )}
 
@@ -821,6 +738,7 @@ const MapScreen = () => {
 
         return (
             <View style={{flex: 1}}>
+                {renderNextMatchBanner()}
                 <View style={{alignItems: 'center', marginBottom: 15, marginTop: 10}}>
                      <View style={{
                          backgroundColor: SKETCH_THEME.colors.text, 
@@ -893,9 +811,7 @@ const MapScreen = () => {
     };
 
     const renderSearchBarInput = () => {
-        const placeholderText = user?.favoriteTeam 
-            ? `On vols veure el ${formatTeamNameForDisplay(user.favoriteTeam)}?` 
-            : "On vols veure el partit?";
+        const placeholderText = "On vols veure el partit?";
 
         if (Platform.OS === 'web') {
              return (
@@ -935,66 +851,8 @@ const MapScreen = () => {
         );
     };
 
-    const renderPickerModal = () => {
-        if (!showPicker) return null;
-        
-        return (
-             <View style={{
-                position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                zIndex: 3000,
-                justifyContent: 'center',
-                alignItems: 'center'
-             }}>
-                <Animated.View style={{
-                    width: isDesktop ? 600 : '85%',
-                    maxHeight: '70%',
-                    maxWidth: '100%',
-                    backgroundColor: SKETCH_THEME.colors.bg,
-                    borderRadius: 12,
-                    borderWidth: 2,
-                    borderColor: SKETCH_THEME.colors.text,
-                    ...sketchShadow,
-                    transform: [{ scale: pickerAnim }],
-                    opacity: pickerAnim
-                }}>
-                    <View style={{
-                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                        padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)'
-                    }}>
-                        <Text style={styles.settingsTitle}>{pickerModal.label}</Text>
-                        <TouchableOpacity onPress={() => setPickerModal(prev => ({...prev, visible: false}))}>
-                             <Feather name="x" size={24} color={SKETCH_THEME.colors.text} />
-                        </TouchableOpacity>
-                    </View>
-                    
-                    <ScrollView contentContainerStyle={{padding: 8}}>
-                        {pickerModal.options.map(opt => (
-                            <TouchableOpacity 
-                                key={opt}
-                                style={{
-                                    paddingVertical: 12, 
-                                    paddingHorizontal: 16,
-                                    borderRadius: 8,
-                                    backgroundColor: pickerModal.selectedValue === opt ? SKETCH_THEME.colors.primarySoft : 'transparent'
-                                }}
-                                onPress={() => pickerModal.onSelect(opt)}
-                            >
-                                <Text style={{
-                                    fontFamily: Platform.OS === 'web' ? 'Lora, serif' : undefined,
-                                    fontSize: 16,
-                                    color: pickerModal.selectedValue === opt ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.text,
-                                    fontWeight: pickerModal.selectedValue === opt ? 'bold' : 'normal'
-                                }}>{pickerModal.label === 'Equip' ? formatTeamNameForDisplay(opt) : opt}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </Animated.View>
-             </View>
-        );
-    }
-    
     const renderRadiusSlider = () => {
+
         if (Platform.OS === 'web') {
             return (
                 <View style={[styles.radiusContainer, { width: '100%', paddingHorizontal: 4, marginTop: 12 }]}>
@@ -1015,142 +873,13 @@ const MapScreen = () => {
         return null; // Native fallback
     }
     const renderSearchSettingsOverlay = () => {
-        if (!showSettings) return null;
-
-        const sports = ['Futbol'];
-        
-        // Render Button that opens the Central Modal
-        const renderSketchyPicker = (
-            label: string, 
-            value: string, 
-            options: string[], 
-            onSelect: (val: string) => void
-        ) => {
-            const displayedValue = label === 'Equip' ? formatTeamNameForDisplay(value) : value;
-            return (
-                <View style={{ marginBottom: 16 }}>
-                    <Text style={styles.settingsLabel}>{label}</Text>
-                    <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() => setPickerModal({
-                            visible: true,
-                            label,
-                            options,
-                            selectedValue: value,
-                            onSelect: (val) => {
-                                onSelect(val);
-                                setPickerModal(prev => ({ ...prev, visible: false }));
-                            }
-                        })}
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            borderWidth: 2,
-                            borderColor: SKETCH_THEME.colors.text,
-                            borderRadius: 12,
-                            backgroundColor: SKETCH_THEME.colors.bg,
-                            height: 40,
-                            paddingHorizontal: 12,
-                        }}
-                    >
-                        <Text style={{
-                            color: value ? SKETCH_THEME.colors.text : SKETCH_THEME.colors.textMuted,
-                            fontFamily: Platform.OS === 'web' ? 'Lora, serif' : undefined,
-                            fontSize: 15
-                        }} numberOfLines={1}>
-                            {displayedValue || 'Qualsevol'}
-                        </Text>
-                        <Feather name="chevron-down" size={18} color={SKETCH_THEME.colors.text} />
-                    </TouchableOpacity>
-                </View>
-            )
-        };
-
-        return (
-            <View style={styles.settingsOverlay}>
-                <Animated.View style={[
-                    styles.settingsCard, 
-                    { 
-                        zIndex: 1, 
-                        minHeight: 450,
-                        opacity: settingsAnim,
-                        transform: [
-                            { scale: settingsAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0.9, 1]
-                            })},
-                            { translateY: settingsAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [20, 0]
-                            })}
-                        ]
-                    }
-                ]}>
-                    <View style={styles.settingsHeader}>
-                        <Text style={styles.settingsTitle}>Filtres</Text>
-                        <TouchableOpacity onPress={() => setIsSearchSettingsOpen(false)} style={{ padding: 6 }}>
-                            <Feather name="x" size={18} color={SKETCH_THEME.colors.text} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <Text style={styles.settingsHint}>
-                        Filtra per esport, competició i equip.
-                    </Text>
-
-                    <View>
-                        {renderSketchyPicker('Esport', selectedSport, sports, (v) => {
-                                setSelectedSport(v);
-                                setSelectedCompetition('');
-                                setSelectedTeam('');
-                        })}
-                    </View>
-
-                    <View>
-                        {renderSketchyPicker('Competició', selectedCompetition, availableCompetitions, (v) => setSelectedCompetition(v))}
-                    </View>
-
-                    <View>
-                        {renderSketchyPicker('Equip', selectedTeam, availableTeams, (v) => setSelectedTeam(v))}
-                    </View>
-
-                    <View style={styles.settingsActions}>
-                        <TouchableOpacity
-                            onPress={() => {
-                                setSelectedSport('Futbol');
-                                setSelectedCompetition('');
-                                setSelectedTeam('');
-                            }}
-                            style={styles.settingsActionSecondary}
-                        >
-                            <Text style={styles.settingsActionSecondaryText}>Restablir</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => setIsSearchSettingsOpen(false)}
-                            style={styles.settingsActionPrimary}
-                        >
-                            <Text style={styles.settingsActionPrimaryText}>Fet</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
-
-                {/* Render the modal inside the overlay to be on top of the card */}
-                {renderPickerModal()}
-            </View>
-        );
+        return null;
     };
 
     const renderHeader = () => (
         <View style={isDesktop ? styles.desktopSidebarContent : styles.topBarContainer}>
              <View style={{flexDirection: 'row', alignItems: 'center'}}>
                  {renderSearchBarInput()}
-                      <TouchableOpacity
-                          style={styles.headerIconButton}
-                          onPress={() => setIsSearchSettingsOpen(true)}
-                      >
-                          <Feather name="sliders" size={22} color={SKETCH_THEME.colors.text} />
-                      </TouchableOpacity>
                  <TouchableOpacity 
                     style={styles.avatarButton}
                     onPress={() => user ? navigation.navigate('Profile' as any) : navigation.navigate('Login' as any)}
@@ -1165,9 +894,39 @@ const MapScreen = () => {
                     }
                 </TouchableOpacity>
              </View>
+             
+             {/* Global Next Match Info Banner */}
+             {nextMatch && (!selectedBar || isDesktop) && (
+                <View style={{
+                    marginTop: 12, 
+                    backgroundColor: SKETCH_THEME.colors.primary, 
+                    borderRadius: 8, 
+                    padding: 10,
+                    marginHorizontal: Platform.OS === 'web' ? 0 : 4
+                }}>
+                    <Text style={{color: 'white', fontSize: 13, fontWeight: 'bold', fontFamily: 'Lora', textAlign: 'center'}}>
+                        Pròxim Partit ({nextMatch.competition === 'Masculí' ? 'M' : 'F'})
+                    </Text>
+                    <View style={{flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 4}}>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.teamHome}</Text>
+                         <Text style={{color: 'white', marginHorizontal: 6, fontSize: 12}}>vs</Text>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.teamAway}</Text>
+                    </View>
+                    <Text style={{color: 'rgba(255,255,255,0.9)', fontSize: 12, textAlign: 'center', marginTop: 4}}>
+                        {/* @ts-ignore */}
+                        {(() => {
+                            // @ts-ignore
+                            const d = nextMatch.date.toDate ? nextMatch.date.toDate() : new Date(nextMatch.date);
+                            return d.toLocaleString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'});
+                        })()}
+                    </Text>
+                </View>
+             )}
+
              { (!selectedBar || isDesktop) && renderRadiusSlider() }
         </View>
     );
+
 
     // Initial Loading State REMOVED
     // if (!userLocation && !centerLocation) { ... }
@@ -1199,6 +958,7 @@ const MapScreen = () => {
                         ref={mapRefNative}
                         provider={PROVIDER_GOOGLE}
                         style={styles.map}
+                        customMapStyle={CUSTOM_MAP_STYLE}
                         initialRegion={{
                             latitude: centerLocation!.latitude,
                             longitude: centerLocation!.longitude,

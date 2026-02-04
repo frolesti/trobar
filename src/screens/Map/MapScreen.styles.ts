@@ -198,18 +198,19 @@ export default StyleSheet.create({
     },
     settingsActionPrimary: {
         paddingVertical: 10,
-        paddingHorizontal: 14,
+        paddingHorizontal: 20,
         borderRadius: 12,
+        backgroundColor: SKETCH_THEME.colors.primary,
         borderWidth: 2,
         borderColor: SKETCH_THEME.colors.text,
-        backgroundColor: SKETCH_THEME.colors.primary,
-        ...Platform.select({ web: { cursor: 'pointer' } })
+        ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } }),
     },
     settingsActionPrimaryText: {
         fontFamily: 'Lora',
         fontWeight: 'bold',
-        color: 'white',
+        color: '#fff',
     },
+
 
     // Detail
     detailContainer: { flex: 1 },
@@ -239,4 +240,37 @@ export default StyleSheet.create({
     matchTeams: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
     teamText: { fontSize: 18, fontWeight: 'bold', width: '40%', textAlign: 'center', fontFamily: 'Lora', color: SKETCH_THEME.colors.text },
     vsText: { color: SKETCH_THEME.colors.primary, marginHorizontal: 10, fontFamily: 'Lora', fontWeight: 'bold' },
+
+    // Next MATCH BANNER
+    nextMatchContainer: {
+        backgroundColor: SKETCH_THEME.colors.bg,
+        borderRadius: 12,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: SKETCH_THEME.colors.text,
+        marginVertical: 10,
+        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } })
+    },
+    nextMatchTitle: {
+        fontSize: 10,
+        color: SKETCH_THEME.colors.textMuted,
+        textTransform: 'uppercase',
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+        marginBottom: 2
+    },
+    nextMatchTeams: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: SKETCH_THEME.colors.text,
+        fontFamily: 'Lora',
+    },
+    nextMatchInfo: {
+        fontSize: 11,
+        color: SKETCH_THEME.colors.text,
+        fontStyle: 'italic',
+        marginTop: 1
+    },
 });

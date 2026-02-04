@@ -1,16 +1,16 @@
 import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 export const SKETCHY_COLORS = {
-    bg: '#FFFBF0', // Cream / Paper
-    uiBg: 'rgba(255, 251, 240, 0.96)',
+    bg: '#F0F7F4', // Light Mint Green
+    uiBg: 'rgba(240, 247, 244, 0.96)',
     card: '#FFFFFF',
-    text: '#3E2723', // Dark Brown / Ink
-    textMuted: '#6D4C41',
-    accent: '#8D6E63',
-    border: 'rgba(62, 39, 35, 0.18)', // Ink wash
-    primary: '#4BB577', // New Green Brand Color (matching GIF)
+    text: '#1B4D3E', // Deep Forest Green
+    textMuted: '#5C8D75', // Sage Green
+    accent: '#4BB577', // Primary is now Accent too
+    border: 'rgba(27, 77, 62, 0.15)', // Green wash
+    primary: '#4BB577', // New Green Brand Color
     primarySoft: 'rgba(75, 181, 119, 0.15)',
-    danger: '#C62828',
+    danger: '#D32F2F',
 };
 
 export const sketchFontFamily = () =>
