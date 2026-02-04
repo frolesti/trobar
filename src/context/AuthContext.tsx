@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const combinedUser: UserProfile = {
             id: firebaseUser.uid,
             name: firestoreProfile?.name || firebaseUser.displayName || 'Usuari',
+            surname: firestoreProfile?.surname || '',
             email: firebaseUser.email || '',
             // Prioritize Firestore avatar if it exists; otherwise use Google photo; otherwise undefined
             avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : (firebaseUser.photoURL || undefined),
@@ -62,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser({
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'Usuari',
+            surname: '',
             email: firebaseUser.email || '',
             avatar: firebaseUser.photoURL || undefined
         });

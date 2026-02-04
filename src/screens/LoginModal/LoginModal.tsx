@@ -220,7 +220,7 @@ const LoginModal = ({ navigation }: Props) => {
                     {!showEmailForm && (
                         <View style={styles.header}>
                             <Text style={styles.emoji}>👋</Text>
-                            <Text style={styles.title}>Benvingut a TroBar</Text>
+                            <Text style={styles.title}>Benvingut a troBar</Text>
                             <Text style={styles.subtitle}>
                                 Inicia sessió per guardar els teus bars preferits, rebre alertes de partits i molt més.
                             </Text>

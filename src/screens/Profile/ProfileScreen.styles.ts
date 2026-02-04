@@ -157,5 +157,15 @@ export default StyleSheet.create({
          color: SKETCH_THEME.colors.text,
       }
     })
+  },
+  footer: {
+    padding: 20,
+    alignItems: 'center',
+    width: '100%'
+  },
+  versionText: {
+    ...SKETCH_THEME.typography.caption,
+    marginTop: 10,
+    color: SKETCH_THEME.colors.textMuted
   }
 });

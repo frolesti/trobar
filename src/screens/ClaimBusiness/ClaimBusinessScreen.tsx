@@ -54,12 +54,17 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
     }
   };
 
+  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+  const wrapperProps = Platform.OS === 'web' ? { style: { flex: 1, height: '100vh', overflow: 'hidden' } } : { behavior: Platform.OS === "ios" ? "padding" : "height", style: styles.container };
+
   return (
-    <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
-    >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    // @ts-ignore
+    <Wrapper {...wrapperProps}>
+        <ScrollView 
+            contentContainerStyle={styles.scrollContent}
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={true}
+        >
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Gestiona el teu negoci</Text>
                 <Text style={styles.headerSubtitle}>
@@ -128,7 +133,8 @@ const ClaimBusinessScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.cancelButtonText}>Cancel·lar</Text>
             </TouchableOpacity>
         </ScrollView>
-    </KeyboardAvoidingView>
+    {/* @ts-ignore */}
+    </Wrapper>
   );
 };
 
