@@ -4,6 +4,7 @@
   Why:
   - Browsers enforce CORS, and public proxies like api.allorigins.win are rate-limited/unreliable.
   - This proxy fetches the ICS server-side and returns it with permissive CORS.
+  - NOTE: This proxy DOES NOT save to the database. It is a "pipe" only. The App (syncService) reads from here and saves to Firestore.
 
   Run:
     node scripts/icsProxyServer.js

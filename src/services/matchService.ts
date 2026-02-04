@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import { executeRequest } from '../api/core';
 import { SPORTS_DATA, CompetitionSpec } from '../data/leagues';
+import { collection, getDocs, query, where, Timestamp, orderBy, limit as firestoreLimit } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 export interface Match {
     id: string;
@@ -18,6 +20,85 @@ export interface Match {
 // Important competitions (Spain national + Champions League)
 
 const leagueIcsUrl = (leagueSlug: string) => `https://ics.fixtur.es/v2/league/${leagueSlug}.ics`;
+
+// --- FIRESTORE SYNC SUPPORT ---
+
+// Map slug -> Name (e.g. 'primera-division' -> 'La Liga')
+const LEAGUE_SLUG_TO_NAME: Record<string, string> = {};
+SPORTS_DATA.forEach(sport => {
+    sport.competitions.forEach(comp => {
+        LEAGUE_SLUG_TO_NAME[comp.slug] = comp.name;
+    });
+});
+
+let cachedFirestoreMatches: Match[] | null = null;
+let lastFirestoreFetchTime = 0;
+const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 Hour
+
+async function fetchMatchesFromFirestore(): Promise<Match[]> {
+    try {
+        const nowTime = Date.now();
+        if (cachedFirestoreMatches && (nowTime - lastFirestoreFetchTime < DB_CACHE_DURATION)) {
+            console.log(`📦 [DB CACHE] Returning ${cachedFirestoreMatches.length} matches from memory.`);
+            return cachedFirestoreMatches;
+        }
+
+        console.log('🔥 (Engine) Querying Firestore "matches" collection...');
+        const matchesRef = collection(db, 'matches');
+        
+        // Filter: Matches from 2 hours ago onwards
+        const now = new Date();
+        const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000); // -2h
+
+        const q = query(
+            matchesRef, 
+            where('date', '>=', Timestamp.fromDate(activeThreshold)),
+            orderBy('date', 'asc'),
+            firestoreLimit(500) // Safety limit
+        );
+
+        const snapshot = await getDocs(q);
+        const matches: Match[] = [];
+
+        if (snapshot.empty) {
+            console.log('⚠️ Internal database empty or no upcoming matches found.');
+            return [];
+        }
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Data validation
+            if (!data.homeTeam || !data.awayTeam || !data.date) return;
+
+            // Resolve proper competition name
+            const compName = LEAGUE_SLUG_TO_NAME[data.leagueSlug] || data.leagueSlug || 'Unknown League';
+
+            matches.push({
+                id: doc.id,
+                teamHome: data.homeTeam,
+                teamAway: data.awayTeam,
+                date: (data.date as Timestamp).toDate(),
+                competition: compName,
+                location: data.location || ''
+            });
+        });
+
+        console.log(`✅ [DB SUCCESS] Loaded ${matches.length} matches from Firestore.`);
+        
+        // Update cache
+        cachedFirestoreMatches = matches;
+        lastFirestoreFetchTime = Date.now();
+
+        return matches;
+    } catch (error: any) {
+        if (error.code === 'permission-denied') {
+            console.warn('⚠️ [DB PERMISSION] Could not read from Firestore. Rules are likely blocking access.');
+        } else {
+            console.error('❌ [DB ERROR]', error);
+        }
+        return [];
+    }
+}
 
 // --- CACHE SYSTEM ---
 let cachedMatches: Record<string, Match[]> = {};
@@ -285,40 +366,49 @@ const fetchCompetitionMatches = async (spec: CompetitionSpec, forceRefresh = fal
 // --- MULTI-COMPETITION FETCHING ---
 
 export const fetchAllMatches = async (): Promise<{ matches: Match[], teams: string[], competitions: string[] }> => {
-    // 1. Fetch competition calendars with a concurrency cap
-    const concurrency = Platform.OS === 'web' ? 3 : 6;
+    // 0. Try Internal DB First
+    let futureMatches = await fetchMatchesFromFirestore();
 
-    // Get all competitions from all sports
-    const allCompetitions = SPORTS_DATA.flatMap(sport => sport.competitions);
+    if (futureMatches.length > 0) {
+        // If DB has matches, we use them directly.
+        // They are already sorted and filtered by date >= now-2h in the query.
+        console.log('✅ Using cached matches from internal DB.');
+    } else {
+        // Fallback: Fetch competition calendars via ICS
+        console.log('🌍 DB empty. Fetching from external ICS sources...');
+        const concurrency = Platform.OS === 'web' ? 3 : 6;
 
-    const results = await mapWithConcurrency(allCompetitions, concurrency, (spec) => fetchCompetitionMatches(spec));
+        // Get all competitions from all sports
+        const allCompetitions = SPORTS_DATA.flatMap(sport => sport.competitions);
 
-    // 2. Flatten and Deduplicate
-    const allMatches: Match[] = [];
-    const seenMatchIds = new Set<string>();
+        const results = await mapWithConcurrency(allCompetitions, concurrency, (spec) => fetchCompetitionMatches(spec));
 
-    results.forEach(teamMatches => {
-        teamMatches.forEach(filterMatch => {
-            // Create a unique ID/fingerprint (Date + Teams) to avoid "Barça vs Madrid" showing twice
-            const fingerprint = `${filterMatch.date.getTime()}_${[filterMatch.teamHome, filterMatch.teamAway].sort().join('_')}`;
-            
-            if (!seenMatchIds.has(fingerprint)) {
-                seenMatchIds.add(fingerprint);
-                allMatches.push(filterMatch);
-            }
+        // 2. Flatten and Deduplicate
+        const allMatches: Match[] = [];
+        const seenMatchIds = new Set<string>();
+
+        results.forEach(teamMatches => {
+            teamMatches.forEach(filterMatch => {
+                // Create a unique ID/fingerprint (Date + Teams) to avoid "Barça vs Madrid" showing twice
+                const fingerprint = `${filterMatch.date.getTime()}_${[filterMatch.teamHome, filterMatch.teamAway].sort().join('_')}`;
+                
+                if (!seenMatchIds.has(fingerprint)) {
+                    seenMatchIds.add(fingerprint);
+                    allMatches.push(filterMatch);
+                }
+            });
         });
-    });
 
-    // 3. Sort by Date
-    allMatches.sort((a, b) => a.date.getTime() - b.date.getTime());
+        // 3. Sort by Date
+        allMatches.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    // 4. Filter for Future Matches ONLY (Context: "Where to watch")
-    // We only want teams and competitions relevant to UPCOMING fixtures.
-    const now = new Date();
-    // Optional buffer: include matches from 2 hours ago (currently playing)
-    const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        // 4. Filter for Future Matches ONLY
+        const now = new Date();
+        const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        futureMatches = allMatches.filter(m => m.date >= activeThreshold);
+    }
 
-    const futureMatches = allMatches.filter(m => m.date >= activeThreshold);
+    // 5. Extract Unique Lists from FUTURE matches only
 
     // 5. Extract Unique Lists from FUTURE matches only
     const teamsSet = new Set<string>();
