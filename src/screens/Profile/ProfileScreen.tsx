@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, Platform, 
-    StatusBar, TextInput, ActivityIndicator, Alert, Modal, FlatList, Animated, Easing, ScrollView, KeyboardAvoidingView
+    StatusBar, TextInput, Alert, Modal, FlatList, Animated, Easing, ScrollView, KeyboardAvoidingView
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -201,7 +202,7 @@ export default function ProfileScreen() {
             disabled={isLoading}
         >
             {isLoading ? 
-              <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} /> : 
+              <LoadingIndicator size="small" /> : 
                 <Text style={styles.editButtonText}>{isEditing ? "Guardar" : "Editar"}</Text>
             }
         </TouchableOpacity>
@@ -413,7 +414,7 @@ export default function ProfileScreen() {
                     
                     <Text style={{fontSize: 12, color: SKETCH_THEME.colors.textMuted, marginBottom: 4, marginTop: 10}}>2. El teu equip</Text>
                     {isLoadingTeams ? (
-                        <ActivityIndicator style={{marginVertical: 10}} color={SKETCH_THEME.colors.primary} />
+                        <LoadingIndicator size="small" style={{marginVertical: 10}} />
                     ) : (
                         renderPickerTrigger(
                             team ? formatTeamNameForDisplay(team) : undefined,

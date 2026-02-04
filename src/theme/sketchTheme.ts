@@ -8,8 +8,8 @@ export const SKETCHY_COLORS = {
     textMuted: '#6D4C41',
     accent: '#8D6E63',
     border: 'rgba(62, 39, 35, 0.18)', // Ink wash
-    primary: '#D32F2F', // Red ink/stamp
-    primarySoft: 'rgba(211, 47, 47, 0.12)',
+    primary: '#4BB577', // New Green Brand Color (matching GIF)
+    primarySoft: 'rgba(75, 181, 119, 0.15)',
     danger: '#C62828',
 };
 

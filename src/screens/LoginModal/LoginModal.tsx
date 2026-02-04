@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -184,7 +185,7 @@ const LoginModal = ({ navigation }: Props) => {
                 disabled={isLoading}
             >
                 {isLoading ? (
-                    <ActivityIndicator color="white" />
+                    <LoadingIndicator size="small" />
                 ) : (
                     <Text style={styles.primaryButtonText}>{isRegistering ? 'Registrar-se' : 'Entrar'}</Text>
                 )}
