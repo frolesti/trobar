@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator } from 'react-native';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
@@ -155,6 +155,7 @@ const MapScreen = () => {
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
             onStartShouldSetPanResponderCapture: () => true,
+            // ... (Bottom Sheet logic remains the same for simple touches)
             onMoveShouldSetPanResponder: (_, gestureState) => {
                 return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 2;
             },
@@ -194,6 +195,28 @@ const MapScreen = () => {
                 }).start();
                 
                 lastHeight.current = targetHeight;
+            }
+        })
+    ).current;
+
+    // Edge Swipe Responder for Login Navigation (Edge from Left -> Right)
+    const edgeSwipeResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (evt, gestureState) => {
+                // Must start at the very edge (x < 50) AND be a right swipe (dx > 20)
+                // We DON'T use Capture because we want to lose to internal scroll views if necessary,
+                // but since it's absolute, it should be fine.
+                // Using 'pageX' for absolute screen coordinates.
+                return evt.nativeEvent.pageX < 60 && gestureState.dx > 10 && Math.abs(gestureState.dy) < Math.abs(gestureState.dx);
+            },
+            onPanResponderMove: (_, gestureState) => {
+                // We can animate something here if we want feedback
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 50) {
+                    // Valid swipe
+                    navigation.navigate('Login');
+                }
             }
         })
     ).current;
@@ -305,39 +328,33 @@ const MapScreen = () => {
         setFilteredBars(nearbyBars);
     }, [centerLocation, radiusKm, bars]);
 
-    // 5. Automatic OSM Scanning (Debounced)
-    useEffect(() => {
-        if (!centerLocation) return;
-        
-        let isActive = true;
-        const timer = setTimeout(async () => {
-             if (isActive) {
-                 setIsScanning(true);
-                 // Scan slightly wider than the user's view radius to be safe? 
-                 // Or stick to 1:1. Let's do 1:1 but capped at 1.5km inside the service.
-                 const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, radiusKm);
-                 
-                 // Deduplicate: Remove OSM nodes that are already in our 'bars' DB (approx match < 50m)
-                 const newScanned = osmData.filter(osmItem => {
-                      const alreadyExists = bars.some(b => {
-                          const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
-                          return dist < 0.05; // 50 meters
-                      });
-                      return !alreadyExists;
-                 });
-                 
-                 if (isActive) {
-                     setScannedBars(newScanned);
-                     setIsScanning(false);
-                 }
-             }
-        }, 1200); // 1.2s Debounce to avoid spamming while sliding slider
+    // 5. Automatic OSM Scanning REMOVED - Now Manual
+    /* 
+    useEffect(() => { ... } 
+    */
 
-        return () => {
-            isActive = false;
-            clearTimeout(timer);
-        };
-    }, [centerLocation, radiusKm, bars]);
+    const handleManualScan = async () => {
+        if (!centerLocation) return;
+        setIsScanning(true);
+        try {
+            const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, radiusKm);
+            
+            // Deduplicate
+            const newScanned = osmData.filter(osmItem => {
+                const alreadyExists = bars.some(b => {
+                    const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
+                    return dist < 0.05; // 50 meters
+                });
+                return !alreadyExists;
+            });
+
+            setScannedBars(newScanned);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsScanning(false);
+        }
+    };
         
     // 3. Load Matches for Banner
     useEffect(() => {
@@ -395,10 +412,10 @@ const MapScreen = () => {
                 <View style={{flex: 1}}>
                     <Text style={styles.nextMatchTitle}>Propers Partits</Text>
                     <Text style={styles.nextMatchTeams}>
-                        {formatTeamNameForDisplay(nextMatch.teamHome)} vs {formatTeamNameForDisplay(nextMatch.teamAway)}
+                        {formatTeamNameForDisplay(nextMatch.homeTeam)} vs {formatTeamNameForDisplay(nextMatch.awayTeam)}
                     </Text>
                     <Text style={styles.nextMatchInfo}>
-                        {nextMatch.competition} • {dateStr}
+                        {nextMatch.league} • {dateStr}
                     </Text>
                 </View>
                 <View style={{ backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 20, padding: 6 }}>
@@ -509,15 +526,15 @@ const MapScreen = () => {
             new window.google.maps.Marker({
                 position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
                 map: map,
-                title: "Tu", 
+                title: "La teva ubicació", 
                 zIndex: 999,
                 icon: {
                     path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 6,
-                    fillColor: SKETCH_THEME.colors.text,
-                    fillOpacity: 0.8,
+                    scale: 10,
+                    fillColor: '#2196F3',
+                    fillOpacity: 1,
                     strokeColor: 'white',
-                    strokeWeight: 2,
+                    strokeWeight: 3,
                 }
             });
         }
@@ -649,11 +666,11 @@ const MapScreen = () => {
                 title: osmItem.name,
                 icon: {
                     path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 5,
-                    fillColor: '#bbb',
-                    fillOpacity: 0.8,
-                    strokeColor: 'white',
-                    strokeWeight: 1
+                    scale: 6, // Slightly larger
+                    fillColor: '#E0E0E0', // Lighter gray
+                    fillOpacity: 1,
+                    strokeColor: '#757575', // Darker border for visibility
+                    strokeWeight: 2
                 },
                 zIndex: 50 // Behind real bars
             });
@@ -787,12 +804,12 @@ const MapScreen = () => {
                     {nextMatch && (
                         <View style={styles.matchCard}>
                             <Text style={styles.matchTitle}>
-                                Pròxim Partit ({nextMatch.competition === 'Masculí' ? 'M' : 'F'})
+                                Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
                             </Text>
                             <View style={styles.matchTeams}>
-                                <Text style={styles.teamText}>{nextMatch.teamHome}</Text>
+                                <Text style={styles.teamText}>{nextMatch.homeTeam}</Text>
                                 <Text style={styles.vsText}>vs</Text>
-                                <Text style={styles.teamText}>{nextMatch.teamAway}</Text>
+                                <Text style={styles.teamText}>{nextMatch.awayTeam}</Text>
                             </View>
                              <Text style={{color: SKETCH_THEME.colors.textMuted, fontSize: 11, textAlign:'center', marginTop: 4, fontStyle:'italic'}}>
                                 {selectedBar.name} emetrà aquest partit.
@@ -824,7 +841,7 @@ const MapScreen = () => {
                          transform: [{ rotate: '-1deg' }] // Tocs sketchy
                      }}>
                         <Text style={{color: SKETCH_THEME.colors.bg, fontWeight: 'bold', fontSize: 13, fontFamily: 'Lora'}}>
-                            Hem trobat {filteredBars.length} bars
+                            {filteredBars.length} bars confirmats {scannedBars.length > 0 ? `(+${scannedBars.length} possibles)` : ''}
                         </Text>
                      </View>
                 </View>
@@ -892,7 +909,7 @@ const MapScreen = () => {
 
         if (Platform.OS === 'web') {
              return (
-                 <View style={[styles.searchBar, {flex: 1}]}>
+                 <View style={styles.searchBar}>
                     <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
                     {/* @ts-ignore */}
                     <input
@@ -914,7 +931,7 @@ const MapScreen = () => {
         }
         // Native Input (Simple Text Input for now, assuming no Autocomplete needed immediately or implemented via library)
         return (
-             <View style={[styles.searchBar, {flex: 1}]}>
+             <View style={styles.searchBar}>
                 <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
                 <TextInput 
                     placeholder={placeholderText} 
@@ -955,28 +972,16 @@ const MapScreen = () => {
 
     const renderHeader = () => (
         <View style={isDesktop ? styles.desktopSidebarContent : styles.topBarContainer}>
-             <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                 {renderSearchBarInput()}
-                 {user ? (
-                    <TouchableOpacity 
-                        style={styles.avatarButton}
-                        onPress={() => navigation.navigate('Profile' as any)}
-                    >
-                        {user.avatar && !isAvatarError
-                            ? <Image 
-                                source={{uri: user.avatar}} 
-                                style={{width: 44, height: 44, borderRadius: 22}} 
-                                onError={() => setIsAvatarError(true)}
-                            />
-                            : <Feather name="user" size={24} color={SKETCH_THEME.colors.text} />
-                        }
-                    </TouchableOpacity>
-                 ) : (
+             <View style={{flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-between'}}>
+                 <View style={{flex: 1}}>
+                     {renderSearchBarInput()}
+                 </View>
+                 {!user && (
                     <TouchableOpacity 
                         style={{ marginLeft: 10, padding: 8 }}
                         onPress={() => navigation.navigate('Login' as any)}
                     >
-                        <Feather name="log-in" size={24} color={SKETCH_THEME.colors.text} />
+                        <Feather name="user" size={24} color={SKETCH_THEME.colors.text} />
                     </TouchableOpacity>
                  )}
              </View>
@@ -991,12 +996,12 @@ const MapScreen = () => {
                     marginHorizontal: Platform.OS === 'web' ? 0 : 4
                 }}>
                     <Text style={{color: 'white', fontSize: 13, fontWeight: 'bold', fontFamily: 'Lora', textAlign: 'center'}}>
-                        Pròxim Partit ({nextMatch.competition === 'Masculí' ? 'M' : 'F'})
+                        Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
                     </Text>
                     <View style={{flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 4}}>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.teamHome}</Text>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.homeTeam}</Text>
                          <Text style={{color: 'white', marginHorizontal: 6, fontSize: 12}}>vs</Text>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.teamAway}</Text>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.awayTeam}</Text>
                     </View>
                     <Text style={{color: 'rgba(255,255,255,0.9)', fontSize: 12, textAlign: 'center', marginTop: 4}}>
                         {/* @ts-ignore */}
@@ -1009,7 +1014,49 @@ const MapScreen = () => {
                 </View>
              )}
 
-             { (!selectedBar || isDesktop) && renderRadiusSlider() }
+             { (!selectedBar || isDesktop) && (
+                 <>
+                    {renderRadiusSlider()}
+                    <TouchableOpacity 
+                        onPress={handleManualScan}
+                        disabled={isScanning}
+                        style={{
+                            marginTop: 10,
+                            backgroundColor: SKETCH_THEME.colors.bg,
+                            borderWidth: 2, 
+                            borderColor: SKETCH_THEME.colors.primary,
+                            borderRadius: 20,
+                            paddingVertical: 8,
+                            paddingHorizontal: 16,
+                            alignSelf: 'center',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            ...sketchShadow()
+                        }}
+                    >
+                         {isScanning ? (
+                             <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                         ) : (
+                             <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                         )}
+                         <Text style={{
+                             color: SKETCH_THEME.colors.primary, 
+                             fontWeight: 'bold', 
+                             fontFamily: 'Lora',
+                             fontSize: 12
+                         }}>
+                             {isScanning ? 'Cercant bars...' : 'Cercar bars en aquesta zona'}
+                         </Text>
+                    </TouchableOpacity>
+                    { scannedBars.length > 0 && (
+                        <View style={{ marginTop: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, paddingVertical: 4 }}>
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, textAlign: 'center', fontFamily: 'Lora' }}>
+                                <Text style={{fontWeight: 'bold'}}>Gris</Text> = Bars sense confirmar. Clica'ls per avisar si donen partits!
+                            </Text>
+                        </View>
+                    )}
+                 </>
+             )}
         </View>
     );
 
@@ -1056,6 +1103,31 @@ const MapScreen = () => {
                         toolbarEnabled={false}
                         onPress={() => setSelectedBar(null)}
                     >
+                         {/* User Location Marker - Custom */}
+                         {userLocation && (
+                            <Marker
+                                coordinate={{ 
+                                    latitude: userLocation.coords.latitude, 
+                                    longitude: userLocation.coords.longitude 
+                                }}
+                                title="La teva ubicació"
+                                zIndex={999}
+                            >
+                                <View style={{
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: 10,
+                                    backgroundColor: '#2196F3',
+                                    borderWidth: 3,
+                                    borderColor: 'white',
+                                    ...Platform.select({
+                                        ios: { shadowColor: 'black', shadowOffset: {width:0, height:2}, shadowOpacity: 0.3, shadowRadius: 2 },
+                                        android: { elevation: 4 }
+                                    })
+                                }} />
+                            </Marker>
+                         )}
+
                          {/* OSM Scanned Bars */}
                          {scannedBars.map(osmBar => (
                             <Marker
@@ -1112,29 +1184,92 @@ const MapScreen = () => {
                     </View>
 
                     <TouchableOpacity 
-                        style={styles.fabGps}
+                        style={[
+                            styles.fabGps,
+                            { bottom: user ? 100 : 20 } // Adjust position based on auth state
+                        ]}
                         onPress={centerMapToGPS}
                     >
                         <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.text} />
                     </TouchableOpacity>
 
-                    <Animated.View style={[
-                        styles.bottomSheet, 
-                        { height: bottomSheetHeight, transform: [{ translateY: bottomSheetTranslateY }] }
-                    ]}>
-                        <View {...panResponder.panHandlers} style={styles.bottomSheetGrabArea}>
-                            <View style={styles.bottomSheetHandle} />
-                        </View>
-                        <View style={{flex: 1, overflow: 'hidden'}}>
-                            {renderContentPanel()}
-                        </View>
-                        {/* Curtain to cover bouncy animation gaps */}
-                         <View style={{
-                             position: 'absolute', top: '100%', left: 0, right: 0, 
-                             height: 1000, backgroundColor: SKETCH_THEME.colors.bg, 
-                             borderLeftWidth: 2, borderRightWidth: 2, borderColor: '#eee' 
-                         }} />
-                    </Animated.View>
+                    {/* Bottom Navigation Bar - Only show when authenticated */}
+                    {user && (
+                        <View style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            backgroundColor: SKETCH_THEME.colors.bg,
+                            borderTopWidth: 1,
+                            borderTopColor: '#ddd',
+                            paddingBottom: 20,
+                            paddingTop: 8,
+                            flexDirection: 'row',
+                            justifyContent: 'space-around',
+                            alignItems: 'center',
+                            ...Platform.select({
+                                web: { boxShadow: '0px -2px 10px rgba(0,0,0,0.1)' },
+                                default: { shadowColor: 'black', shadowOffset: {width: 0, height: -2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 8 }
+                            })
+                        }}>
+                        <TouchableOpacity
+                            style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}
+                            onPress={() => navigation.navigate('Matches')}
+                        >
+                            <Ionicons name="calendar-outline" size={26} color={SKETCH_THEME.colors.textMuted} />
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, marginTop: 4, fontFamily: 'Lora' }}>
+                                Partits
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}
+                            onPress={() => {}}
+                        >
+                            <View style={{
+                                backgroundColor: SKETCH_THEME.colors.primary,
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginTop: -28,
+                                borderWidth: 4,
+                                borderColor: SKETCH_THEME.colors.bg,
+                                ...sketchShadow()
+                            }}>
+                                <Feather name="map-pin" size={28} color="white" />
+                            </View>
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.primary, marginTop: 8, fontWeight: 'bold', fontFamily: 'Lora' }}>
+                                Mapa
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}
+                            onPress={() => navigation.navigate('Profile')}
+                        >
+                            {user?.avatar ? (
+                                <Image 
+                                    source={{ uri: user.avatar }} 
+                                    style={{ 
+                                        width: 26, 
+                                        height: 26, 
+                                        borderRadius: 13,
+                                        borderWidth: 1.5,
+                                        borderColor: SKETCH_THEME.colors.textMuted
+                                    }} 
+                                />
+                            ) : (
+                                <Feather name="user" size={26} color={SKETCH_THEME.colors.textMuted} />
+                            )}
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, marginTop: 4, fontFamily: 'Lora' }}>
+                                Perfil
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                    )}
                 </>
             )}
 
@@ -1150,6 +1285,14 @@ const MapScreen = () => {
             <StatusBar style="dark" />
 
             {renderSearchSettingsOverlay()}
+
+             {/* EDGE SWIPE AREA - Invisible Left Area */}
+             <View 
+                {...edgeSwipeResponder.panHandlers}
+                style={{
+                    position: 'absolute', top: 0, bottom: 0, left: 0, width: 20, zIndex: 9999, backgroundColor: 'transparent'
+                }}
+             />
         </View>
     );
 

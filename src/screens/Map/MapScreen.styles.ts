@@ -78,10 +78,10 @@ export default StyleSheet.create({
 
     // Fab
     fabGps: {
-        position: 'absolute', right: 16, bottom: 135, width: 44, height: 44, borderRadius: 22, 
+        position: 'absolute', right: 20, width: 32, height: 32, borderRadius: 16, 
         backgroundColor: SKETCH_THEME.colors.bg, borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
-        ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
     fabSettings: {
         position: 'absolute', right: 16, bottom: 190, width: 44, height: 44, borderRadius: 22, 

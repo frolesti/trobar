@@ -6,9 +6,14 @@ export interface OSMBar {
     lat: number;
     lon: number;
     type: string; // 'bar', 'restaurant', 'cafe'
+    tags: Record<string, string>; // Store all raw tags
 }
 
-const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_SERVERS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://interpreter.lazus.de/'
+];
 
 // Debounce helper to avoid spamming the public API
 let lastController: AbortController | null = null;
@@ -21,11 +26,13 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
         lastController.abort();
     }
     lastController = new AbortController();
+    const signal = lastController.signal;
 
     // Overpass QL query
     // We look for nodes and ways (buildings) with amenity = bar/pub/restaurant/cafe
+    // Increased timeout to 25s for better reliability
     const query = `
-        [out:json][timeout:15];
+        [out:json][timeout:25];
         (
           node["amenity"~"bar|pub"](around:${queryRadiusMeters},${lat},${lon});
           way["amenity"~"bar|pub"](around:${queryRadiusMeters},${lat},${lon});
@@ -33,41 +40,49 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
         out center;
     `;
 
-    try {
-        const response = await fetch(OVERPASS_API, {
-            method: 'POST',
-            body: `data=${encodeURIComponent(query)}`,
-            signal: lastController.signal
-        });
+    for (const server of OVERPASS_SERVERS) {
+        try {
+            if (signal.aborted) return [];
 
-        if (!response.ok) {
-            console.warn('[OSM] Request failed', response.status);
-            return [];
-        }
+            const response = await fetch(server, {
+                method: 'POST',
+                body: `data=${encodeURIComponent(query)}`,
+                signal: signal
+            });
 
-        const data = await response.json();
-        const elements = data.elements || [];
+            if (response.status === 429 || response.status === 504 || !response.ok) {
+                console.warn(`[OSM] Server ${server} failed with ${response.status}. Trying next...`);
+                continue; // Try next server
+            }
 
-        const bars: OSMBar[] = elements
-            .filter((el: any) => {
-                // Filter out unnamed places if we want quality, or keep them if we just want points.
-                // Usually for "Claiming", having a name helps.
-                return el.tags && (el.tags.name || el.tags['name:ca'] || el.tags['name:es']);
-            })
-            .map((el: any) => ({
-                id: `osm_${el.id}`,
-                name: el.tags.name || el.tags['name:ca'] || el.tags['name:es'] || 'Bar sense nom',
-                // For 'way' (buildings), Overpass 'out center' gives us a 'center' property
-                lat: el.lat || el.center?.lat,
-                lon: el.lon || el.center?.lon,
-                type: el.tags.amenity
-            }));
+            const data = await response.json();
+            const elements = data.elements || [];
+
+            const bars: OSMBar[] = elements
+                .filter((el: any) => {
+                    // Filter out unnamed places if we want quality, or keep them if we just want points.
+                    // Usually for "Claiming", having a name helps.
+                    return el.tags && (el.tags.name || el.tags['name:ca'] || el.tags['name:es']);
+                })
+                .map((el: any) => ({
+                    id: `osm_${el.id}`,
+                    name: el.tags.name || el.tags['name:ca'] || el.tags['name:es'] || 'Bar sense nom',
+                    // For 'way' (buildings), Overpass 'out center' gives us a 'center' property
+                    lat: el.lat || el.center?.lat,
+                    lon: el.lon || el.center?.lon,
+                    type: el.tags.amenity,
+                    tags: el.tags || {} 
+                }));
             
-        return bars;
+            return bars; // Success! Return immediately
 
-    } catch (error: any) {
-        if (error.name === 'AbortError') return []; // Ignore aborted requests
-        console.error('[OSM] Error fetching:', error);
-        return [];
+        } catch (error: any) {
+            if (error.name === 'AbortError') return []; // User cancelled
+            console.warn(`[OSM] Error fetching from ${server}:`, error);
+            // Continue loop to next server
+        }
     }
+
+    console.error('[OSM] All servers failed.');
+    return [];
 };
