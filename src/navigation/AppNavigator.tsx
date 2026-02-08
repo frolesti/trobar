@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import StartupScreen from '../screens/Startup/StartupScreen';
 import MapScreen from '../screens/Map/MapScreen';
+import MatchesScreen from '../screens/Matches/MatchesScreen';
 import LoginModal from '../screens/LoginModal/LoginModal';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import ClaimBusinessScreen from '../screens/ClaimBusiness/ClaimBusinessScreen';
@@ -13,6 +14,7 @@ import { OSMBar } from '../services/osmService';
 export type RootStackParamList = {
   Startup: undefined;
   Map: undefined;
+  Matches: undefined;
   Login: undefined;
   Profile: undefined;
   ClaimBusiness: { barId: string; barName: string };
@@ -21,30 +23,52 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+// Define linking configuration to force the title to 'troBar'
+const linking = {
+  prefixes: [],
+  config: {
+    screens: {
+      Startup: '',
+      Map: 'map',
+      Login: 'login',
+      Profile: 'profile',
+      ClaimBusiness: 'claim-business',
+      ReportBar: 'report',
+    },
+  },
+  documentTitle: {
+    enabled: false, // Completely disable React Navigation's title handling
+  },
+};
+
 export default function AppNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator 
         initialRouteName="Startup"
         screenOptions={{
           headerShown: false,
+          title: 'troBar', // Default title for all screens
           // This ensures the lateral slide animation works on Web too
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
       >
-        <Stack.Screen name="Startup" component={StartupScreen} />
-        <Stack.Screen name="Map" component={MapScreen} />
+        <Stack.Screen name="Startup" component={StartupScreen} options={{ title: 'troBar' }} />
+        <Stack.Screen name="Map" component={MapScreen} options={{ title: 'troBar' }} />
+        <Stack.Screen name="Matches" component={MatchesScreen} options={{ title: 'troBar' }} />
         <Stack.Screen 
           name="Profile" 
           component={ProfileScreen} 
+          options={{ title: 'troBar' }}
         />
-        <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: '', headerBackTitleVisible: false, headerShadowVisible: false, headerStyle: { backgroundColor: '#F0F7F4' } }} />
+        <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: 'Reclamar Negoci', headerBackTitleVisible: false, headerShadowVisible: false, headerStyle: { backgroundColor: '#F0F7F4' } }} />
 
-        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ presentation: 'transparentModal', headerShown: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
+        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'troBar', presentation: 'transparentModal', headerShown: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
         
         <Stack.Screen 
           name="Login" 
           component={LoginModal} 
+          options={{ title: 'troBar' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
