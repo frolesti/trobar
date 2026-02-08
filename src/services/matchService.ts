@@ -3,11 +3,14 @@ import { db } from '../config/firebase';
 
 export interface Match {
     id: string;
-    teamHome: string;
-    teamAway: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeBadge?: string;
+    awayBadge?: string;
     date: Date;
-    competition: string;
+    league: string;
     location?: string;
+    category?: 'masculino' | 'femenino';
 }
 
 // --- FIRESTORE SYNC SUPPORT ---
@@ -51,10 +54,10 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
             
             return [{
                 id: 'demo_match',
-                teamHome: 'FC Barcelona',
-                teamAway: 'Real Madrid',
+                homeTeam: 'FC Barcelona',
+                awayTeam: 'Real Madrid',
                 date: tomorrow,
-                competition: 'La Liga',
+                league: 'La Liga',
                 location: 'Camp Nou'
             }];
         }
@@ -62,15 +65,18 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
         snapshot.forEach(doc => {
             const data = doc.data();
             // Data validation
-            if (!data.teamHome || !data.teamAway || !data.date) return;
+            if (!data.homeTeam || !data.awayTeam || !data.date) return;
 
             matches.push({
                 id: doc.id,
-                teamHome: data.teamHome,
-                teamAway: data.teamAway,
+                homeTeam: data.homeTeam,
+                awayTeam: data.awayTeam,
+                homeBadge: data.homeBadge,
+                awayBadge: data.awayBadge,
                 date: (data.date as Timestamp).toDate(),
-                competition: data.competition || 'F.C. Barcelona',
-                location: data.location || ''
+                league: data.league || 'La Liga',
+                location: data.location || '',
+                category: data.category
             });
         });
 

@@ -118,7 +118,9 @@ export const ensureLoraOnWeb = () => {
         // Inject global styles for web
         const style = document.createElement('style');
         style.textContent = `
-          body { font-family: 'Lora', serif; background-color: ${SKETCHY_COLORS.bg}; }
+          html, body, #root, #root > div { height: 100%; }
+          body { font-family: 'Lora', serif; background-color: ${SKETCHY_COLORS.bg}; overflow: auto; }
+          #root { display: flex; flex: 1; }
           input, textarea, select, button { font-family: 'Lora', serif !important; }
         `;
         document.head.appendChild(style);
