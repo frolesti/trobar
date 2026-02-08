@@ -159,7 +159,9 @@ export default StyleSheet.create({
     })
   },
   footer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 50,
     alignItems: 'center',
     width: '100%'
   },

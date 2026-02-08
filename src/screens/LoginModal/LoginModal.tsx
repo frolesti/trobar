@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -9,6 +9,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    PanResponder
 } from 'react-native';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,6 +27,22 @@ type Props = {
 
 const LoginModal = ({ navigation }: Props) => {
     const { loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
+
+    // Swipe Right to Go Back Gesture
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (evt, gestureState) => {
+                // Return true if horizontal swipe to right (Back)
+                return gestureState.dx > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+            },
+            onPanResponderRelease: (evt, gestureState) => {
+                 if (gestureState.dx > 60) {
+                     if (navigation.canGoBack()) navigation.goBack();
+                     else navigation.replace('Map');
+                 }
+            }
+        })
+    ).current;
 
     // UI State
     const [showEmailForm, setShowEmailForm] = useState(false);
@@ -204,10 +221,23 @@ const LoginModal = ({ navigation }: Props) => {
     );
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.container}
+            {...panResponder.panHandlers}
+        >
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-                <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-                    <Text style={styles.closeText}>✕</Text>
+                <TouchableOpacity 
+                    style={styles.closeButton} 
+                    onPress={() => {
+                        if (navigation.canGoBack()) {
+                            navigation.goBack();
+                        } else {
+                            navigation.replace('Map'); // Use replace to avoid stacking Login
+                        }
+                    }}
+                >
+                    <Feather name="arrow-left" size={28} color={SKETCH_THEME.colors.text} />
                 </TouchableOpacity>
 
                 <View style={styles.panel}>

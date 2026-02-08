@@ -13,25 +13,32 @@ import { getUserFriendlyError } from '../../utils/errorHandler';
 import styles from './ProfileScreen.styles';
 
 export default function ProfileScreen() {
-  const { user, logout, refreshProfile } = useAuth();
+  const { user, logout, refreshProfile, isLoading: authLoading } = useAuth();
   const navigation = useNavigation();
 
-  const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect to login if not authenticated, BUT wait for auth check to complete
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigation.navigate('Login' as any);
+    }
+  }, [user, authLoading, navigation]);
 
   // Form State
   const [name, setName] = useState(user?.name || '');
   const [surname, setSurname] = useState(user?.surname || '');
   const [avatarUri, setAvatarUri] = useState(user?.avatar || '');
 
-  // Reset form when user changes or we toggle edit off (cancel)
+  // Update form when user data changes
   useEffect(() => {
-    if (!isEditing && user) {
-        setName(user.name);
-        setSurname(user.surname || '');
-        setAvatarUri(user.avatar || '');
+    if (user) {
+        // Only update if the values are different to avoid overwriting local edits if sync happens
+        if (user.name !== name) setName(user.name);
+        if ((user.surname || '') !== surname) setSurname(user.surname || '');
+        if ((user.avatar || '') !== avatarUri) setAvatarUri(user.avatar || '');
     }
-  }, [user, isEditing]);
+  }, [user]);
 
   useEffect(() => {
     ensureLoraOnWeb();
@@ -39,7 +46,11 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await logout();
-    navigation.goBack();
+    // Navigate home instead of just "back" to avoid empty stack errors
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Map' as any }],
+    });
   };
 
   const pickImage = async () => {
@@ -51,107 +62,100 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled) {
-      setAvatarUri(result.assets[0].uri);
+      const newUri = result.assets[0].uri;
+      setAvatarUri(newUri);
+      
+      // Auto-save image immediately
+      if (user) {
+          try {
+             setIsLoading(true);
+             const downloadUrl = await uploadProfileImage(user.id, newUri);
+             await updateUserProfile(user.id, { avatar: downloadUrl });
+             await refreshProfile();
+          } catch (error) {
+             console.error("Error uploading image:", error);
+             Alert.alert("Error", "No s'ha pogut actualitzar la foto.");
+          } finally {
+             setIsLoading(false);
+          }
+      }
     }
   };
 
-  const handleSave = async () => {
+  const saveData = async () => {
       if (!user) return;
-      setIsLoading(true);
+      
+      // Check if there are actual changes before calling API
+      if (name === user.name && surname === (user.surname || '')) {
+          return;
+      }
+
+      console.log("Auto-saving profile data...");
       try {
-          // Important: Si user.avatar és undefined, posem null per evitar error de Firestore
-          let downloadUrl: string | null = user.avatar || null;
-
-          // 1. Si hem canviat la imatge (és una URI local diferent de la remote)
-          if (avatarUri && avatarUri !== user.avatar && !avatarUri.startsWith('http')) {
-             downloadUrl = await uploadProfileImage(user.id, avatarUri);
-          }
-
-          // 2. Guardar dades a Firestore
-          // We force 'favoriteTeam' to 'FC Barcelona' and 'favoriteSport' to 'Football' for consistency
           await updateUserProfile(user.id, {
               name: name,
               surname: surname,
-              favoriteTeam: 'FC Barcelona',
+              // Keep defaults
+              favoriteTeam: 'FC Barcelona', 
               favoriteSport: 'Football',
-              avatar: downloadUrl as string | undefined
           });
-
-          // 3. Refrescar context
           await refreshProfile();
-          
-          setIsEditing(false);
-          Alert.alert("Perfil actualitzat", "Les teves dades s'han guardat correctament.");
+          // No alert needed for auto-save
       } catch (error) {
-          console.error(error);
-          Alert.alert("Error", getUserFriendlyError(error, "No s'ha pogut guardar el perfil."));
-      } finally {
-          setIsLoading(false);
+          console.error("Auto-save error:", error);
       }
+  };
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Map' as any);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
-        <TouchableOpacity 
-            style={styles.editButton} 
-            onPress={() => isEditing ? handleSave() : setIsEditing(true)}
-            disabled={isLoading}
+        <View style={{ width: 44, height: 44 }} /> 
+      </View>
+
+      {/* Unified ScrollView for Web and Mobile with flex: 1 handling instead of fixed 100vh */}
+      <View style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
+        <ScrollView 
+          style={styles.scrollContainer} 
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={Platform.OS === 'web'}
         >
-            {isLoading ? 
-              <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} /> : 
-                <Text style={styles.editButtonText}>{isEditing ? "Guardar" : "Editar"}</Text>
-            }
+          {renderContent(avatarUri, pickImage, name, setName, surname, setSurname, user, saveData, isLoading)}
+        </ScrollView>
+      </View>
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Tancar Sessió</Text>
         </TouchableOpacity>
       </View>
-
-      {Platform.OS === 'web' ? (
-      <View style={{ flex: 1, width: '100%', height: Platform.select({ web: '100vh' as any, default: '100%' }), overflow: 'hidden' }}>
-      <ScrollView 
-        style={styles.scrollContainer} 
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={true}
-      >
-        {renderContent(isEditing, avatarUri, pickImage, name, setName, surname, setSurname, user)}
-      </ScrollView>
-      </View>
-      ) : (
-      <ScrollView 
-        style={styles.scrollContainer} 
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled" 
-        showsVerticalScrollIndicator={false}
-      >
-        {renderContent(isEditing, avatarUri, pickImage, name, setName, surname, setSurname, user)}
-      </ScrollView>
-      )}
-
-      {!isEditing && (
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutText}>Tancar Sessió</Text>
-            </TouchableOpacity>
-          </View>
-      )}
     </SafeAreaView>
   );
 }
 
 // Helper to avoid duplicating scrollview content
 function renderContent(
-    isEditing: boolean, 
     avatarUri: string, 
     pickImage: () => void, 
     name: string, 
     setName: (val: string) => void, 
     surname: string, 
     setSurname: (val: string) => void,
-    user: any
+    user: any,
+    saveData: () => void,
+    isLoading: boolean
 ) {
     return (
         <>
@@ -161,42 +165,35 @@ function renderContent(
                 source={{ uri: avatarUri || 'https://placehold.co/150x150/png' }} 
                 style={styles.avatar} 
             />
-            {isEditing && (
-                <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage}>
+            <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage} disabled={isLoading}>
+                {isLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                ) : (
                     <Ionicons name="camera" size={20} color="white" />
-                </TouchableOpacity>
-            )}
+                )}
+            </TouchableOpacity>
         </View>
 
-        {isEditing && (
-             <Text style={styles.helperText}>Toca la càmera per canviar la foto</Text>
-        )}
+        <Text style={styles.helperText}>Toca la càmera per canviar la foto</Text>
 
         {/* Info / Form Section */}
         <View style={styles.formContainer}>
-            {isEditing ? (
-                <>
-                    <Text style={styles.label}>Nom</Text>
-                    <TextInput 
-                        style={styles.input} 
-                        value={name} 
-                        onChangeText={setName} 
-                        placeholder="El teu nom"
-                    />
-                    <Text style={styles.label}>Cognoms</Text>
-                    <TextInput 
-                        style={styles.input} 
-                        value={surname} 
-                        onChangeText={setSurname} 
-                        placeholder="Els teus cognoms"
-                    />
-                </>
-            ) : (
-                <>
-                    <Text style={styles.label}>Nom i Cognoms</Text>
-                    <Text style={styles.value}>{`${user?.name || ''} ${user?.surname || ''}`.trim() || '-'}</Text>
-                </>
-            )}
+            <Text style={styles.label}>Nom</Text>
+            <TextInput 
+                style={styles.input} 
+                value={name} 
+                onChangeText={setName} 
+                onEndEditing={saveData} // Trigger save when leaving field or pressing done
+                placeholder="El teu nom"
+            />
+            <Text style={styles.label}>Cognoms</Text>
+            <TextInput 
+                style={styles.input} 
+                value={surname} 
+                onChangeText={setSurname} 
+                onEndEditing={saveData} // Trigger save when leaving field
+                placeholder="Els teus cognoms"
+            />
 
             <Text style={styles.label}>Correu electrònic</Text>
             <Text style={[styles.value, styles.readOnly]}>{user?.email}</Text>

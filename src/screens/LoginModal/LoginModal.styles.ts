@@ -25,7 +25,7 @@ export default StyleSheet.create({
     closeButton: {
         position: 'absolute',
         top: Platform.OS === 'ios' ? 48 : 18,
-        right: 18,
+        left: 18,
         zIndex: 10,
         width: 40,
         height: 40,
