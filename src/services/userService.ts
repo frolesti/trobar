@@ -2,16 +2,9 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { executeRequest, executeOrThrow } from '../api/core';
+import { UserProfile } from '../models/UserProfile';
 
-export interface UserProfile {
-  id: string;
-  name: string;
-  surname?: string;
-  email: string;
-  avatar?: string;
-  favoriteTeam?: string;
-  favoriteSport?: string;
-}
+export type { UserProfile };
 
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
     const result = await executeRequest(async () => {

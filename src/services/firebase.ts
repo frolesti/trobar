@@ -1,5 +1,5 @@
 import firestore from '@react-native-firebase/firestore';
-import { Bar } from '../data/dummyData';
+import { Bar } from '../models/Bar';
 
 export const getBars = async (): Promise<Bar[]> => {
   try {

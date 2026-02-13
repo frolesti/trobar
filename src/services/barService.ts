@@ -1,6 +1,6 @@
 import { collection, getDocs, doc, getDoc, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Bar } from '../data/dummyData';
+import { Bar } from '../models/Bar';
 import { OSMBar } from './osmService';
 import { executeRequest } from '../api/core';
 

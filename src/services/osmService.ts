@@ -1,13 +1,7 @@
 import { Platform } from 'react-native';
+import { OSMBar } from '../models/OSMBar';
 
-export interface OSMBar {
-    id: string; // OSM ID
-    name: string;
-    lat: number;
-    lon: number;
-    type: string; // 'bar', 'restaurant', 'cafe'
-    tags: Record<string, string>; // Store all raw tags
-}
+export type { OSMBar };
 
 const OVERPASS_SERVERS = [
     'https://overpass-api.de/api/interpreter',

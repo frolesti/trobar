@@ -1,13 +1,9 @@
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { executeRequest } from '../api/core';
+import { ClaimData } from '../models/ClaimData';
 
-export interface ClaimData {
-    name: string;
-    phone: string;
-    email: string;
-    cif: string;
-}
+export type { ClaimData };
 
 /**
  * Envia una sol·licitud per reclamar la propietat d'un negoci.

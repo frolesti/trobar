@@ -1,5 +1,8 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { SyncStatus } from '../models/SyncStatus';
+
+export type { SyncStatus };
 
 /**
  * syncService  –  Read-only checker.
@@ -13,14 +16,6 @@ import { db } from '../config/firebase';
 
 const METADATA_COLLECTION = 'system';
 const SYNC_METADATA_DOC   = 'sync_status';
-
-export interface SyncStatus {
-    state: 'fresh' | 'stale' | 'unknown';
-    lastUpdated: Date | null;
-    matchCount: number;
-    competitionCount: number;
-    teamCount: number;
-}
 
 /**
  * Returns the current sync metadata without making any external API call.

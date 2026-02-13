@@ -1,19 +1,8 @@
 import { collection, getDocs, query, where, Timestamp, orderBy, limit as firestoreLimit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { Match } from '../models/Match';
 
-export interface Match {
-    id: string;
-    homeTeam: string | any; // Team ID or Object
-    awayTeam: string | any; // Team ID or Object
-    date: Date;
-    league: string; // Competition ID
-    competition?: { id: string; name: string; logo?: string }; // Added to support new sync format
-    location?: string;
-    category?: 'masculino' | 'femenino' | 'MASCULI' | 'FEMENI';
-    homeScore?: number;
-    awayScore?: number;
-    status?: 'scheduled' | 'finished' | 'live' | 'postponed';
-}
+export type { Match };
 
 // --- FIRESTORE SYNC SUPPORT ---
 
