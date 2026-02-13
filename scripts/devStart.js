@@ -18,15 +18,36 @@
 */
 
 const path = require('path');
-const { spawnSync, execSync } = require('child_process');
+const { spawn, spawnSync, execSync } = require('child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 
 const DEV_PORTS = [8787, 8081, 19000, 19001, 19002];
 
-const argv = new Set(process.argv.slice(2));
+function getNpmArgvFallback() {
+  // npm sets npm_config_argv for scripts. On some Windows setups, args after `--` don't
+  // reliably show up in process.argv, so we also parse this env var.
+  try {
+    const raw = process.env.npm_config_argv;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const original = Array.isArray(parsed?.original) ? parsed.original : [];
+    const remain = Array.isArray(parsed?.remain) ? parsed.remain : [];
+
+    // Keep only likely flags to avoid noise like "start".
+    return [...original, ...remain]
+      .map(String)
+      .filter((s) => s.startsWith('-'));
+  } catch {
+    return [];
+  }
+}
+
+const argv = new Set([...process.argv.slice(2), ...getNpmArgvFallback()]);
 const dryRun = argv.has('--dry-run');
 const freeOnly = argv.has('--free-only');
+const noProxy = argv.has('--no-proxy');
+const expoClear = argv.has('--clear');
 
 const force = /^1|true|yes$/i.test(String(process.env.TROBAR_DEV_FORCE || ''));
 const killAll = /^1|true|yes$/i.test(String(process.env.TROBAR_DEV_KILL_ALL || ''));
@@ -223,14 +244,76 @@ function freePorts() {
   }
 }
 
-function runStartRaw() {
-  const res = spawnSync('npm', ['run', 'start:raw'], {
+function runSyncScript() {
+  console.log('-------------------------------------------------------');
+  console.log('🔄 Running Match Sync Script (Server Simulation)...');
+  // Run synchronously so we see the output before Metro clears the screen
+  const res = spawnSync(process.execPath, ['scripts/updateMatches.js'], {
     stdio: 'inherit',
-    shell: true,
+    cwd: projectRoot,
     env: process.env,
-    cwd: projectRoot
+    shell: false
   });
-  process.exit(res.status ?? 1);
+  console.log('-------------------------------------------------------');
+}
+
+function runStartRaw() {
+  // Always run the sync script before starting the dev server
+  runSyncScript();
+
+  if (noProxy) {
+    const res = spawnSync('npm', ['run', 'start:raw', ...(expoClear ? ['--', '--clear'] : [])], {
+      stdio: 'inherit',
+      shell: true,
+      env: process.env,
+      cwd: projectRoot,
+    });
+    process.exit(res.status ?? 1);
+  }
+
+  // Run proxy + Expo without concurrently (more reliable on Windows).
+  const proxyProc = spawn(process.execPath, ['scripts/icsProxyServer.js'], {
+    stdio: 'inherit',
+    cwd: projectRoot,
+    env: process.env,
+    shell: false,
+  });
+
+  const expoCmd = 'npm';
+  const expoArgs = ['run', 'start:raw'];
+  if (expoClear) {
+    expoArgs.push('--', '--clear');
+  }
+
+  const expoProc = spawn(expoCmd, expoArgs, {
+    stdio: 'inherit',
+    cwd: projectRoot,
+    env: process.env,
+    shell: true,
+  });
+
+  const cleanup = () => {
+    try {
+      if (!proxyProc.killed) proxyProc.kill();
+    } catch {
+      // ignore
+    }
+  };
+
+  expoProc.on('exit', (code) => {
+    cleanup();
+    process.exit(code ?? 1);
+  });
+
+  expoProc.on('error', () => {
+    cleanup();
+    process.exit(1);
+  });
+
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(130);
+  });
 }
 
 freePorts();

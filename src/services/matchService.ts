@@ -3,14 +3,16 @@ import { db } from '../config/firebase';
 
 export interface Match {
     id: string;
-    homeTeam: string;
-    awayTeam: string;
-    homeBadge?: string;
-    awayBadge?: string;
+    homeTeam: string | any; // Team ID or Object
+    awayTeam: string | any; // Team ID or Object
     date: Date;
-    league: string;
+    league: string; // Competition ID
+    competition?: { id: string; name: string; logo?: string }; // Added to support new sync format
     location?: string;
-    category?: 'masculino' | 'femenino';
+    category?: 'masculino' | 'femenino' | 'MASCULI' | 'FEMENI';
+    homeScore?: number;
+    awayScore?: number;
+    status?: 'scheduled' | 'finished' | 'live' | 'postponed';
 }
 
 // --- FIRESTORE SYNC SUPPORT ---
@@ -18,6 +20,58 @@ export interface Match {
 let cachedFirestoreMatches: Match[] | null = null;
 let lastFirestoreFetchTime = 0;
 const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 Hour
+
+export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5): Promise<Match[]> {
+    try {
+        console.log('📜 Loading history matches from DB before:', beforeDate);
+        const matchesRef = collection(db, 'matches');
+        
+        // Query database for matches OLDER than "beforeDate", ordered desc
+        const q = query(
+            matchesRef, 
+            where('timestamp', '<', Timestamp.fromDate(beforeDate)),
+            orderBy('timestamp', 'desc'),
+            firestoreLimit(limitCount)
+        );
+
+        const snapshot = await getDocs(q);
+        const matches: Match[] = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (!data.homeTeam || !data.awayTeam) return;
+
+             // Handle potential date/timestamp format field
+             let dateObj = new Date();
+             if (data.timestamp && data.timestamp.toDate) {
+                 dateObj = data.timestamp.toDate();
+             } else if (data.date && data.date.toDate) {
+                 dateObj = data.date.toDate();
+             } else if (typeof data.date === 'string') {
+                 dateObj = new Date(data.date);
+             }
+
+            matches.push({
+                id: doc.id,
+                homeTeam: data.homeTeam,
+                awayTeam: data.awayTeam,
+                date: dateObj,
+                league: data.league || (data.competition ? data.competition.id : 'Unknown'),
+                competition: data.competition,
+                location: data.location || '',
+                category: data.category,
+                homeScore: data.homeScore, 
+                awayScore: data.awayScore, 
+                status: data.status || 'finished' 
+            });
+        });
+        
+        return matches;
+    } catch (error) {
+        console.error('❌ Error loading past matches:', error);
+        return [];
+    }
+}
 
 async function fetchMatchesFromFirestore(): Promise<Match[]> {
     try {
@@ -34,11 +88,12 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
         const now = new Date();
         const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000); // -2h
 
+        // QUERY FIX: Use 'timestamp' field (Firestore Timestamp) instead of 'date' (String)
         const q = query(
             matchesRef, 
-            where('date', '>=', Timestamp.fromDate(activeThreshold)),
-            orderBy('date', 'asc'),
-            firestoreLimit(500) // Safety limit
+            where('timestamp', '>=', Timestamp.fromDate(activeThreshold)),
+            orderBy('timestamp', 'asc'),
+            firestoreLimit(100)
         );
 
         const snapshot = await getDocs(q);
@@ -46,37 +101,35 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
 
         if (snapshot.empty) {
             console.log('⚠️ Internal database empty or no upcoming matches found.');
-            // FALLBACK FOR DEMO: Return a dummy match so the UI isn't empty
-            const now = new Date();
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(21, 0, 0, 0);
-            
-            return [{
-                id: 'demo_match',
-                homeTeam: 'FC Barcelona',
-                awayTeam: 'Real Madrid',
-                date: tomorrow,
-                league: 'La Liga',
-                location: 'Camp Nou'
-            }];
+            // Fallback: Check if we have mismatched data (date vs timestamp)
+            // Or maybe just fetch recent past matches if upcoming is empty?
         }
 
         snapshot.forEach(doc => {
             const data = doc.data();
             // Data validation
-            if (!data.homeTeam || !data.awayTeam || !data.date) return;
+            if (!data.homeTeam || !data.awayTeam) return;
+
+            // Handle potential date/timestamp format field
+            let dateObj = new Date();
+            if (data.timestamp && data.timestamp.toDate) {
+                dateObj = data.timestamp.toDate();
+            } else if (data.date && data.date.toDate) {
+                dateObj = data.date.toDate();
+            } else if (typeof data.date === 'string') {
+                dateObj = new Date(data.date);
+            }
 
             matches.push({
                 id: doc.id,
                 homeTeam: data.homeTeam,
                 awayTeam: data.awayTeam,
-                homeBadge: data.homeBadge,
-                awayBadge: data.awayBadge,
-                date: (data.date as Timestamp).toDate(),
-                league: data.league || 'La Liga',
+                date: dateObj,
+                league: data.league || (data.competition ? data.competition.id : 'Unknown'),
+                competition: data.competition,
                 location: data.location || '',
-                category: data.category
+                category: data.category,
+                status: data.status
             });
         });
 
@@ -98,11 +151,7 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
 }
 
 export const fetchAllMatches = async (): Promise<{ matches: Match[] }> => {
-    // We only fetch from Firestore now, as the Sync Service handles the ingestion.
     const matches = await fetchMatchesFromFirestore();
     return { matches };
 };
-
-// CLEANUP: Removed deprecated fetching logic (fetchCompetitionMatches, getFetchUrl, etc.) 
-// since we now rely 100% on the backend syncService storing data into Firestore.
 

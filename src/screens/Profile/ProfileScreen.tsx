@@ -5,23 +5,24 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile, uploadProfileImage } from '../../services/userService';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
-import { getUserFriendlyError } from '../../utils/errorHandler';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 import styles from './ProfileScreen.styles';
 
 export default function ProfileScreen() {
   const { user, logout, refreshProfile, isLoading: authLoading } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Profile'>>();
 
   const [isLoading, setIsLoading] = useState(false);
 
   // Redirect to login if not authenticated, BUT wait for auth check to complete
   useEffect(() => {
     if (!authLoading && !user) {
-      navigation.navigate('Login' as any);
+      navigation.navigate('Login');
     }
   }, [user, authLoading, navigation]);
 
@@ -49,7 +50,7 @@ export default function ProfileScreen() {
     // Navigate home instead of just "back" to avoid empty stack errors
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Map' as any }],
+      routes: [{ name: 'Map' }],
     });
   };
 
@@ -110,7 +111,7 @@ export default function ProfileScreen() {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate('Map' as any);
+      navigation.navigate('Map');
     }
   };
 

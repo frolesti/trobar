@@ -1,299 +1,346 @@
+#!/usr/bin/env node
 /**
- * Script per actualitzar els partits del FC Barcelona (masculí i femení)
- * 
- * Descarrega els calendaris ICS, els parseja i els puja a Firestore.
- * Pot executar-se manualment o com a cron job.
- * 
- * Ús: node scripts/updateMatches.js
+ * scripts/updateMatches.js
+ *
+ * Syncs FC Barcelona data from football-data.org → Firestore.
+ *
+ * ─ Single API call  (GET /teams/81/matches)
+ * ─ Ordinal IDs      (competitions 1,2,3… / teams 1,2,3… / matches 1,2,3…)
+ * ─ Upsert only      (merge:true — never duplicates, only adds or updates)
+ * ─ Local logos       (assets/img/competicions/ → Firebase Storage)
+ *
+ * Called automatically by `npm start` via devStart.js.
+ * Manual:  node scripts/updateMatches.js [--force]
  */
 
-const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } = require('firebase/firestore');
-const { getStorage, ref, uploadBytes, getDownloadURL } = require('firebase/storage');
-const https = require('https');
-const http = require('http');
-const ICAL = require('ical.js');
-const crypto = require('crypto');
 require('dotenv').config();
+const fs   = require('fs');
+const path = require('path');
 
-// Configuració Firebase (usa les mateixes variables d'entorn que l'app)
+// ── Firebase (client SDK, works in Node 18+) ───────────────────────────────
+const { initializeApp }  = require('firebase/app');
+const {
+    getFirestore, doc, getDoc, setDoc,
+    writeBatch, serverTimestamp, Timestamp
+} = require('firebase/firestore');
+const { getStorage, ref, uploadBytes, getDownloadURL } = require('firebase/storage');
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const API_KEY       = process.env.FOOTBALL_DATA_API_KEY;
+const BASE_URL      = 'https://api.football-data.org/v4';
+const BARCA_TEAM_ID = 81;
+const COOLDOWN_MS   = 4 * 60 * 60 * 1000; // 4 h
+
 const firebaseConfig = {
-    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+    authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+    appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Inicialitzar Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
 const storage = getStorage(app);
 
-// URLs dels calendaris ICS del Barça (via fixtur.es)
-const ICS_URLS = {
-    masculino: 'https://ics.fixtur.es/v2/fc-barcelona.ics',
-    femenino: 'https://ics.fixtur.es/v2/fc-barcelona-women.ics'
+// ── Competition → local logo file mapping ───────────────────────────────────
+//    football-data.org competition IDs we know + the filename in assets/img/competicions/
+const COMP_LOGO_FILE = {
+    2014: 'liga.png',           // Primera División (La Liga)
+    2001: 'champions.png',     // UEFA Champions League
+    2079: 'copa-del-rey.png',  // Copa del Rey
 };
 
-/**
- * Descarrega un fitxer ICS des d'una URL
- */
-function downloadICS(url) {
-    return new Promise((resolve, reject) => {
-        const protocol = url.startsWith('https') ? https : http;
-        
-        protocol.get(url, (res) => {
-            let data = '';
-            
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            
-            res.on('end', () => {
-                if (res.statusCode === 200) {
-                    resolve(data);
-                } else {
-                    reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
-                }
-            });
-        }).on('error', (err) => {
-            reject(err);
-        });
-    });
-}
+// Known Firebase Storage URLs (already uploaded previously) as reliable fallback
+const LOGO_STORAGE_URLS = {
+    'liga.png':           'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fliga.png?alt=media&token=d035d3f5-5ab1-405f-861b-d94009c858f0',
+    'champions.png':      'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions.png?alt=media&token=eafb909f-a41d-463a-81ee-c3fbbbb5a98d',
+    'champions-w.png':    'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions-w.png?alt=media&token=ff772840-f75e-4d8b-9c1e-3a42ac395237',
+    'copa-del-rey.png':   'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fcopa-del-rey.png?alt=media&token=d66387f6-cb30-4e4f-bedd-1703d26d7171',
+    'copa-reina.png':     'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fcopa-reina.png?alt=media',
+    'ligaf.png':          'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fligaf.png?alt=media&token=46bfc314-95d9-4a7d-862a-ef477389ebd6',
+};
 
-/**
- * Descarrega una imatge i retorna el buffer
- */
-function downloadImage(url) {
-    return new Promise((resolve, reject) => {
-        https.get(url, (res) => {
-            const chunks = [];
-            
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                if (res.statusCode === 200) {
-                    resolve(Buffer.concat(chunks));
-                } else {
-                    reject(new Error(`HTTP ${res.statusCode}`));
-                }
-            });
-        }).on('error', reject);
-    });
-}
-
-/**
- * Puja una imatge a Firebase Storage i retorna la URL
- */
-async function uploadTeamBadge(teamName, imageUrl) {
-    try {
-        const imageBuffer = await downloadImage(imageUrl);
-        const hash = crypto.createHash('md5').update(teamName).digest('hex');
-        const storageRef = ref(storage, `team-badges/${hash}.png`);
-        
-        await uploadBytes(storageRef, imageBuffer, {
-            contentType: 'image/png',
-            cacheControl: 'public, max-age=31536000'
-        });
-        
-        const downloadURL = await getDownloadURL(storageRef);
-        return downloadURL;
-    } catch (error) {
-        console.warn(`   ⚠️ No s'ha pogut descarregar l'escut de ${teamName}:`, error.message);
-        return null;
-    }
-}
-
-/**
- * Obté l'escut d'un equip des de TheSportsDB API (gratuïta)
- */
-async function getTeamBadge(teamName) {
-    const cleanName = teamName.replace(/\s*Women\s*/gi, '').trim();
-    
-    // Mapa d'equips espanyols coneguts amb els seus IDs de TheSportsDB
-    const teamBadges = {
-        'FC Barcelona': 'https://www.thesportsdb.com/images/media/team/badge/xzqdr11517661315.png',
-        'Real Madrid': 'https://www.thesportsdb.com/images/media/team/badge/vwpvry1467462651.png',
-        'Atlético Madrid': 'https://www.thesportsdb.com/images/media/team/badge/vrtrtp1448813175.png',
-        'Valencia': 'https://www.thesportsdb.com/images/media/team/badge/qtwwqv1448806551.png',
-        'Sevilla': 'https://www.thesportsdb.com/images/media/team/badge/uqspup1517489912.png',
-        'Athletic Bilbao': 'https://www.thesportsdb.com/images/media/team/badge/qtxwwr1448813397.png',
-        'Real Sociedad': 'https://www.thesportsdb.com/images/media/team/badge/sqxtsy1449059119.png',
-        'Villarreal': 'https://www.thesportsdb.com/images/media/team/badge/tsqwvx1517753757.png',
-        'Real Betis': 'https://www.thesportsdb.com/images/media/team/badge/bvjzag1550141460.png',
-        'Celta Vigo': 'https://www.thesportsdb.com/images/media/team/badge/svqyqr1448814224.png'
-    };
-    
-    if (teamBadges[cleanName]) {
-        try {
-            return await uploadTeamBadge(cleanName, teamBadges[cleanName]);
-        } catch (error) {
-            console.warn(`   ⚠️ Error pujant ${cleanName}:`, error.message);
-            return null;
-        }
-    }
-    
+// Name-based fallback when competition ID is unknown
+function guessLogoFile(name) {
+    const l = name.toLowerCase();
+    if (l.includes('women') && l.includes('champions'))           return 'champions-w.png';
+    if (l.includes('champions'))                                   return 'champions.png';
+    if (l.includes('copa del rey') || l.includes("king's cup"))   return 'copa-del-rey.png';
+    if (l.includes('copa de la reina'))                            return 'copa-reina.png';
+    if (l.includes('liga f') || (l.includes('liga') && l.includes('women'))) return 'ligaf.png';
+    if (l.includes('primera') || l.includes('la liga') || l.includes('liga')) return 'liga.png';
     return null;
 }
 
-/**
- * Parseja un fitxer ICS i retorna els esdeveniments
- */
-function parseICS(icsData) {
-    try {
-        const jcalData = ICAL.parse(icsData);
-        const comp = new ICAL.Component(jcalData);
-        const vevents = comp.getAllSubcomponents('vevent');
-        
-        return vevents.map(vevent => {
-            const event = new ICAL.Event(vevent);
-            
-            // Extreure informació bàsica
-            const summary = event.summary || '';
-            const location = event.location || '';
-            const description = event.description || '';
-            
-            // Parsejar equips des del summary
-            let homeTeam = 'FC Barcelona';
-            let awayTeam = '';
-             
-            // Netejar el summary de resultats entre parèntesis al final: "Team A - Team B (1-0)"
-            let cleanSummary = summary.replace(/\s*\(\d+-\d+\)$/, '');
-            
-            if (cleanSummary.includes(' - ')) {
-                const parts = cleanSummary.split(' - ');
-                
-                // Funció de neteja específica per noms d'equips
-                const cleanName = (name) => {
-                    return name
-                        .replace(/\[.*?\]/g, '') // Treure [Copa], [CL], etc
-                        .replace(/\s+\d+$/, '')  // Treure gols al final (format antic)
-                        .replace(/^\d+\s+/, '')  // Treure gols al principi (format antic)
-                        .trim();
-                };
+// ── Logo upload ─────────────────────────────────────────────────────────────
+async function resolveLogoUrl(filename) {
+    if (!filename) return null;
 
-                homeTeam = cleanName(parts[0]);
-                awayTeam = cleanName(parts[1]);
-            } else if (cleanSummary.includes(' vs ')) {
-                const parts = cleanSummary.split(' vs ');
-                homeTeam = parts[0].trim();
-                awayTeam = parts[1].trim();
-            }
-            
-            // Extreure competició des de la descripció o summary
-            let league = 'La Liga';
-            const lowerDesc = description.toLowerCase();
-            const lowerSummary = summary.toLowerCase();
-            
-            if (lowerDesc.includes('champions') || lowerSummary.includes('champions')) {
-                league = 'Champions League';
-            } else if (lowerDesc.includes('copa') || lowerSummary.includes('copa')) {
-                league = 'Copa del Rey';
-            } else if (lowerDesc.includes('supercopa') || lowerSummary.includes('supercopa')) {
-                league = 'Supercopa';
-            } else if (lowerDesc.includes('liga f') || lowerSummary.includes('liga f')) {
-                league = 'Liga F';
-            }
-            
-            return {
-                uid: event.uid,
-                homeTeam,
-                awayTeam,
-                date: event.startDate.toJSDate(),
-                location,
-                league,
-                description,
-                summary
-            };
-        });
-    } catch (error) {
-        console.error('Error parseant ICS:', error);
-        return [];
-    }
-}
-
-/**
- * Puja o actualitza els partits a Firestore
- */
-async function uploadMatches(matches, category) {
-    let added = 0;
-    let updated = 0;
-    
-    for (const match of matches) {
-        // Utilitzar UID com a document ID per evitar duplicats
-        const docRef = doc(db, 'matches', match.uid);
-        
-        // Comprovar si existeix
-        const docSnap = await getDoc(docRef);
-        
-        // Obtenir escuts dels equips
-        const homeBadge = await getTeamBadge(match.homeTeam);
-        const awayBadge = await getTeamBadge(match.awayTeam);
-        
-        const matchData = {
-            homeTeam: match.homeTeam,
-            awayTeam: match.awayTeam,
-            homeBadge,
-            awayBadge,
-            date: Timestamp.fromDate(match.date),
-            location: match.location,
-            league: match.league,
-            category, // 'masculino' o 'femenino'
-            updatedAt: serverTimestamp()
-        };
-        
-        if (!docSnap.exists()) {
-            // Nou partit
-            await setDoc(docRef, {
-                ...matchData,
-                createdAt: serverTimestamp()
-            });
-            added++;
-        } else {
-            // Actualitzar partit existent
-            await updateDoc(docRef, matchData);
-            updated++;
+    // 1. Try uploading from the local assets folder
+    const localPath = path.resolve(__dirname, '..', 'assets', 'img', 'competicions', filename);
+    if (fs.existsSync(localPath)) {
+        try {
+            const buffer   = fs.readFileSync(localPath);
+            const storRef  = ref(storage, `competitions/logos/${filename}`);
+            await uploadBytes(storRef, new Uint8Array(buffer), { contentType: 'image/png' });
+            const url = await getDownloadURL(storRef);
+            console.log(`   📤 Uploaded ${filename} → Storage`);
+            return url;
+        } catch (e) {
+            console.warn(`   ⚠️  Upload failed for ${filename}: ${e.message || e}`);
         }
     }
-    
-    return { added, updated };
+
+    // 2. Fall back to known Storage URL
+    if (LOGO_STORAGE_URLS[filename]) {
+        console.log(`   🔗 Using cached Storage URL for ${filename}`);
+        return LOGO_STORAGE_URLS[filename];
+    }
+
+    return null;
 }
 
-/**
- * Funció principal
- */
-async function main() {
-    console.log('🔵 Iniciant actualització de partits del FC Barcelona...\n');
-    
-    try {
-        // Processar masculí
-        console.log('⚽ Descarregant calendari masculí...');
-        const icsDataMasculino = await downloadICS(ICS_URLS.masculino);
-        const matchesMasculino = parseICS(icsDataMasculino);
-        console.log(`   Trobats ${matchesMasculino.length} partits masculins`);
-        
-        const resultMasculino = await uploadMatches(matchesMasculino, 'masculino');
-        console.log(`   ✅ Afegits: ${resultMasculino.added} | Actualitzats: ${resultMasculino.updated}\n`);
-        
-        // Processar femení
-        console.log('⚽ Descarregant calendari femení...');
-        const icsDataFemenino = await downloadICS(ICS_URLS.femenino);
-        const matchesFemenino = parseICS(icsDataFemenino);
-        console.log(`   Trobats ${matchesFemenino.length} partits femenins`);
-        
-        const resultFemenino = await uploadMatches(matchesFemenino, 'femenino');
-        console.log(`   ✅ Afegits: ${resultFemenino.added} | Actualitzats: ${resultFemenino.updated}\n`);
-        
-        console.log('✅ Actualització completada amb èxit!');
-        process.exit(0);
-        
-    } catch (error) {
-        console.error('❌ Error durant l\'actualització:', error);
-        process.exit(1);
+// ── Status mapper ───────────────────────────────────────────────────────────
+function mapStatus(st) {
+    switch (st) {
+        case 'FINISHED': case 'AWARDED':                     return 'finished';
+        case 'IN_PLAY':  case 'PAUSED':                      return 'live';
+        case 'POSTPONED': case 'SUSPENDED': case 'CANCELLED': return 'postponed';
+        default:                                              return 'scheduled';
     }
 }
 
-// Executar
-main();
+// ── Ordinal-ID helper ───────────────────────────────────────────────────────
+//    Persisted in Firestore as  system/id_mappings  so subsequent runs reuse
+//    the same ordinal for the same API entity.
+function createIdManager(mappings) {
+    return {
+        comp(apiId) {
+            const k = String(apiId);
+            if (mappings.competitions[k]) return mappings.competitions[k];
+            const id = mappings.nextCompId;
+            mappings.competitions[k] = id;
+            mappings.nextCompId = id + 1;
+            return id;
+        },
+        team(apiId) {
+            const k = String(apiId);
+            if (mappings.teams[k]) return mappings.teams[k];
+            const id = mappings.nextTeamId;
+            mappings.teams[k] = id;
+            mappings.nextTeamId = id + 1;
+            return id;
+        },
+        match(apiId) {
+            const k = String(apiId);
+            if (mappings.matches[k]) return mappings.matches[k];
+            const id = mappings.nextMatchId;
+            mappings.matches[k] = id;
+            mappings.nextMatchId = id + 1;
+            return id;
+        },
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════════════════════
+async function main() {
+    if (!API_KEY) {
+        console.error('❌ FOOTBALL_DATA_API_KEY not set in .env');
+        return;
+    }
+
+    const force = process.argv.includes('--force');
+
+    // ── 1.  Cooldown check ──────────────────────────────────────────────────
+    const metaRef  = doc(db, 'system', 'sync_status');
+    const metaSnap = await getDoc(metaRef);
+
+    if (!force && metaSnap.exists()) {
+        const last    = metaSnap.data().lastUpdated?.toMillis() || 0;
+        const elapsed = Date.now() - last;
+        if (elapsed < COOLDOWN_MS) {
+            const mins = Math.round(elapsed / 60000);
+            console.log(`⏳ Data is fresh (synced ${mins} min ago). Use --force to override.`);
+            return;
+        }
+    }
+
+    // ── 2.  Load / init ordinal-ID mappings ─────────────────────────────────
+    const mapRef  = doc(db, 'system', 'id_mappings');
+    const mapSnap = await getDoc(mapRef);
+    const mappings = mapSnap.exists() ? mapSnap.data() : {
+        competitions: {},
+        teams:        {},
+        matches:      {},
+        nextCompId:   1,
+        nextTeamId:   1,
+        nextMatchId:  1,
+    };
+    const ids = createIdManager(mappings);
+
+    // ── 3.  Single API call ─────────────────────────────────────────────────
+    console.log('🌍 football-data.org  →  GET /teams/81/matches …');
+    const res = await fetch(`${BASE_URL}/teams/${BARCA_TEAM_ID}/matches?limit=200`, {
+        headers: { 'X-Auth-Token': API_KEY },
+    });
+
+    if (res.status === 429) { console.warn('⚠️  Rate-limit hit. Try again later.'); return; }
+    if (!res.ok) { console.error(`❌ API ${res.status}: ${res.statusText}`); return; }
+
+    const json    = await res.json();
+    const apiMatches = json.matches || [];
+    console.log(`📊 ${apiMatches.length} matches received.`);
+    if (apiMatches.length === 0) { console.log('⚠️  Nothing to sync.'); return; }
+
+    // ── 4.  Extract unique competitions & teams ─────────────────────────────
+    const compsRaw  = new Map();   // apiId → { name, emblem }
+    const teamsRaw  = new Map();   // apiId → { name, shortName, tla, crest }
+
+    for (const m of apiMatches) {
+        if (!compsRaw.has(m.competition.id)) {
+            compsRaw.set(m.competition.id, {
+                name:   m.competition.name,
+                emblem: m.competition.emblem,
+            });
+        }
+        for (const t of [m.homeTeam, m.awayTeam]) {
+            if (!teamsRaw.has(t.id)) {
+                teamsRaw.set(t.id, {
+                    name:      t.name,
+                    shortName: t.shortName || t.name,
+                    tla:       t.tla,
+                    crest:     t.crest,
+                });
+            }
+        }
+    }
+
+    console.log(`🏆 ${compsRaw.size} competitions   ⚽ ${teamsRaw.size} teams`);
+
+    // ── 5.  Resolve logos ───────────────────────────────────────────────────
+    console.log('🖼️  Resolving competition logos…');
+    const compDocs = {};
+    for (const [apiId, c] of compsRaw) {
+        const ordId    = ids.comp(apiId);
+        const logoFile = COMP_LOGO_FILE[apiId] || guessLogoFile(c.name);
+        let   logoUrl  = c.emblem;                         // default = API emblem
+
+        if (logoFile) {
+            const resolved = await resolveLogoUrl(logoFile);
+            if (resolved) logoUrl = resolved;
+        }
+
+        compDocs[ordId] = {
+            name:      c.name,
+            logo:      logoUrl,
+            apiId:     apiId,
+            updatedAt: serverTimestamp(),
+        };
+    }
+
+    // ── 6.  Build team docs ─────────────────────────────────────────────────
+    const teamDocs = {};
+    for (const [apiId, t] of teamsRaw) {
+        const ordId = ids.team(apiId);
+        teamDocs[ordId] = {
+            name:      t.name,
+            shortName: t.shortName,
+            tla:       t.tla,
+            badge:     t.crest,
+            apiId:     apiId,
+            updatedAt: serverTimestamp(),
+        };
+    }
+
+    // ── 7.  Build match docs (denormalized team/comp objects) ────────────────
+    const matchDocs = {};
+    for (const m of apiMatches) {
+        const ordId      = ids.match(m.id);
+        const compOrdId  = ids.comp(m.competition.id);
+        const homeOrdId  = ids.team(m.homeTeam.id);
+        const awayOrdId  = ids.team(m.awayTeam.id);
+        const homeRaw    = teamsRaw.get(m.homeTeam.id);
+        const awayRaw    = teamsRaw.get(m.awayTeam.id);
+        const compDoc    = compDocs[compOrdId];
+        const matchDate  = new Date(m.utcDate);
+
+        const isWomen =
+            m.competition.name.toLowerCase().includes('women') ||
+            m.competition.name.toLowerCase().includes('femenin');
+
+        matchDocs[ordId] = {
+            homeTeam: {
+                id:        String(homeOrdId),
+                name:      homeRaw.name,
+                shortName: homeRaw.shortName,
+                badge:     homeRaw.crest,
+            },
+            awayTeam: {
+                id:        String(awayOrdId),
+                name:      awayRaw.name,
+                shortName: awayRaw.shortName,
+                badge:     awayRaw.crest,
+            },
+            league: String(compOrdId),
+            competition: {
+                id:   String(compOrdId),
+                name: compDoc.name,
+                logo: compDoc.logo,
+            },
+            timestamp:  Timestamp.fromDate(matchDate),
+            status:     mapStatus(m.status),
+            homeScore:  m.score?.fullTime?.home ?? null,
+            awayScore:  m.score?.fullTime?.away ?? null,
+            category:   isWomen ? 'femenino' : 'masculino',
+            apiId:      m.id,
+            updatedAt:  serverTimestamp(),
+        };
+    }
+
+    // ── 8.  Write to Firestore (batch, max ~450 ops) ────────────────────────
+    console.log('💾 Writing to Firestore…');
+    let batch   = writeBatch(db);
+    let ops     = 0;
+    const LIMIT = 450;
+
+    async function flush() {
+        if (ops > 0) { await batch.commit(); batch = writeBatch(db); ops = 0; }
+    }
+
+    for (const [id, data] of Object.entries(compDocs)) {
+        batch.set(doc(db, 'competitions', String(id)), data, { merge: true });
+        if (++ops >= LIMIT) await flush();
+    }
+    for (const [id, data] of Object.entries(teamDocs)) {
+        batch.set(doc(db, 'teams', String(id)), data, { merge: true });
+        if (++ops >= LIMIT) await flush();
+    }
+    for (const [id, data] of Object.entries(matchDocs)) {
+        batch.set(doc(db, 'matches', String(id)), data, { merge: true });
+        if (++ops >= LIMIT) await flush();
+    }
+    await flush();
+
+    // ── 9.  Persist mappings & metadata ─────────────────────────────────────
+    await setDoc(mapRef, mappings);
+    await setDoc(metaRef, {
+        lastUpdated:      serverTimestamp(),
+        provider:         'football-data.org',
+        matchCount:       apiMatches.length,
+        competitionCount: compsRaw.size,
+        teamCount:        teamsRaw.size,
+    });
+
+    console.log(`✅ Sync complete — ${Object.keys(compDocs).length} competitions, ` +
+                `${Object.keys(teamDocs).length} teams, ${Object.keys(matchDocs).length} matches.`);
+}
+
+// ── Run ─────────────────────────────────────────────────────────────────────
+main()
+    .then(() => process.exit(0))
+    .catch(err => { console.error('❌ Fatal:', err); process.exit(1); });
+

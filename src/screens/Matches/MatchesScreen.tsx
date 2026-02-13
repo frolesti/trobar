@@ -1,165 +1,258 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, Image } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, Image, RefreshControl, PanResponder, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { fetchAllMatches, Match } from '../../services/matchService';
+import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchService';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ensureLoraOnWeb, SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 import { formatTeamNameForDisplay } from '../../utils/teamName';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import MatchCard from '../../components/MatchCard';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Matches'>;
 };
 
+type FilterType = 'ALL' | 'MASCULI' | 'FEMENI';
+
 const MatchesScreen = ({ navigation }: Props) => {
     const { user } = useAuth();
     const [allMatches, setAllMatches] = useState<Match[]>([]);
-    const [matches, setMatches] = useState<Match[]>([]);
+    const [pastMatches, setPastMatches] = useState<Match[]>([]);
+    // const [matches, setMatches] = useState<Match[]>([]); // Deprecated in favor of derived state
+    const [visibleCount, setVisibleCount] = useState(20);
+    const [filter, setFilter] = useState<FilterType>('ALL');
+    const [selectedComp, setSelectedComp] = useState<string | null>(null);
+    
     const [loading, setLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [competitionLogos, setCompetitionLogos] = useState<Record<string, string>>({});
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const isRefreshingRef = React.useRef(false);
+    const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
+    const [teamsMap, setTeamsMap] = useState<Record<string, { name: string, badge: string }>>({});
     const PAGE_SIZE = 20;
 
-    useEffect(() => {
-        ensureLoraOnWeb();
-        
-        // Redirect to login if not authenticated
-        if (!user) {
-            navigation.replace('Login');
-        }
-        
-        // Load competition logos from Firebase
-        const loadCompetitionLogos = async () => {
-            try {
-                const logosDoc = await getDoc(doc(db, 'config', 'competition-logos'));
-                if (logosDoc.exists()) {
-                    setCompetitionLogos(logosDoc.data() as Record<string, string>);
-                }
-            } catch (error) {
-                console.error('❌ Error loading competition logos:', error);
+    // --- SCROLL MAINTENANCE FOR LOADING PAST MATCHES ---
+    const flatListRef = useRef<FlatList>(null);
+    const previousContentHeightRef = useRef<number>(0);
+    const previousScrollOffsetRef = useRef<number>(0);
+    const isLoadingPastMatchesRef = useRef(false);
+
+    // PanResponder for Swipe-to-Right -> Map navigation
+    // DISABLED: Can conflict with FlatList vertical scroll on some devices/patterns.
+    // Re-enable only if strictly tested or requested.
+    /*
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return gestureState.dx > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 3;
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 60) navigation.navigate('Map');
             }
-        };
-        
-        loadCompetitionLogos();
-    }, [user, navigation]);
+        })
+    ).current;
+    */
 
     useEffect(() => {
-        const loadMatches = async () => {
+        const loadInitialData = async () => {
             try {
-                const { matches: allMatches } = await fetchAllMatches();
-                console.log('📅 Loaded matches:', allMatches);
-                console.log('📅 First match details:', allMatches[0]);
+                // 1. Load Competitions Map
+                const compsSnap = await getDocs(collection(db, 'competitions'));
+                const cMap: Record<string, { logo: string, name: string }> = {};
 
-                // Sort all matches by date ascending
-                const sorted = allMatches
+                compsSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.id) cMap[data.id] = { logo: data.logo, name: data.name };
+                    // fallback using doc.id if data.id differs or consistency needed
+                    cMap[doc.id] = { logo: data.logo, name: data.name };
+                });
+                setCompetitionMap(cMap);
+
+                // 2. Load Teams Map
+                const teamsSnap = await getDocs(collection(db, 'teams'));
+                const tMap: Record<string, { name: string, badge: string }> = {};
+                teamsSnap.forEach(t => {
+                    const tData = t.data();
+                    tMap[t.id] = { name: tData.name, badge: tData.badge };
+                });
+                setTeamsMap(tMap);
+
+                // 3. Fetch Future Matches
+                const { matches: fetchedMatches } = await fetchAllMatches();
+                
+                // Sort by date ascending (Future)
+                const sortedFuture = fetchedMatches
                     .slice()
+                    .map(m => ({ ...m, status: 'scheduled' as const }))
                     .sort((a, b) => {
                         const dA = a.date instanceof Date ? a.date : new Date(a.date);
                         const dB = b.date instanceof Date ? b.date : new Date(b.date);
                         return dA.getTime() - dB.getTime();
                     });
 
-                console.log('📅 Total matches:', sorted.length);
-                setAllMatches(sorted);
-                setMatches(sorted.slice(0, PAGE_SIZE));
+                setAllMatches(sortedFuture);
+                // setMatches(sortedFuture.slice(0, PAGE_SIZE)); // Removed
+
             } catch (e) {
-                console.error('❌ Error loading matches:', e);
+                console.error('❌ Error loading data:', e);
             } finally {
                 setLoading(false);
             }
         };
-        loadMatches();
+
+        loadInitialData();
+    }, [user, navigation]);
+
+    /* REMOVED SEPARATE loadMatches/loadCompetitionLogos EFFECTS TO REDUCE NETWORK CALLS */
+
+    // --- Helper Logic ---
+    const isFemenino = useCallback((match: Match | any) => {
+        // Safe access to team name 
+        const getTeamName = (t: any) => (typeof t === 'string' ? t : (t?.name || t?.shortName || ''));
+        const homeName = getTeamName(match.homeTeam).toLowerCase();
+        const awayName = getTeamName(match.awayTeam).toLowerCase();
+        const leagueName = (match.league || '').toLowerCase();
+
+        return match.category === 'femenino' || 
+               homeName.includes('women') || 
+               awayName.includes('women') ||
+               homeName.includes('femeni') || 
+               awayName.includes('femeni') ||
+               leagueName.includes('liga f') ||
+               leagueName.includes('femen');
     }, []);
 
-    const loadMoreMatches = useCallback(() => {
-        if (isLoadingMore || matches.length >= allMatches.length) return;
-        setIsLoadingMore(true);
-        const nextCount = Math.min(matches.length + PAGE_SIZE, allMatches.length);
-        setMatches(allMatches.slice(0, nextCount));
-        setIsLoadingMore(false);
-    }, [isLoadingMore, matches.length, allMatches, PAGE_SIZE]);
+    // --- Derived Data ---
+    const uniqueCompetitions = useMemo(() => {
+         const comps = new Set<string>();
+         const matches = [...pastMatches, ...allMatches];
+         matches.forEach(m => {
+             const isFem = isFemenino(m);
+             const matchCat = isFem ? 'FEMENI' : 'MASCULI';
+             
+             if (filter !== 'ALL' && matchCat !== filter) return;
 
-    const formatDate = (match: Match) => {
-        const d = match.date instanceof Date ? match.date : new Date(match.date);
-        const today = new Date();
-        const isToday = d.toDateString() === today.toDateString();
-        
-        if (isToday) {
-            return `Avui, ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}h`;
-        }
-        
-        return d.toLocaleDateString('ca-ES', { 
-            weekday: 'short', 
-            day: 'numeric', 
-            month: 'short', 
-            hour: '2-digit', 
-            minute: '2-digit' 
+             if (m.competition && m.competition.name) comps.add(m.competition.name);
+             else if (m.league && competitionMap[m.league]) comps.add(competitionMap[m.league].name);
+             else if (m.league) comps.add(m.league);
+         });
+         return Array.from(comps).sort();
+    }, [pastMatches, allMatches, filter, isFemenino, competitionMap]);
+
+    const filteredFutureMatches = useMemo(() => {
+        return allMatches.filter(m => {
+            if (filter === 'ALL') {
+                // pass or check comp
+            } else {
+                const isFem = isFemenino(m);
+                const matchCat = isFem ? 'FEMENI' : 'MASCULI';
+                if (matchCat !== filter) return false;
+            }
+            
+            if (selectedComp) {
+                const cName = m.competition?.name || (m.league && competitionMap[m.league]?.name) || m.league;
+                // Flexible match
+                if (cName !== selectedComp && m.competition?.id !== selectedComp && m.league !== selectedComp) return false;
+            }
+            return true;
         });
-    };
+    }, [allMatches, filter, isFemenino, selectedComp, competitionMap]);
 
-    const isFemenino = (match: Match) => {
-        return match.category === 'femenino' || 
-               match.homeTeam?.toLowerCase().includes('women') || 
-               match.awayTeam?.toLowerCase().includes('women');
-    };
+    const displayedMatches = useMemo(() => {
+        const filteredPast = pastMatches.filter(m => {
+            if (filter !== 'ALL') {
+                const isFem = isFemenino(m);
+                const matchCat = isFem ? 'FEMENI' : 'MASCULI';
+                if (matchCat !== filter) return false;
+            }
 
-    const cleanTeamName = (name: string) => {
-        return name.replace(/\s*Women\s*/gi, '').trim();
-    };
+            if (selectedComp) {
+                const cName = m.competition?.name || (m.league && competitionMap[m.league]?.name) || m.league;
+                if (cName !== selectedComp && m.competition?.id !== selectedComp && m.league !== selectedComp) return false;
+            }
+            return true;
+        });
 
-    const getLeagueName = (match: Match) => {
-        const isFem = isFemenino(match);
-        const baseName = match.league || 'La Liga';
-        
-        // Liga F ja ve amb el nom correcte
-        if (baseName.toLowerCase().includes('liga f')) {
-            return 'Liga F';
-        }
-        
-        // Champions, Copa, etc mantenen el nom
-        if (baseName.toLowerCase().includes('champions')) {
-            return 'Champions League';
-        }
-        if (baseName.toLowerCase().includes('copa')) {
-            return isFem ? 'Copa de la Reina' : 'Copa del Rey';
-        }
-        
-        // La Liga per defecte
-        return isFem ? 'Liga F' : 'La Liga EA Sports';
-    };
+        const futureSlice = filteredFutureMatches.slice(0, visibleCount);
 
-    const getLeagueLogo = (match: Match) => {
-        const isFem = isFemenino(match);
-        const leagueName = getLeagueName(match);
-        
-        if (leagueName === 'Liga F' && competitionLogos['ligaf']) {
-            return competitionLogos['ligaf'];
-        }
-        if (leagueName === 'La Liga EA Sports' && competitionLogos['laliga-ea-sports']) {
-            return competitionLogos['laliga-ea-sports'];
-        }
-        return null;
-    };
+        return [...filteredPast, ...futureSlice];
+    }, [pastMatches, filteredFutureMatches, visibleCount, filter, isFemenino, selectedComp]);
 
-    const getMatchColors = (match: Match) => {
-        const isFem = isFemenino(match);
-        return {
-            badge: isFem ? '#9C27B0' : SKETCH_THEME.colors.primary,
-            button: isFem ? '#9C27B0' : SKETCH_THEME.colors.primary,
-            border: isFem ? '#9C27B0' : SKETCH_THEME.colors.primary
-        };
-    };
+    const handleRefresh = useCallback(async () => {
+        if (isRefreshingRef.current) return;
+        isRefreshingRef.current = true;
+        setIsRefreshing(true);
+
+        try {
+            // Prefer oldest past match
+            let oldestDate = new Date();
+            if (pastMatches.length > 0) {
+                oldestDate = pastMatches[0].date;
+            } else if (allMatches.length > 0) {
+                oldestDate = allMatches[0].date;
+            }
+                
+            const history = await fetchPastMatches(oldestDate);
+            const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
+            
+            if (sortedHistory.length > 0) {
+                // MARK LOADING AND CAPTURE OFFSET
+                isLoadingPastMatchesRef.current = true;
+                // Capture the current scroll offset explicitly before update
+                // Note: We rely on onScroll to keep this updated, but if we are at top (0), it's 0.
+                if (previousScrollOffsetRef.current < 0) previousScrollOffsetRef.current = 0;
+                
+                console.log('[SCROLL DEBUG] Loading past matches. Current height:', previousContentHeightRef.current);
+                
+                setPastMatches(prev => [...sortedHistory, ...prev]);
+            }
+        } finally {
+            setIsRefreshing(false);
+            isRefreshingRef.current = false;
+        }
+    }, [pastMatches, allMatches]);
+
+    const loadMoreMatches = useCallback(() => {
+        if (isLoadingMore || visibleCount >= filteredFutureMatches.length) return;
+        setIsLoadingMore(true);
+        // Just increase visible count
+        setTimeout(() => { // Simulate small delay or just state update
+            setVisibleCount(prev => prev + PAGE_SIZE);
+            setIsLoadingMore(false);
+        }, 100);
+    }, [isLoadingMore, visibleCount, filteredFutureMatches.length, PAGE_SIZE]);
+
+    // Format Helpers
+    const getTabStyle = (tab: FilterType) => ({
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : 'transparent',
+        borderWidth: 1,
+        borderColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
+        marginRight: 8,
+    });
+    
+    const getTabText = (tab: FilterType) => ({
+        color: filter === tab ? '#FFF' : SKETCH_THEME.colors.textMuted,
+        fontWeight: filter === tab ? 'bold' as 'bold' : 'normal' as 'normal',
+        fontSize: 13,
+        fontFamily: 'Lora'
+    });
 
     return (
-        <View style={{ 
-            flex: 1, 
-            backgroundColor: SKETCH_THEME.colors.bg,
-            ...Platform.select({ web: { height: '100vh' as any }, default: {} })
-        }}>
-            {/* Header - Same style as Profile */}
+        <View 
+            style={{ 
+                flex: 1, 
+                backgroundColor: SKETCH_THEME.colors.bg,
+                ...Platform.select({ web: { height: '100vh' as any, display: 'flex' as any, flexDirection: 'column' as any, overflow: 'hidden' as any }, default: {} })
+            }}
+            // {...panResponder.panHandlers}
+        >
+            {/* Header - Arrow on Right */}
             <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -170,9 +263,6 @@ const MatchesScreen = ({ navigation }: Props) => {
                 borderBottomColor: SKETCH_THEME.colors.border,
                 backgroundColor: SKETCH_THEME.colors.uiBg,
             }}>
-                <TouchableOpacity onPress={() => navigation.navigate('Map')} style={{ padding: 4 }}>
-                    <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.text} />
-                </TouchableOpacity>
                 <Text style={{ 
                     fontSize: 20, 
                     fontWeight: 'bold', 
@@ -181,25 +271,128 @@ const MatchesScreen = ({ navigation }: Props) => {
                 }}>
                     Pròxims Partits
                 </Text>
-                <View style={{ width: 32 }} />
+                
+                <TouchableOpacity 
+                    onPress={() => navigation.navigate('Map')} 
+                    style={{ padding: 4 }}
+                    hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                >
+                    {/* Arrow Right because "we come from there" (User Request) */}
+                    <Ionicons name="arrow-forward" size={24} color={SKETCH_THEME.colors.text} />
+                </TouchableOpacity>
+            </View>
+
+            {/* Unified Filters */}
+            <View style={{ height: 50, backgroundColor: SKETCH_THEME.colors.bg }}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 16, alignItems: 'center' }}
+                >
+                    {/* Category Tabs */}
+                    {(['ALL', 'MASCULI', 'FEMENI'] as const).map((tab) => (
+                         <TouchableOpacity 
+                            key={tab}
+                            onPress={() => { setFilter(tab); setSelectedComp(null); }} 
+                            style={{
+                                paddingVertical: 6,
+                                paddingHorizontal: 12,
+                                borderRadius: 18,
+                                backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.bg,
+                                borderWidth: 1,
+                                borderColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
+                                marginRight: 8,
+                            }}
+                        >
+                            <Text style={{
+                                color: filter === tab ? '#FFF' : SKETCH_THEME.colors.textMuted,
+                                fontWeight: filter === tab ? 'bold' : 'normal',
+                                fontSize: 12,
+                                fontFamily: 'Lora',
+                                textTransform: 'capitalize'
+                            }}>
+                                {tab === 'ALL' ? 'Tots' : (tab === 'MASCULI' ? 'Masculí' : 'Femení')}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+
+                    {/* Vertical Divider */}
+                    <View style={{ width: 1, height: 20, backgroundColor: SKETCH_THEME.colors.border, marginHorizontal: 8 }} />
+
+                    {/* Competition Tabs */}
+                    {uniqueCompetitions.map(c => (
+                        <TouchableOpacity
+                            key={c}
+                            onPress={() => setSelectedComp(selectedComp === c ? null : c)}
+                            style={{
+                                paddingVertical: 6,
+                                paddingHorizontal: 12,
+                                borderRadius: 18,
+                                backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'transparent',
+                                borderWidth: 1,
+                                borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
+                                marginRight: 8
+                            }}
+                        >
+                            <Text style={{
+                                color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.textMuted,
+                                fontSize: 12, fontFamily: 'Lora'
+                            }}>{c}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
             </View>
 
             <FlatList
-                data={loading ? [] : matches}
-                keyExtractor={(item, index) => (item.id ? String(item.id) : String(index))}
-                contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                ref={flatListRef}
+                data={loading ? [] : displayedMatches}
+                style={Platform.select({ web: { flex: 1, minHeight: 0, overflowY: 'auto' } as any, default: { flex: 1 } })}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 100 }}
                 showsVerticalScrollIndicator={true}
+                // maintainVisibleContentPosition={{
+                //     minIndexForVisible: 0,
+                //     autoscrollToTopThreshold: 10,
+                // }}
+                bounces={true}
+                alwaysBounceVertical={true}
+                overScrollMode="always"
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        tintColor={SKETCH_THEME.colors.primary}
+                        title="Carregant historial..."
+                    />
+                }
                 onEndReached={loadMoreMatches}
                 onEndReachedThreshold={0.6}
                 ListEmptyComponent={
                     loading ? (
                         <LoadingState />
                     ) : (
-                        <EmptyState />
+                        <EmptyState filter={filter} />
                     )
                 }
+                ListHeaderComponent={
+                    Platform.OS === 'web' ? (
+                        <View style={{ paddingVertical: 4, alignItems: 'center' }}>
+                             <TouchableOpacity 
+                                onPress={handleRefresh} 
+                                disabled={isRefreshing}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                {isRefreshing ? (
+                                    <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
+                                ) : (
+                                    <Ionicons name="chevron-up-circle-outline" size={24} color={SKETCH_THEME.colors.textMuted} />
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    ) : null
+                }
                 ListFooterComponent={
-                    !loading && matches.length < allMatches.length ? (
+                    !loading && visibleCount < filteredFutureMatches.length ? (
                         <View style={{ alignItems: 'center', paddingVertical: 16 }}>
                             <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
                             <Text style={{
@@ -217,11 +410,6 @@ const MatchesScreen = ({ navigation }: Props) => {
                     <MatchCard
                         match={item}
                         onPress={() => navigation.navigate('Map')}
-                        formatDate={formatDate}
-                        getLeagueLogo={getLeagueLogo}
-                        getLeagueName={getLeagueName}
-                        getMatchColors={getMatchColors}
-                        cleanTeamName={cleanTeamName}
                     />
                 )}
             />
@@ -243,7 +431,7 @@ const LoadingState = () => (
     </View>
 );
 
-const EmptyState = () => (
+const EmptyState = ({ filter }: { filter: FilterType }) => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>
         <Ionicons name="calendar-outline" size={64} color={SKETCH_THEME.colors.textMuted} />
         <Text style={{ 
@@ -253,7 +441,7 @@ const EmptyState = () => (
             fontWeight: 'bold',
             fontFamily: 'Lora'
         }}>
-            No hi ha partits pròximament
+            No hi ha partits {filter === 'ALL' ? '' : filter === 'MASCULI' ? 'masculins' : 'femenins'} pròximament
         </Text>
         <Text style={{ 
             color: SKETCH_THEME.colors.textMuted, 
@@ -267,167 +455,7 @@ const EmptyState = () => (
     </View>
 );
 
-const MatchCard = ({
-    match,
-    onPress,
-    formatDate,
-    getLeagueLogo,
-    getLeagueName,
-    getMatchColors,
-    cleanTeamName,
-}: {
-    match: Match;
-    onPress: () => void;
-    formatDate: (m: Match) => string;
-    getLeagueLogo: (m: Match) => string | null;
-    getLeagueName: (m: Match) => string;
-    getMatchColors: (m: Match) => { badge: string; button: string; border: string };
-    cleanTeamName: (n: string) => string;
-}) => (
-    <View
-        style={{
-            backgroundColor: SKETCH_THEME.colors.uiBg,
-            borderRadius: 16,
-            padding: 18,
-            marginBottom: 14,
-            borderWidth: 2,
-            borderLeftWidth: 6,
-            borderColor: getMatchColors(match).border,
-            ...Platform.select({
-                web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.08)' },
-                default: sketchShadow()
-            })
-        }}
-    >
-        {/* Competition Badge */}
-        <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 14 
-        }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {getLeagueLogo(match) ? (
-                    <Image 
-                        source={{ uri: getLeagueLogo(match) as string }} 
-                        style={{ width: 32, height: 32 }}
-                        resizeMode="contain"
-                    />
-                ) : (
-                    <View style={{
-                        backgroundColor: getMatchColors(match).badge,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        borderRadius: 8
-                    }}>
-                        <Text style={{ 
-                            fontSize: 11, 
-                            fontWeight: 'bold', 
-                            color: 'white',
-                            textTransform: 'uppercase',
-                            fontFamily: 'Lora'
-                        }}>
-                            {getLeagueName(match)}
-                        </Text>
-                    </View>
-                )}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="clock" size={13} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 5 }} />
-                <Text style={{ 
-                    fontSize: 13, 
-                    color: SKETCH_THEME.colors.textMuted,
-                    fontFamily: 'Lora'
-                }}>
-                    {formatDate(match)}
-                </Text>
-            </View>
-        </View>
 
-        {/* Teams */}
-        <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            marginBottom: 16
-        }}>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-                {match.homeBadge && (
-                    <Image 
-                        source={{ uri: match.homeBadge }} 
-                        style={{ width: 40, height: 40, marginBottom: 8 }}
-                        resizeMode="contain"
-                    />
-                )}
-                <Text style={{ 
-                    fontSize: 17, 
-                    fontWeight: 'bold', 
-                    textAlign: 'center', 
-                    fontFamily: 'Lora',
-                    color: SKETCH_THEME.colors.text
-                }}>
-                    {formatTeamNameForDisplay(cleanTeamName(match.homeTeam))}
-                </Text>
-            </View>
-            <View style={{ 
-                paddingHorizontal: 14,
-                paddingVertical: 6,
-                backgroundColor: SKETCH_THEME.colors.bg,
-                borderRadius: 8
-            }}>
-                <Text style={{ 
-                    fontSize: 15, 
-                    fontWeight: 'bold', 
-                    color: SKETCH_THEME.colors.textMuted,
-                    fontFamily: 'Lora'
-                }}>
-                    VS
-                </Text>
-            </View>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-                {match.awayBadge && (
-                    <Image 
-                        source={{ uri: match.awayBadge }} 
-                        style={{ width: 40, height: 40, marginBottom: 8 }}
-                        resizeMode="contain"
-                    />
-                )}
-                <Text style={{ 
-                    fontSize: 17, 
-                    fontWeight: 'bold', 
-                    textAlign: 'center', 
-                    fontFamily: 'Lora',
-                    color: SKETCH_THEME.colors.text
-                }}>
-                    {formatTeamNameForDisplay(cleanTeamName(match.awayTeam))}
-                </Text>
-            </View>
-        </View>
-
-        {/* Action Button */}
-        <TouchableOpacity
-            style={{
-                backgroundColor: getMatchColors(match).button,
-                paddingVertical: 12,
-                borderRadius: 12,
-                alignItems: 'center',
-                ...sketchShadow()
-            }}
-            onPress={onPress}
-        >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="map-pin" size={16} color="white" style={{ marginRight: 8 }} />
-                <Text style={{ 
-                    color: 'white', 
-                    fontWeight: 'bold', 
-                    fontSize: 15,
-                    fontFamily: 'Lora'
-                }}>
-                    Trobar bars
-                </Text>
-            </View>
-        </TouchableOpacity>
-    </View>
-);
+// MatchCard was moved to components/MatchCard.tsx for reuse
 
 export default MatchesScreen;

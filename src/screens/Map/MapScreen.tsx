@@ -8,7 +8,6 @@ import { fetchBars } from '../../services/barService';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { Bar } from '../../data/dummyData';
-import { seedDatabase } from '../../utils/seedDatabase';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../../utils/GoogleMaps';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
 import { CUSTOM_MAP_STYLE } from '../../theme/mapStyle';
@@ -18,6 +17,7 @@ import { fetchBarsFromOSM, OSMBar } from '../../services/osmService';
 import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
 import { formatTeamNameForDisplay } from '../../utils/teamName';
+import MatchCard from '../../components/MatchCard';
 
 // DeclaraciÃ³ global per a TypeScript (Google Maps Web)
 declare global {
@@ -284,11 +284,23 @@ const MapScreen = () => {
         document.head.appendChild(style);
 
         const loadMapAndAutocomplete = () => {
-            if (centerLocation && mapDivRef.current && !googleMapRef.current && window.google) {
-                initWebMap();
-            }
-            if (window.google && autocompleteInputRef.current) {
-                initWebAutocomplete();
+            if (window.google && window.google.maps) {
+                if (centerLocation && mapDivRef.current && !googleMapRef.current) {
+                    try {
+                        initWebMap();
+                    } catch (e) {
+                         console.error("Error initializing map: ", e);
+                    }
+                }
+                if (autocompleteInputRef.current) {
+                    try {
+                        initWebAutocomplete();
+                    } catch (e) {
+                        console.error("Error initializing autocomplete: ", e);
+                    }
+                }
+            } else {
+                 console.warn("Google Maps SDK failed to load or is incomplete.");
             }
         };
 
@@ -396,32 +408,15 @@ const MapScreen = () => {
     const renderNextMatchBanner = () => {
         if (!nextMatch) return null;
         
-        // Safe check for dates
-        let dateStr = "Avui";
-        if (nextMatch.date) {
-            // @ts-ignore
-            const d = nextMatch.date.toDate ? nextMatch.date.toDate() : new Date(nextMatch.date);
-            const isToday = new Date().toDateString() === d.toDateString();
-            dateStr = isToday ? 
-                `AVUI ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}h` : 
-                `${d.toLocaleDateString('ca-ES', {weekday: 'short', day: 'numeric'})} ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}h`;
-        }
-
         return (
-            <View style={styles.nextMatchContainer}>
-                <View style={{flex: 1}}>
-                    <Text style={styles.nextMatchTitle}>Propers Partits</Text>
-                    <Text style={styles.nextMatchTeams}>
-                        {formatTeamNameForDisplay(nextMatch.homeTeam)} vs {formatTeamNameForDisplay(nextMatch.awayTeam)}
-                    </Text>
-                    <Text style={styles.nextMatchInfo}>
-                        {nextMatch.league} • {dateStr}
-                    </Text>
-                </View>
-                <View style={{ backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 20, padding: 6 }}>
-                     <Ionicons name="football" size={20} color="white" />
-                </View>
-            </View>
+             <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+                 {/* Reusing unified MatchCard component for visual consistency */}
+                <MatchCard 
+                    match={nextMatch} 
+                    compact={true} 
+                    onPress={() => {}} // No action needed on banner itself 
+                />
+             </View>
         );
     };
 
@@ -507,6 +502,11 @@ const MapScreen = () => {
     // --- WEB HELPERS ---
     const initWebMap = () => {
         if (!centerLocation) return;
+        if (!window.google || !window.google.maps) {
+            console.error("Cannot init map: SDK not loaded");
+            return;
+        }
+
         const mapDomNode = mapDivRef.current as unknown as HTMLElement;
         const mapOptions = {
             center: { lat: centerLocation.latitude, lng: centerLocation.longitude },
@@ -518,8 +518,15 @@ const MapScreen = () => {
             backgroundColor: SKETCH_THEME.colors.bg,
             // mapId removed to allow 'styles' (JSON) to work. AdvancedMarkerElement disabled.
         };
-        const map = new window.google.maps.Map(mapDomNode, mapOptions);
-        googleMapRef.current = map;
+        let map: any;
+        try {
+            map = new window.google.maps.Map(mapDomNode, mapOptions);
+            googleMapRef.current = map;
+        } catch (error) {
+            console.error("FAIL: new google.maps.Map threw error. Likely invalid API Key or project config.", error);
+            setErrorMsg("No s'ha pogut carregar el mapa. Revisa la clau API.");
+            return;
+        }
 
         // User Marker (Legacy Marker for JSON styles compatibility)
         if (userLocation) {
@@ -807,9 +814,9 @@ const MapScreen = () => {
                                 Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
                             </Text>
                             <View style={styles.matchTeams}>
-                                <Text style={styles.teamText}>{nextMatch.homeTeam}</Text>
+                                <Text style={styles.teamText}>{formatTeamNameForDisplay(nextMatch.homeTeam)}</Text>
                                 <Text style={styles.vsText}>vs</Text>
-                                <Text style={styles.teamText}>{nextMatch.awayTeam}</Text>
+                                <Text style={styles.teamText}>{formatTeamNameForDisplay(nextMatch.awayTeam)}</Text>
                             </View>
                              <Text style={{color: SKETCH_THEME.colors.textMuted, fontSize: 11, textAlign:'center', marginTop: 4, fontStyle:'italic'}}>
                                 {selectedBar.name} emetrà aquest partit.
@@ -999,9 +1006,9 @@ const MapScreen = () => {
                         Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
                     </Text>
                     <View style={{flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 4}}>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.homeTeam}</Text>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{formatTeamNameForDisplay(nextMatch.homeTeam)}</Text>
                          <Text style={{color: 'white', marginHorizontal: 6, fontSize: 12}}>vs</Text>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{nextMatch.awayTeam}</Text>
+                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{formatTeamNameForDisplay(nextMatch.awayTeam)}</Text>
                     </View>
                     <Text style={{color: 'rgba(255,255,255,0.9)', fontSize: 12, textAlign: 'center', marginTop: 4}}>
                         {/* @ts-ignore */}
