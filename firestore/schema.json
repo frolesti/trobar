@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "troBar Firestore Schema",
+  "description": "Definició canònica de totes les col·leccions de Firestore per a troBar. Versió controlada — qualsevol canvi ha de passar per una migració.",
+  "version": "1.0.0",
+  "collections": {
+    "matches": {
+      "description": "Partits del FC Barcelona (masculí i femení). Sincronitzats des de football-data.org.",
+      "documentId": "Ordinal seqüencial (1, 2, 3…). Mapejat des de l'API ID via system/id_mappings.",
+      "fields": {
+        "homeTeam": {
+          "type": "map",
+          "required": true,
+          "description": "Equip local (desnormalitzat per lectures ràpides)",
+          "fields": {
+            "id":        { "type": "string",  "description": "ID ordinal de l'equip (referència a teams/)" },
+            "name":      { "type": "string",  "description": "Nom complet de l'equip" },
+            "shortName": { "type": "string",  "description": "Nom curt" },
+            "badge":     { "type": "string",  "description": "URL de l'escut" }
+          }
+        },
+        "awayTeam": {
+          "type": "map",
+          "required": true,
+          "description": "Equip visitant (mateixa estructura que homeTeam)"
+        },
+        "league": {
+          "type": "string",
+          "required": true,
+          "description": "ID ordinal de la competició (referència a competitions/)"
+        },
+        "competition": {
+          "type": "map",
+          "required": true,
+          "description": "Competició desnormalitzada",
+          "fields": {
+            "id":   { "type": "string", "description": "ID ordinal de la competició" },
+            "name": { "type": "string", "description": "Nom de la competició" },
+            "logo": { "type": "string", "description": "URL del logo" }
+          }
+        },
+        "timestamp": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Data i hora del partit (Firestore Timestamp). Camp principal per queries temporals.",
+          "indexed": true
+        },
+        "status": {
+          "type": "string",
+          "required": true,
+          "enum": ["scheduled", "finished", "live", "postponed"],
+          "description": "Estat actual del partit"
+        },
+        "homeScore": {
+          "type": "number | null",
+          "required": false,
+          "description": "Gols de l'equip local (null si no s'ha jugat)"
+        },
+        "awayScore": {
+          "type": "number | null",
+          "required": false,
+          "description": "Gols de l'equip visitant (null si no s'ha jugat)"
+        },
+        "category": {
+          "type": "string",
+          "required": true,
+          "enum": ["masculino", "femenino"],
+          "description": "Categoria del partit"
+        },
+        "apiId": {
+          "type": "number",
+          "required": true,
+          "description": "ID original de football-data.org (per deduplicació)"
+        },
+        "updatedAt": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Última actualització del document"
+        }
+      },
+      "indexes": [
+        { "fields": ["timestamp"], "order": "asc", "usage": "fetchAllMatches — partits futurs" },
+        { "fields": ["timestamp"], "order": "desc", "usage": "fetchPastMatches — historial" }
+      ]
+    },
+
+    "competitions": {
+      "description": "Competicions en les quals participa el Barça.",
+      "documentId": "Ordinal seqüencial (1, 2, 3…).",
+      "fields": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "Nom de la competició (ex: 'Primera Division', 'UEFA Champions League')"
+        },
+        "logo": {
+          "type": "string",
+          "required": true,
+          "description": "URL del logo (Firebase Storage o API)"
+        },
+        "apiId": {
+          "type": "number",
+          "required": true,
+          "description": "ID original de football-data.org"
+        },
+        "updatedAt": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Última actualització"
+        }
+      }
+    },
+
+    "teams": {
+      "description": "Equips que juguen contra (o són) el Barça.",
+      "documentId": "Ordinal seqüencial (1, 2, 3…).",
+      "fields": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "Nom complet (ex: 'FC Barcelona')"
+        },
+        "shortName": {
+          "type": "string",
+          "required": true,
+          "description": "Nom curt (ex: 'Barcelona')"
+        },
+        "tla": {
+          "type": "string",
+          "required": true,
+          "description": "Abreviatura de 3 lletres (ex: 'BAR')"
+        },
+        "badge": {
+          "type": "string",
+          "required": true,
+          "description": "URL de l'escut"
+        },
+        "apiId": {
+          "type": "number",
+          "required": true,
+          "description": "ID original de football-data.org"
+        },
+        "updatedAt": {
+          "type": "timestamp",
+          "required": true,
+          "description": "Última actualització"
+        }
+      }
+    },
+
+    "bars": {
+      "description": "Bars verificats o reportats per usuaris on es poden veure partits.",
+      "documentId": "String lliure (slug o OSM ID per user_reported).",
+      "fields": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "Nom del bar"
+        },
+        "location": {
+          "type": "map",
+          "required": false,
+          "description": "Coordenades (format alternatiu — alguns docs usen latitude/longitude directes)",
+          "fields": {
+            "latitude":  { "type": "number" },
+            "longitude": { "type": "number" }
+          }
+        },
+        "latitude":  { "type": "number", "required": false, "description": "Latitud (format legacy)" },
+        "longitude": { "type": "number", "required": false, "description": "Longitud (format legacy)" },
+        "address":   { "type": "string", "required": false },
+        "rating":    { "type": "number", "required": false, "default": 0 },
+        "isOpen":    { "type": "boolean", "required": false, "default": true },
+        "image":     { "type": "string", "required": false, "description": "URL de la imatge del bar" },
+        "amenities": { "type": "array<string>", "required": false, "description": "Etiquetes/tags del bar" },
+        "source": {
+          "type": "string",
+          "required": false,
+          "enum": ["verified", "user_reported"],
+          "description": "Origen de la dada"
+        },
+        "reportedBy": { "type": "string", "required": false, "description": "UID de l'usuari que l'ha reportat" },
+        "isActive":   { "type": "boolean", "required": false, "description": "Actiu = confirmat per propietari" },
+        "nextMatch": {
+          "type": "map | null",
+          "required": false,
+          "description": "Pròxim partit que emet (deprecated — caldria migrar a referència)",
+          "fields": {
+            "teamHome":    { "type": "string" },
+            "teamAway":    { "type": "string" },
+            "time":        { "type": "string" },
+            "competition": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "timestamp", "required": false }
+      },
+      "indexes": [
+        { "fields": ["nextMatch"], "usage": "fetchBars — bars amb pròxim partit" }
+      ]
+    },
+
+    "users": {
+      "description": "Perfils d'usuari.",
+      "documentId": "Firebase Auth UID.",
+      "fields": {
+        "name":          { "type": "string",  "required": true },
+        "surname":       { "type": "string",  "required": false },
+        "email":         { "type": "string",  "required": false },
+        "avatar":        { "type": "string",  "required": false, "description": "URL de Firebase Storage" },
+        "favoriteTeam":  { "type": "string",  "required": false },
+        "favoriteSport": { "type": "string",  "required": false }
+      }
+    },
+
+    "business_claims": {
+      "description": "Sol·licituds de reclamació de negoci per part de propietaris.",
+      "documentId": "Auto-generat (addDoc).",
+      "fields": {
+        "barId":        { "type": "string",    "required": true, "description": "ID del bar reclamat" },
+        "barName":      { "type": "string",    "required": true },
+        "contactName":  { "type": "string",    "required": true },
+        "contactPhone": { "type": "string",    "required": true },
+        "contactEmail": { "type": "string",    "required": true },
+        "cif":          { "type": "string",    "required": true, "description": "CIF del negoci" },
+        "status":       { "type": "string",    "required": true, "enum": ["pending", "approved", "rejected"] },
+        "createdAt":    { "type": "timestamp", "required": true }
+      }
+    },
+
+    "system": {
+      "description": "Metadades internes del sistema. No llegides per l'app client directament.",
+      "documents": {
+        "sync_status": {
+          "description": "Estat de la última sincronització amb football-data.org.",
+          "fields": {
+            "lastUpdated":      { "type": "timestamp" },
+            "provider":         { "type": "string", "description": "Sempre 'football-data.org'" },
+            "matchCount":       { "type": "number" },
+            "competitionCount": { "type": "number" },
+            "teamCount":        { "type": "number" }
+          }
+        },
+        "id_mappings": {
+          "description": "Mapeig API ID → ID ordinal per a consistència entre execucions.",
+          "fields": {
+            "competitions": { "type": "map<string, number>", "description": "apiId → ordinalId" },
+            "teams":        { "type": "map<string, number>", "description": "apiId → ordinalId" },
+            "matches":      { "type": "map<string, number>", "description": "apiId → ordinalId" },
+            "nextCompId":   { "type": "number" },
+            "nextTeamId":   { "type": "number" },
+            "nextMatchId":  { "type": "number" }
+          }
+        },
+        "schema_version": {
+          "description": "Versió actual de l'esquema. Usada pel sistema de migracions.",
+          "fields": {
+            "version":   { "type": "string", "description": "Semver (ex: '1.0.0')" },
+            "migratedAt": { "type": "timestamp" },
+            "migrations": { "type": "array<string>", "description": "Llista de migracions aplicades" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -244,10 +244,21 @@ function freePorts() {
   }
 }
 
+function runMigrations() {
+  console.log('-------------------------------------------------------');
+  console.log('🗄️  Running Firestore Migrations...');
+  const res = spawnSync(process.execPath, ['firestore/migrate.js'], {
+    stdio: 'inherit',
+    cwd: projectRoot,
+    env: process.env,
+    shell: false
+  });
+  console.log('-------------------------------------------------------');
+}
+
 function runSyncScript() {
   console.log('-------------------------------------------------------');
   console.log('🔄 Running Match Sync Script (Server Simulation)...');
-  // Run synchronously so we see the output before Metro clears the screen
   const res = spawnSync(process.execPath, ['scripts/updateMatches.js'], {
     stdio: 'inherit',
     cwd: projectRoot,
@@ -258,7 +269,8 @@ function runSyncScript() {
 }
 
 function runStartRaw() {
-  // Always run the sync script before starting the dev server
+  // Run migrations first, then sync data
+  runMigrations();
   runSyncScript();
 
   if (noProxy) {

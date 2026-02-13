@@ -9,7 +9,11 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "update-matches": "node scripts/updateMatches.js"
+    "update-matches": "node scripts/updateMatches.js",
+    "db:migrate": "node firestore/migrate.js",
+    "db:migrate:status": "node firestore/migrate.js --status",
+    "db:migrate:dry-run": "node firestore/migrate.js --dry-run",
+    "db:validate": "node firestore/validate.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",
