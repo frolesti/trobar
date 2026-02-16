@@ -1,4 +1,4 @@
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, Platform } from 'react-native';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
 
 const { width, height } = Dimensions.get('window');
@@ -26,9 +26,10 @@ export default StyleSheet.create({
     // We add margin top to separate from the visual center of the GIF (assuming character is centered)
     marginTop: 200, 
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    ...Platform.select({
+      web: { textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)' },
+      default: { textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }
+    }),
   },
   loader: {
     marginTop: SKETCH_THEME.spacing.lg,

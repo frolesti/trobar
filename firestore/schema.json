@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "troBar Firestore Schema",
   "description": "Definició canònica de totes les col·leccions de Firestore per a troBar. Versió controlada — qualsevol canvi ha de passar per una migració.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "collections": {
     "matches": {
       "description": "Partits del FC Barcelona (masculí i femení). Sincronitzats des de football-data.org.",
@@ -181,10 +181,21 @@
         },
         "reportedBy": { "type": "string", "required": false, "description": "UID de l'usuari que l'ha reportat" },
         "isActive":   { "type": "boolean", "required": false, "description": "Actiu = confirmat per propietari" },
+        "broadcastingMatches": {
+          "type": "array<string>",
+          "required": false,
+          "description": "IDs dels partits que el bar emet. Usat per bars verificats que seleccionen partits concrets."
+        },
+        "usuallyShowsBarca": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Si és true, el bar normalment fa el Barça (reportat per usuaris). Compta com a emissió per TOTS els partits futurs."
+        },
         "nextMatch": {
           "type": "map | null",
           "required": false,
-          "description": "Pròxim partit que emet (deprecated — caldria migrar a referència)",
+          "description": "(DEPRECATED) Pròxim partit que emet. Substituït per broadcastingMatches/usuallyShowsBarca.",
           "fields": {
             "teamHome":    { "type": "string" },
             "teamAway":    { "type": "string" },
@@ -195,7 +206,8 @@
         "createdAt": { "type": "timestamp", "required": false }
       },
       "indexes": [
-        { "fields": ["nextMatch"], "usage": "fetchBars — bars amb pròxim partit" }
+        { "fields": ["broadcastingMatches"], "usage": "Bars que emeten un partit concret (array-contains)" },
+        { "fields": ["usuallyShowsBarca"], "usage": "Bars que normalment fan el Barça" }
       ]
     },
 
