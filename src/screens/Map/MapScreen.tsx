@@ -404,6 +404,12 @@ const MapScreen = () => {
     */
 
     const handleManualScan = async () => {
+        // Toggle feature: If we already have scanned bars, clear them.
+        if (scannedBars.length > 0) {
+            setScannedBars([]);
+            return;
+        }
+
         if (!centerLocation) return;
         setIsScanning(true);
         try {
@@ -1068,37 +1074,43 @@ const MapScreen = () => {
              { (!selectedBar || isDesktop) && (
                  <>
                     {renderRadiusSlider()}
-                    <TouchableOpacity 
-                        onPress={handleManualScan}
-                        disabled={isScanning}
-                        style={{
-                            marginTop: 10,
-                            backgroundColor: SKETCH_THEME.colors.bg,
-                            borderWidth: 2, 
-                            borderColor: SKETCH_THEME.colors.primary,
-                            borderRadius: 20,
-                            paddingVertical: 8,
-                            paddingHorizontal: 16,
-                            alignSelf: 'center',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            ...sketchShadow()
-                        }}
-                    >
-                         {isScanning ? (
-                             <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-                         ) : (
-                             <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-                         )}
-                         <Text style={{
-                             color: SKETCH_THEME.colors.primary, 
-                             fontWeight: 'bold', 
-                             fontFamily: 'Lora',
-                             fontSize: 12
-                         }}>
-                             {isScanning ? 'Cercant bars...' : 'Cercar bars en aquesta zona'}
-                         </Text>
-                    </TouchableOpacity>
+                        {/* Scanned/Found Bars Action */}
+                        <TouchableOpacity 
+                            onPress={handleManualScan}
+                            disabled={isScanning}
+                            style={{
+                                marginTop: 10,
+                                backgroundColor: isScanning || scannedBars.length > 0 ? SKETCH_THEME.colors.bg : SKETCH_THEME.colors.bg,
+                                borderWidth: 2, 
+                                borderColor: scannedBars.length > 0 ? SKETCH_THEME.colors.textMuted : SKETCH_THEME.colors.primary,
+                                borderRadius: 20,
+                                paddingVertical: 8,
+                                paddingHorizontal: 16,
+                                alignSelf: 'center',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                ...Platform.select({
+                                    web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' },
+                                    default: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }
+                                })
+                            }}
+                        >
+                             {isScanning ? (
+                                 <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                             ) : scannedBars.length > 0 ? (
+                                 <Feather name="x-circle" size={16} color={SKETCH_THEME.colors.textMuted} style={{marginRight: 8}} />
+                             ) : (
+                                 <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                             )}
+                             <Text style={{
+                                 color: scannedBars.length > 0 ? SKETCH_THEME.colors.textMuted : SKETCH_THEME.colors.primary, 
+                                 fontWeight: 'bold', 
+                                 fontFamily: 'Lora',
+                                 fontSize: 12
+                             }}>
+                                 {isScanning ? 'Cercant bars...' : (scannedBars.length > 0 ? 'Amagar bars trobats' : 'Cercar bars en aquesta zona')}
+                             </Text>
+                        </TouchableOpacity>
                     { scannedBars.length > 0 && (
                         <View style={{ marginTop: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, paddingVertical: 4 }}>
                             <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, textAlign: 'center', fontFamily: 'Lora' }}>

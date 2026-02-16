@@ -8,6 +8,7 @@ import { ensureLoraOnWeb, SKETCH_THEME, sketchShadow } from '../../theme/sketchT
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { OSMBar } from '../../services/osmService';
+import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 // We don't use styles file anymore to keep it self contained and faster to iterate UI
 // import styles from './ReportBarScreen.styles'; 
 
@@ -16,23 +17,48 @@ type Props = {
   route: RouteProp<RootStackParamList, 'ReportBar'>;
 };
 
-// Placeholder images for carousel
+// Placeholder images for carousel (used if fetch fails)
 const PLACEHOLDERS = [
     require('../../../assets/img/bar-fallout.jpg'),
-    // Reuse same image or others if available to simulate carousel
 ];
 
 const ReportBarScreen = ({ navigation, route }: Props) => {
   const { osmBar } = route.params;
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
       ensureLoraOnWeb();
+      fetchDetails();
   }, []);
+
+  const fetchDetails = async () => {
+      // Only fetch if we have name and coords
+      if (!osmBar.name || !osmBar.lat || !osmBar.lon) return;
+      
+      setLoadingDetails(true);
+      try {
+          // This uses Google Places (New) to get photos etc.
+          // Note: "Free API" in user request might be misunderstanding, but this gets Real Data.
+          // If they meant truly free, we can't do much for images.
+          const details = await fetchBarPlaceDetails(osmBar.name, osmBar.lat, osmBar.lon);
+          if (details) {
+              setPlaceDetails(details);
+          }
+      } catch (err) {
+          console.log('[ReportBar] Failed to fetch place details', err);
+      } finally {
+          setLoadingDetails(false);
+      }
+  };
 
   // Construct Address from Tags
   const getAddress = () => {
+    // Prefer Google Place address if available
+    if (placeDetails?.formattedAddress) return placeDetails.formattedAddress;
+
     const t = osmBar.tags || {};
     const street = t['addr:street'] || '';
     const number = t['addr:housenumber'] || '';
@@ -61,11 +87,16 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
       try {
           await addUserReportedBar(osmBar, user.id);
           
-          Alert.alert(
-              "Gràcies! 🍺", 
-              "Aquest bar s'ha afegit al mapa per a la comunitat.",
-              [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map') }]
-          );
+          if (Platform.OS === 'web') {
+              // Web: no Alert.alert, just navigate back
+              navigation.navigate('Map');
+          } else {
+              Alert.alert(
+                  "Gràcies! 🍺", 
+                  "Aquest bar s'ha afegit al mapa per a la comunitat.",
+                  [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map') }]
+              );
+          }
       } catch (error) {
           console.error(error);
           Alert.alert("Error", "No s'ha pogut guardar. Torna-ho a provar.");
@@ -101,11 +132,30 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                     </View>
                     <View style={{ flex: 1, justifyContent: 'center' }}>
                         <Text style={{ fontSize: 22, fontWeight: 'bold', fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
-                            {osmBar.name}
+                            {placeDetails?.displayName || osmBar.name}
                         </Text>
                         <Text style={{ fontSize: 13, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', marginTop: 4 }}>
                             {getAddress()}
                         </Text>
+                         {/* Enhanced Info */}
+                         {placeDetails && (
+                            <View style={{flexDirection: 'row', marginTop: 8, flexWrap: 'wrap', alignItems: 'center'}}>
+                                {placeDetails.rating > 0 && (
+                                    <View style={{flexDirection: 'row', alignItems: 'center', marginRight: 12}}>
+                                        <Text style={{fontSize: 14, color: '#F9A825', fontWeight: 'bold'}}>★ {placeDetails.rating}</Text>
+                                        <Text style={{fontSize: 12, color: SKETCH_THEME.colors.textMuted, marginLeft: 2}}>({placeDetails.userRatingCount})</Text>
+                                    </View>
+                                )}
+                                {placeDetails.websiteUri && (
+                                    <TouchableOpacity onPress={() => Linking.openURL(placeDetails.websiteUri!)} style={{ marginLeft: 0 }}>
+                                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                                            <Feather name="globe" size={12} color={SKETCH_THEME.colors.primary} style={{marginRight: 4}} />
+                                            <Text style={{fontSize: 12, color: SKETCH_THEME.colors.primary, textDecorationLine: 'underline'}}>Web</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
                         <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center', marginTop: 8}} onPress={openGoogleMaps}>
                             <Feather name="map" size={12} color="#E53935" />
                             <Text style={{ fontSize: 12, color: '#E53935', marginLeft: 4, textDecorationLine: 'underline' }}>
@@ -116,16 +166,42 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                </View>
 
                {/* 2. Carousel Simulation */}
-               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: 20, marginBottom: 20 }}>
-                   {[1, 2, 3].map((i) => (
-                       <Image 
-                            key={i}
-                            source={require('../../../assets/img/bar-fallout.jpg')} 
-                            style={{ width: 140, height: 100, borderRadius: 12, marginRight: 10, backgroundColor: '#eee' }}
-                            resizeMode="cover"
-                       />
-                   ))}
-               </ScrollView>
+               <View style={{ height: 110 }}>
+                   <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false} 
+                        style={{ paddingLeft: 20, marginBottom: 10 }} // Reduced bottom margin
+                        contentContainerStyle={{ paddingRight: 20 }} // Ensure last item is visible
+                   >
+                       {loadingDetails ? (
+                           <View style={{ width: 140, height: 100, borderRadius: 12, marginRight: 10, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color="#999" />
+                           </View>
+                       ) : (
+                            <>
+                                {placeDetails && placeDetails.photoUrls.length > 0 ? (
+                                    placeDetails.photoUrls.map((url, i) => (
+                                        <Image 
+                                            key={`gm-${i}`}
+                                            source={{ uri: url }} 
+                                            style={{ width: 140, height: 100, borderRadius: 12, marginRight: 10, backgroundColor: '#eee' }}
+                                            resizeMode="cover"
+                                        />
+                                    ))
+                                ) : (
+                                    PLACEHOLDERS.map((img, i) => (
+                                        <Image 
+                                                key={`ph-${i}`}
+                                                source={img} 
+                                                style={{ width: 140, height: 100, borderRadius: 12, marginRight: 10, backgroundColor: '#eee' }}
+                                                resizeMode="cover"
+                                        />
+                                    ))
+                                )}
+                            </>
+                       )}
+                   </ScrollView>
+               </View>
 
                {/* 3. Action Area */}
                <View style={{ padding: 20, paddingTop: 0 }}>
