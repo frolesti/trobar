@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, Im
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchService';
+import { fetchBroadcastMatchIds } from '../../services/barService';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ensureLoraOnWeb, SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 import { formatTeamNameForDisplay } from '../../utils/teamName';
@@ -21,10 +22,18 @@ const MatchesScreen = ({ navigation }: Props) => {
     const { user } = useAuth();
     const [allMatches, setAllMatches] = useState<Match[]>([]);
     const [pastMatches, setPastMatches] = useState<Match[]>([]);
-    // const [matches, setMatches] = useState<Match[]>([]); // Deprecated in favor of derived state
     const [visibleCount, setVisibleCount] = useState(20);
     const [filter, setFilter] = useState<FilterType>('ALL');
     const [selectedComp, setSelectedComp] = useState<string | null>(null);
+    
+    // Custom animation: When pushing to Map, standard. When appearing... default is slide from right.
+    // If we want "Slide from Left", we might need to adjust navigation options or assume this screen is "left" of others.
+    // React Navigation Stack treats screens linearly. To get "slide left", we usually pop().
+    // But this is the initial screen.
+    // The user issue: "When we access scroll component, we slide left BUT animation effect comes from right".
+    // This sounds like they are navigating *to* MatchesScreen and seeing it enter from the right.
+    // They want it to enter from the left?
+    // Setting gestureDirection: 'horizontal-inverted' on the screen options might help.
     
     const [loading, setLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -32,6 +41,7 @@ const MatchesScreen = ({ navigation }: Props) => {
     const isRefreshingRef = React.useRef(false);
     const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
     const [teamsMap, setTeamsMap] = useState<Record<string, { name: string, badge: string }>>({});
+    const [broadcastMatchIds, setBroadcastMatchIds] = useState<Set<string>>(new Set());
     const PAGE_SIZE = 20;
 
     // --- SCROLL MAINTENANCE FOR LOADING PAST MATCHES ---
@@ -94,7 +104,11 @@ const MatchesScreen = ({ navigation }: Props) => {
                     });
 
                 setAllMatches(sortedFuture);
-                // setMatches(sortedFuture.slice(0, PAGE_SIZE)); // Removed
+
+                // 4. Fetch broadcast data — which matches have at least one bar?
+                const allIds = sortedFuture.map(m => m.id);
+                const bcastIds = await fetchBroadcastMatchIds(allIds);
+                setBroadcastMatchIds(bcastIds);
 
             } catch (e) {
                 console.error('❌ Error loading data:', e);
@@ -199,14 +213,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
             
             if (sortedHistory.length > 0) {
-                // MARK LOADING AND CAPTURE OFFSET
                 isLoadingPastMatchesRef.current = true;
-                // Capture the current scroll offset explicitly before update
-                // Note: We rely on onScroll to keep this updated, but if we are at top (0), it's 0.
-                if (previousScrollOffsetRef.current < 0) previousScrollOffsetRef.current = 0;
-                
-                console.log('[SCROLL DEBUG] Loading past matches. Current height:', previousContentHeightRef.current);
-                
                 setPastMatches(prev => [...sortedHistory, ...prev]);
             }
         } finally {
@@ -248,28 +255,28 @@ const MatchesScreen = ({ navigation }: Props) => {
             style={{ 
                 flex: 1, 
                 backgroundColor: SKETCH_THEME.colors.bg,
-                ...Platform.select({ web: { height: '100vh' as any, display: 'flex' as any, flexDirection: 'column' as any, overflow: 'hidden' as any }, default: {} })
+                ...Platform.select({ web: { height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }, default: {} }) as any
             }}
             // {...panResponder.panHandlers}
         >
-            {/* Header - Arrow on Right */}
+            {/* Header */}
             <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderBottomWidth: 1,
-                borderBottomColor: SKETCH_THEME.colors.border,
-                backgroundColor: SKETCH_THEME.colors.uiBg,
+                paddingTop: 14,
+                paddingBottom: 10,
             }}>
                 <Text style={{ 
-                    fontSize: 20, 
-                    fontWeight: 'bold', 
-                    fontFamily: 'Lora', 
-                    color: SKETCH_THEME.colors.text 
+                    fontSize: 15, 
+                    fontWeight: '600', 
+                    fontFamily: 'Lora',
+                    letterSpacing: 0.3,
+                    color: SKETCH_THEME.colors.textMuted,
+                    textTransform: 'uppercase',
                 }}>
-                    Pròxims Partits
+                    Partits
                 </Text>
                 
                 <TouchableOpacity 
@@ -277,8 +284,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                     style={{ padding: 4 }}
                     hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
                 >
-                    {/* Arrow Right because "we come from there" (User Request) */}
-                    <Ionicons name="arrow-forward" size={24} color={SKETCH_THEME.colors.text} />
+                    <Ionicons name="arrow-forward" size={20} color={SKETCH_THEME.colors.textMuted} />
                 </TouchableOpacity>
             </View>
 
@@ -346,17 +352,29 @@ const MatchesScreen = ({ navigation }: Props) => {
             <FlatList
                 ref={flatListRef}
                 data={loading ? [] : displayedMatches}
-                style={Platform.select({ web: { flex: 1, minHeight: 0, overflowY: 'auto' } as any, default: { flex: 1 } })}
+                style={Platform.select({ web: { flex: 1, minHeight: 0 } as any, default: { flex: 1 } })}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 100 }}
                 showsVerticalScrollIndicator={true}
-                // maintainVisibleContentPosition={{
-                //     minIndexForVisible: 0,
-                //     autoscrollToTopThreshold: 10,
-                // }}
                 bounces={true}
                 alwaysBounceVertical={true}
                 overScrollMode="always"
+                onScroll={(e) => {
+                    previousScrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+                }}
+                scrollEventThrottle={16}
+                onContentSizeChange={(_w, h) => {
+                    if (isLoadingPastMatchesRef.current && previousContentHeightRef.current > 0) {
+                        const delta = h - previousContentHeightRef.current;
+                        if (delta > 0) {
+                            const newOffset = previousScrollOffsetRef.current + delta;
+                            flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                            previousScrollOffsetRef.current = newOffset;
+                        }
+                        isLoadingPastMatchesRef.current = false;
+                    }
+                    previousContentHeightRef.current = h;
+                }}
                 refreshControl={
                     <RefreshControl
                         refreshing={isRefreshing}
@@ -409,7 +427,8 @@ const MatchesScreen = ({ navigation }: Props) => {
                 renderItem={({ item }) => (
                     <MatchCard
                         match={item}
-                        onPress={() => navigation.navigate('Map')}
+                        hasBroadcast={broadcastMatchIds.has(item.id)}
+                        onPress={() => navigation.navigate('Map', { matchId: item.id })}
                     />
                 )}
             />
@@ -441,7 +460,7 @@ const EmptyState = ({ filter }: { filter: FilterType }) => (
             fontWeight: 'bold',
             fontFamily: 'Lora'
         }}>
-            No hi ha partits {filter === 'ALL' ? '' : filter === 'MASCULI' ? 'masculins' : 'femenins'} pròximament
+            No hi ha partits {filter === 'ALL' ? '' : filter === 'MASCULI' ? 'masculins' : 'femenins'} properament
         </Text>
         <Text style={{ 
             color: SKETCH_THEME.colors.textMuted, 
