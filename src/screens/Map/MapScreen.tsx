@@ -398,36 +398,59 @@ const MapScreen = () => {
         }
     }, [bars]);
 
+    // Notification Logic for Scanned Bars
+    const [showScanTip, setShowScanTip] = useState(false);
+    useEffect(() => {
+        if (isScanning) {
+            setShowScanTip(true);
+        } else if (scannedBars.length > 0) {
+            // Keep showing for 4 seconds after scan finishes
+            const timer = setTimeout(() => setShowScanTip(false), 4000);
+            return () => clearTimeout(timer);
+        } else {
+            setShowScanTip(false);
+        }
+    }, [isScanning, scannedBars.length]);
+
+
+    // Radius Change Listener for Scanned Bars
+    // If the user has scanned bars, and increases OR DECREASES the radius, automagically fetch/filter?
+    // User requested: "si hem clicat a buscar bars, i ampliem el radi de cerca, també han d'aparèixer els bars amb aquesta ampliació"
+    // AND "hi ha algun problemet quan el fem més petit" (make it smaller -> should probably filter strict to views?)
+    
+    useEffect(() => {
+        if (scannedBars.length === 0 || !centerLocation) return;
+        
+        const timer = setTimeout(() => {
+            console.log('[Map] Radius changed with active scan. Fetching more...');
+            
+            // If shrinking radius significantly, maybe we should filter out the FAR away ones 
+            // from the CURRENT view to avoid confusion?
+            // "si fem el radi més gran o més petit, també ha de retornar els bars que toqui, ja sigui més o menys."
+            // IMPLIES: If smaller, show LESS.
+            
+            // Step 1: Filter existing scanned bars by new radius (visually clean up)
+            // But allow some margin (e.g. 1.2x radius) so slight pans don't hide everything? 
+            // Or stick to strict radius? Strict radius matches user intent best.
+            
+            setScannedBars(prev => prev.filter(b => {
+                const dist = getDistanceFromLatLonInKm(centerLocation.latitude, centerLocation.longitude, b.lat, b.lon);
+                return dist <= radiusKm;
+            }));
+
+            // Step 2: Fetch new ones (in case cache has *closer* ones we missed? Unlikely but good for consistency)
+            handleManualScan(); 
+        }, 800); // 800ms debounce
+
+        return () => clearTimeout(timer);
+    }, [radiusKm]); // Only trigger when radius changes (and we have active scans)
+
     // 6. Automatic OSM Scanning REMOVED - Now Manual
     /* 
     useEffect(() => { ... } 
     */
 
-    const handleManualScan = async () => {
-        // Toggle feature: If we HAVE scanned bars near current location (overlapping), clear them.
-        // But if we moved far away, maybe we want to keep them or add new ones?
-        // User asked: "Com podríem fer perquè es guardin però no es sobreposin si canviem d'ubicació"
-        // Interpretation: Keep old ones visible, but if I search HERE, don't duplicate visually or cache logic.
-        
-        // Simplified based on user choice "Keep + Add":
-        // But we need a way to clear them too if the map gets messy.
-        // Let's make the button logic: 
-        // 1. If we have bars and user clicks -> Add more (scan current view).
-        // 2. Add a separate "Clear" button? Or long press? 
-        // 3. Or just smart merge.
-        
-        // Current implementation of button text: 
-        // "Cercant..." / "Amagar bars trobats" (if length > 0) / "Cercar bars..."
-        // If the button says "Amagar bars trobats", it clears ALL.
-        // This stops the user from "Add more".
-        
-        // Let's change the button behavior:
-        // Always allow "Search here". The "Hide" option should maybe be a small X next to it?
-        // Or if the user moves map significantly, the button resets to "Search here" allowing accumulation.
-        
-        // For now, let's Stick to the accumulation logic inside `setScannedBars` (already added above).
-        // But we need to fix the BUTTON TEXT logic so it doesn't force "Hide" immediately.
-        
+    async function handleManualScan() {
         if (!centerLocation) return;
         setIsScanning(true);
         try {
@@ -436,6 +459,7 @@ const MapScreen = () => {
             // Deduplicate against FIRESTORE bars
             const newScanned = osmData.filter(osmItem => {
                 const alreadyExists = bars.some(b => {
+                     // Check by ID or proximity
                      if (b.id === osmItem.id) return true;
                      const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
                      return dist < 0.05; 
@@ -443,7 +467,7 @@ const MapScreen = () => {
                 return !alreadyExists;
             });
             
-            // Deduplicate against ALREADY SCANNED bars
+            // Deduplicate against already scanned bars (accumulation)
             setScannedBars(prev => {
                 const combined = [...prev, ...newScanned];
                 // Unique by ID
@@ -458,6 +482,15 @@ const MapScreen = () => {
         }
     };
 
+    // Toggle: Button calls this
+    const handleScanToggle = () => {
+        if (scannedBars.length > 0) {
+            setScannedBars([]); // Hide/Clear
+        } else {
+            handleManualScan(); // Search
+        }
+    };
+            
     const clearScannedBars = () => setScannedBars([]);
         
     // 3. Load Matches for Banner
@@ -647,7 +680,7 @@ const MapScreen = () => {
     }, [userLocation]);
 
     // --- WEB HELPERS ---
-    const initWebMap = () => {
+    function initWebMap() {
         if (!centerLocation) return;
         if (!window.google || !window.google.maps) {
             console.error("Cannot init map: SDK not loaded");
@@ -698,7 +731,7 @@ const MapScreen = () => {
         updateWebMapVisuals(filteredBars); // Initial render
     };
 
-    const initWebAutocomplete = () => {
+    function initWebAutocomplete() {
         if (!autocompleteInputRef.current) return;
         if (autocompleteInputRef.current.classList.contains('pac-target-input')) return;
 
@@ -1103,7 +1136,7 @@ const MapScreen = () => {
                         {/* Scanned/Found Bars Action */}
                         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10}}>
                             <TouchableOpacity 
-                                onPress={handleManualScan}
+                                onPress={handleScanToggle}
                                 disabled={isScanning}
                                 style={{
                                     backgroundColor: SKETCH_THEME.colors.bg,
@@ -1116,14 +1149,19 @@ const MapScreen = () => {
                                     alignItems: 'center',
                                     ...Platform.select({
                                         web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' },
-                                        default: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }
+                                        ios: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4 },
+                                        android: { elevation: 4 }
                                     })
                                 }}
                             >
                                 {isScanning ? (
                                     <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
                                 ) : (
-                                    <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                                    scannedBars.length > 0 ? (
+                                        <Feather name="eye-off" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                                    ) : (
+                                        <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                                    )
                                 )}
                                 <Text style={{
                                     color: SKETCH_THEME.colors.primary, 
@@ -1131,32 +1169,19 @@ const MapScreen = () => {
                                     fontFamily: 'Lora',
                                     fontSize: 12
                                 }}>
-                                    {isScanning ? 'Cercant bars...' : 'Cercar bars en aquesta zona'}
+                                    {isScanning ? 'Cercant bars...' : (
+                                        scannedBars.length > 0 ? 'Amagar bars trobats' : 'Cercar bars en aquesta zona'
+                                    )}
                                 </Text>
                             </TouchableOpacity>
 
-                            {/* Clear Button - Only visible if we have results */}
-                            {scannedBars.length > 0 && (
-                                <TouchableOpacity 
-                                    onPress={clearScannedBars}
-                                    style={{
-                                        marginLeft: 8,
-                                        backgroundColor: '#fff',
-                                        width: 36, height: 36,
-                                        borderRadius: 18,
-                                        justifyContent: 'center', alignItems: 'center',
-                                        borderWidth: 1, borderColor: '#ddd',
-                                        ...Platform.select({
-                                            web: { boxShadow: '1px 1px 4px rgba(0,0,0,0.1)' },
-                                            default: { shadowColor: 'black', shadowOffset: {width: 1, height: 1}, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
-                                        })
-                                    }}
-                                >
-                                    <Feather name="x" size={18} color="#EB5757" />
-                                </TouchableOpacity>
-                            )}
+                            {/* Only show "Add more" if we already have some but maybe moved? 
+                                Actually user wanted a toggle. So if we have bars, the button hides them. 
+                                But what if we want to search anew? 
+                                The radius slider update handles the "expand search" case.
+                            */}
                         </View>
-                    { scannedBars.length > 0 && (
+                    { (showScanTip) && (
                         <View style={{ marginTop: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, paddingVertical: 4 }}>
                             <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, textAlign: 'center', fontFamily: 'Lora' }}>
                                 <Text style={{fontWeight: 'bold'}}>Gris</Text> = Bars sense confirmar. Clica'ls per avisar si donen partits!
@@ -1354,7 +1379,8 @@ const MapScreen = () => {
                                     padding: 14,
                                     ...Platform.select({
                                         web: { boxShadow: '0px 4px 20px rgba(0,0,0,0.15)' },
-                                        default: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.15, shadowRadius: 10, elevation: 12 }
+                                        ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.15, shadowRadius: 10 },
+                                        android: { elevation: 12 }
                                     })
                                 }}>
                                     {/* Fixed Close Button — outside ScrollView */}
@@ -1420,7 +1446,8 @@ const MapScreen = () => {
                             alignItems: 'center',
                             ...Platform.select({
                                 web: { boxShadow: '0px -2px 10px rgba(0,0,0,0.1)' },
-                                default: { shadowColor: 'black', shadowOffset: {width: 0, height: -2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 8 }
+                                ios: { shadowColor: 'black', shadowOffset: {width: 0, height: -2}, shadowOpacity: 0.1, shadowRadius: 4 },
+                                android: { elevation: 8 }
                             })
                         }}>
                         <TouchableOpacity

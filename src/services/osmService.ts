@@ -17,13 +17,15 @@ const CACHE_GRID_SIZE = 0.01; // ~1km
 const cache: Record<string, { timestamp: number, data: OSMBar[] }> = {};
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
-const getGridCell = (lat: number, lon: number) => {
-    return `${Math.floor(lat / CACHE_GRID_SIZE)},${Math.floor(lon / CACHE_GRID_SIZE)}`;
+const getGridCell = (lat: number, lon: number, radius: number) => {
+    // Round lat/lon to ~100m precision (3 decimals) to group nearby searches
+    // Include radius to differentiate scope.
+    return `${lat.toFixed(3)},${lon.toFixed(3)},r:${radius.toFixed(1)}`;
 };
 
 export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: number): Promise<OSMBar[]> => {
-    // Check Cache first
-    const gridKey = getGridCell(lat, lon);
+    // Check Cache first with stricter key
+    const gridKey = getGridCell(lat, lon, radiusKm);
     const cached = cache[gridKey];
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
         console.log('[OSM] Returned from cache:', gridKey);

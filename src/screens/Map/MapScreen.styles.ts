@@ -233,7 +233,8 @@ export default StyleSheet.create({
         borderColor: SKETCH_THEME.colors.text,
         ...Platform.select({
             web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)' },
-            default: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 }
+            ios: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3 },
+            android: { elevation: 2 }
         })
     },
     matchTitle: { fontSize: 14, color: SKETCH_THEME.colors.text, marginBottom: 8, fontFamily: 'Lora', fontWeight: 'bold' },
