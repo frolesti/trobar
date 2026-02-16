@@ -13,7 +13,7 @@ import { OSMBar } from '../services/osmService';
 // Define the root stack param list
 export type RootStackParamList = {
   Startup: undefined;
-  Map: undefined;
+  Map: { matchId?: string } | undefined;
   Matches: undefined;
   Login: undefined;
   Profile: undefined;
@@ -55,7 +55,16 @@ export default function AppNavigator() {
       >
         <Stack.Screen name="Startup" component={StartupScreen} options={{ title: 'troBar' }} />
         <Stack.Screen name="Map" component={MapScreen} options={{ title: 'troBar' }} />
-        <Stack.Screen name="Matches" component={MatchesScreen} options={{ title: 'troBar' }} />
+        <Stack.Screen 
+          name="Matches" 
+          component={MatchesScreen} 
+          options={{ 
+            title: 'troBar',
+            // When navigating TO Matches, slide from Left (as if it was on the left)
+            gestureDirection: 'horizontal-inverted',
+            cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS
+          }} 
+        />
         <Stack.Screen 
           name="Profile" 
           component={ProfileScreen} 
