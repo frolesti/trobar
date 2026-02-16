@@ -9,6 +9,8 @@ type MatchCardProps = {
     match: Match;
     onPress?: () => void;
     compact?: boolean; // For Map Banner usage
+    /** Si true, almenys un bar emet aquest partit → mostra botó 'Trobar bars' */
+    hasBroadcast?: boolean;
 };
 
 const getTeam = (key: any) => {
@@ -32,7 +34,7 @@ const LOGO_FALLBACKS: Record<string, string> = {
     'SCDR': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Supercopa_de_Espa%C3%B1a_logo_2020.svg/512px-Supercopa_de_Espa%C3%B1a_logo_2020.svg.png'
 };
 
-const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
+const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: MatchCardProps) => {
 
     const homeTeam = getTeam(match.homeTeam);
     const awayTeam = getTeam(match.awayTeam);
@@ -68,10 +70,19 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
         // @ts-ignore
         const d = match.date instanceof Date ? match.date : (match.date && match.date.toDate ? match.date.toDate() : new Date(match.date));
         
-        const isToday = new Date().toDateString() === d.toDateString();
+        const now = new Date();
+        const isToday = now.toDateString() === d.toDateString();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const isTomorrow = tomorrow.toDateString() === d.toDateString();
         
-        // Compact/Map style vs Full list style
-        if (compact && isToday) return `AVUI ${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+        const timeStr = `${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+
+        if (compact) {
+            if (isToday) return `Avui, ${timeStr}`;
+            if (isTomorrow) return `Demà, ${timeStr}`;
+            return d.toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short' }) + `, ${timeStr}`;
+        }
 
         return d.toLocaleDateString('ca-ES', { 
             weekday: 'short', 
@@ -95,11 +106,12 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
         
         // Scheduled
         if (compLogo) {
+             const logoSize = compact ? 18 : 28;
              return (
                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                     <Image 
                         source={{ uri: compLogo }} 
-                        style={{ width: 28, height: 28 }} 
+                        style={{ width: logoSize, height: logoSize }} 
                         resizeMode="contain"
                     />
                  </View>
@@ -118,15 +130,16 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
     };
 
     const cardStyle = compact ? {
-        backgroundColor: SKETCH_THEME.colors.card, // White/Card color like matches page
-        borderRadius: 16,
-        padding: 12,
+        backgroundColor: SKETCH_THEME.colors.card,
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
         marginHorizontal: Platform.OS === 'web' ? 0 : 4,
-        marginTop: 10,
+        marginTop: 8,
         borderWidth: 1,
         borderColor: SKETCH_THEME.colors.border,
         ...Platform.select({
-            web: { boxShadow: '0 2px 8px rgba(0,0,0,0.04)' },
+            web: { boxShadow: '0 2px 6px rgba(0,0,0,0.04)' },
             default: sketchShadow()
         })
     } : {
@@ -145,6 +158,59 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
     const textColor = SKETCH_THEME.colors.text;
     const subTextColor = SKETCH_THEME.colors.textMuted;
 
+    if (compact) {
+        return (
+            <View style={cardStyle}>
+                {/* Header: "Proper partit · Avui, 21:00" */}
+                <Text style={{ 
+                    fontSize: 10, fontWeight: '600',
+                    color: SKETCH_THEME.colors.primary, fontFamily: 'Lora', 
+                    letterSpacing: 0.3, textAlign: 'center', marginBottom: 10
+                }}>
+                    Proper partit  ·  {formatDate(match)}
+                </Text>
+
+                {/* Teams Row — compact */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* HOME */}
+                    <View style={{ alignItems: 'center', width: 70 }}>
+                        {homeTeam.badge ? (
+                            <Image source={{ uri: homeTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
+                        ) : (
+                            <Ionicons name="shield-outline" size={24} color={subTextColor} style={{ marginBottom: 4 }} />
+                        )}
+                        <Text numberOfLines={1} style={{ 
+                            textAlign: 'center', fontWeight: 'bold', fontSize: 11, 
+                            color: textColor, fontFamily: 'Lora'
+                        }}>
+                            {formatTeamNameForDisplay(homeTeam.name)}
+                        </Text>
+                    </View>
+
+                    {/* VS / SCORE */}
+                    <View style={{ marginHorizontal: 8, alignItems: 'center' }}>
+                        <StatusBadge />
+                    </View>
+
+                    {/* AWAY */}
+                    <View style={{ alignItems: 'center', width: 70 }}>
+                        {awayTeam.badge ? (
+                            <Image source={{ uri: awayTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
+                        ) : (
+                            <Ionicons name="shield-outline" size={24} color={subTextColor} style={{ marginBottom: 4 }} />
+                        )}
+                        <Text numberOfLines={1} style={{ 
+                            textAlign: 'center', fontWeight: 'bold', fontSize: 11, 
+                            color: textColor, fontFamily: 'Lora'
+                        }}>
+                            {formatTeamNameForDisplay(awayTeam.name)}
+                        </Text>
+                    </View>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <View style={cardStyle}>
             {/* Header: Comp + Date */}
@@ -153,7 +219,7 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
                 justifyContent: 'space-between', 
                 marginBottom: 16,
                 paddingBottom: 8,
-                borderBottomWidth: compact ? 0 : 1,
+                borderBottomWidth: 1,
                 borderBottomColor: SKETCH_THEME.colors.bg
             }}>
                 <Text style={{ 
@@ -206,8 +272,8 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
                 </View>
             </View>
 
-            {/* Action Button (Only explicit or non-compact matches) */}
-            {!compact && match.status !== 'finished' && onPress && (
+            {/* Action Button — only when at least one bar broadcasts this match */}
+            {hasBroadcast && match.status !== 'finished' && onPress && (
                  <TouchableOpacity
                     style={{
                         backgroundColor: isFemenino ? '#9C27B0' : SKETCH_THEME.colors.primary,
@@ -227,14 +293,6 @@ const MatchCard = ({ match, onPress, compact = false }: MatchCardProps) => {
                 </TouchableOpacity>
             )}
 
-            {/* Compact Indicator (e.g. "Next Match") - Optional */}
-            {compact && (
-                <View style={{ marginTop: 8, alignItems: 'center' }}>
-                     <Text style={{ color: SKETCH_THEME.colors.primary, fontSize: 10, fontWeight: 'bold', fontFamily: 'Lora', textTransform: 'uppercase' }}>
-                         Pròxim Partit
-                     </Text>
-                </View>
-            )}
         </View>
     );
 };
