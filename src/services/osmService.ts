@@ -12,7 +12,24 @@ const OVERPASS_SERVERS = [
 // Debounce helper to avoid spamming the public API
 let lastController: AbortController | null = null;
 
+// Caching system: stores results by grid cell (approx 1km)
+const CACHE_GRID_SIZE = 0.01; // ~1km
+const cache: Record<string, { timestamp: number, data: OSMBar[] }> = {};
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+const getGridCell = (lat: number, lon: number) => {
+    return `${Math.floor(lat / CACHE_GRID_SIZE)},${Math.floor(lon / CACHE_GRID_SIZE)}`;
+};
+
 export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: number): Promise<OSMBar[]> => {
+    // Check Cache first
+    const gridKey = getGridCell(lat, lon);
+    const cached = cache[gridKey];
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+        console.log('[OSM] Returned from cache:', gridKey);
+        return cached.data;
+    }
+
     // We strictly use the user's radius now, up to a reasonable safety limit of 5km.
     const queryRadiusMeters = Math.min(radiusKm * 1000, 5000); 
 
@@ -68,6 +85,8 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
                     tags: el.tags || {} 
                 }));
             
+            // Store cache
+            cache[gridKey] = { timestamp: Date.now(), data: bars };
             return bars; // Success! Return immediately
 
         } catch (error: any) {

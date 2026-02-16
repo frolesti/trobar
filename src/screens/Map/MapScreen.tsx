@@ -404,35 +404,61 @@ const MapScreen = () => {
     */
 
     const handleManualScan = async () => {
-        // Toggle feature: If we already have scanned bars, clear them.
-        if (scannedBars.length > 0) {
-            setScannedBars([]);
-            return;
-        }
-
+        // Toggle feature: If we HAVE scanned bars near current location (overlapping), clear them.
+        // But if we moved far away, maybe we want to keep them or add new ones?
+        // User asked: "Com podríem fer perquè es guardin però no es sobreposin si canviem d'ubicació"
+        // Interpretation: Keep old ones visible, but if I search HERE, don't duplicate visually or cache logic.
+        
+        // Simplified based on user choice "Keep + Add":
+        // But we need a way to clear them too if the map gets messy.
+        // Let's make the button logic: 
+        // 1. If we have bars and user clicks -> Add more (scan current view).
+        // 2. Add a separate "Clear" button? Or long press? 
+        // 3. Or just smart merge.
+        
+        // Current implementation of button text: 
+        // "Cercant..." / "Amagar bars trobats" (if length > 0) / "Cercar bars..."
+        // If the button says "Amagar bars trobats", it clears ALL.
+        // This stops the user from "Add more".
+        
+        // Let's change the button behavior:
+        // Always allow "Search here". The "Hide" option should maybe be a small X next to it?
+        // Or if the user moves map significantly, the button resets to "Search here" allowing accumulation.
+        
+        // For now, let's Stick to the accumulation logic inside `setScannedBars` (already added above).
+        // But we need to fix the BUTTON TEXT logic so it doesn't force "Hide" immediately.
+        
         if (!centerLocation) return;
         setIsScanning(true);
         try {
             const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, radiusKm);
             
-            // Deduplicate: filter out OSM bars that already exist in Firestore
+            // Deduplicate against FIRESTORE bars
             const newScanned = osmData.filter(osmItem => {
                 const alreadyExists = bars.some(b => {
-                    // Match by ID (OSM ID used as doc ID) or by proximity
-                    if (b.id === osmItem.id) return true;
-                    const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
-                    return dist < 0.05; // 50 meters
+                     if (b.id === osmItem.id) return true;
+                     const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
+                     return dist < 0.05; 
                 });
                 return !alreadyExists;
             });
+            
+            // Deduplicate against ALREADY SCANNED bars
+            setScannedBars(prev => {
+                const combined = [...prev, ...newScanned];
+                // Unique by ID
+                const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+                return unique;
+            });
 
-            setScannedBars(newScanned);
         } catch (e) {
             console.error(e);
         } finally {
             setIsScanning(false);
         }
     };
+
+    const clearScannedBars = () => setScannedBars([]);
         
     // 3. Load Matches for Banner
     useEffect(() => {
@@ -1075,42 +1101,61 @@ const MapScreen = () => {
                  <>
                     {renderRadiusSlider()}
                         {/* Scanned/Found Bars Action */}
-                        <TouchableOpacity 
-                            onPress={handleManualScan}
-                            disabled={isScanning}
-                            style={{
-                                marginTop: 10,
-                                backgroundColor: isScanning || scannedBars.length > 0 ? SKETCH_THEME.colors.bg : SKETCH_THEME.colors.bg,
-                                borderWidth: 2, 
-                                borderColor: scannedBars.length > 0 ? SKETCH_THEME.colors.textMuted : SKETCH_THEME.colors.primary,
-                                borderRadius: 20,
-                                paddingVertical: 8,
-                                paddingHorizontal: 16,
-                                alignSelf: 'center',
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                ...Platform.select({
-                                    web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' },
-                                    default: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }
-                                })
-                            }}
-                        >
-                             {isScanning ? (
-                                 <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-                             ) : scannedBars.length > 0 ? (
-                                 <Feather name="x-circle" size={16} color={SKETCH_THEME.colors.textMuted} style={{marginRight: 8}} />
-                             ) : (
-                                 <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-                             )}
-                             <Text style={{
-                                 color: scannedBars.length > 0 ? SKETCH_THEME.colors.textMuted : SKETCH_THEME.colors.primary, 
-                                 fontWeight: 'bold', 
-                                 fontFamily: 'Lora',
-                                 fontSize: 12
-                             }}>
-                                 {isScanning ? 'Cercant bars...' : (scannedBars.length > 0 ? 'Amagar bars trobats' : 'Cercar bars en aquesta zona')}
-                             </Text>
-                        </TouchableOpacity>
+                        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10}}>
+                            <TouchableOpacity 
+                                onPress={handleManualScan}
+                                disabled={isScanning}
+                                style={{
+                                    backgroundColor: SKETCH_THEME.colors.bg,
+                                    borderWidth: 2, 
+                                    borderColor: SKETCH_THEME.colors.primary,
+                                    borderRadius: 20,
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 16,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    ...Platform.select({
+                                        web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' },
+                                        default: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 }
+                                    })
+                                }}
+                            >
+                                {isScanning ? (
+                                    <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                                ) : (
+                                    <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
+                                )}
+                                <Text style={{
+                                    color: SKETCH_THEME.colors.primary, 
+                                    fontWeight: 'bold', 
+                                    fontFamily: 'Lora',
+                                    fontSize: 12
+                                }}>
+                                    {isScanning ? 'Cercant bars...' : 'Cercar bars en aquesta zona'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            {/* Clear Button - Only visible if we have results */}
+                            {scannedBars.length > 0 && (
+                                <TouchableOpacity 
+                                    onPress={clearScannedBars}
+                                    style={{
+                                        marginLeft: 8,
+                                        backgroundColor: '#fff',
+                                        width: 36, height: 36,
+                                        borderRadius: 18,
+                                        justifyContent: 'center', alignItems: 'center',
+                                        borderWidth: 1, borderColor: '#ddd',
+                                        ...Platform.select({
+                                            web: { boxShadow: '1px 1px 4px rgba(0,0,0,0.1)' },
+                                            default: { shadowColor: 'black', shadowOffset: {width: 1, height: 1}, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
+                                        })
+                                    }}
+                                >
+                                    <Feather name="x" size={18} color="#EB5757" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     { scannedBars.length > 0 && (
                         <View style={{ marginTop: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, paddingVertical: 4 }}>
                             <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, textAlign: 'center', fontFamily: 'Lora' }}>
