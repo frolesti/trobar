@@ -72,7 +72,7 @@ export default function AppNavigator() {
         />
         <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: 'Reclamar Negoci', headerBackTitleVisible: false, headerShadowVisible: false, headerStyle: { backgroundColor: '#F0F7F4' } }} />
 
-        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'troBar', presentation: 'transparentModal', headerShown: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
+        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'troBar', presentation: 'transparentModal', headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
         
         <Stack.Screen 
           name="Login" 
