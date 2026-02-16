@@ -1,13 +1,14 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Dimensions, Alert, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator } from 'react-native';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { Feather, Ionicons } from '@expo/vector-icons'; // Import Vector Icons
-import { fetchBars } from '../../services/barService';
+import { fetchBars, fetchBarsForMatch } from '../../services/barService';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { Bar } from '../../data/dummyData';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../../utils/GoogleMaps';
 import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
 import { CUSTOM_MAP_STYLE } from '../../theme/mapStyle';
@@ -18,6 +19,9 @@ import { Picker } from '@react-native-picker/picker';
 import styles from './MapScreen.styles';
 import { formatTeamNameForDisplay } from '../../utils/teamName';
 import MatchCard from '../../components/MatchCard';
+import BarDetailCard from '../../components/BarDetailCard';
+import BarListItem from '../../components/BarListItem';
+import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 
 // DeclaraciÃ³ global per a TypeScript (Google Maps Web)
 declare global {
@@ -83,6 +87,8 @@ if (Platform.OS === 'web') {
 const MapScreen = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const navigation = useNavigation<any>();
+    const route = useRoute<RouteProp<RootStackParamList, 'Map'>>();
+    const matchIdFromNav = route.params?.matchId ?? null;
     
     // Animations for Popup Effects
     const settingsAnim = useRef(new Animated.Value(0)).current;
@@ -113,6 +119,8 @@ const MapScreen = () => {
     const [nextMatch, setNextMatch] = useState<Match | null>(null);
     
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
+    const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
+    const [loadingPlaceDetails, setLoadingPlaceDetails] = useState(false);
     const [isAvatarError, setIsAvatarError] = useState(false);
 
     // Force local placeholder if a remote image fails to load
@@ -135,12 +143,16 @@ const MapScreen = () => {
     const centerMarkerRef = useRef<any>(null);
     const autocompleteInputRef = useRef<any>(null);
     const polylineRef = useRef<any>(null);
+    const userMarkerRef = useRef<any>(null);
 
     // Refs (Native)
     const mapRefNative = useRef<any>(null);
     
     // Instruction Animation
     const instructionOpacity = useRef(new Animated.Value(1)).current;
+    const bubbleScale = useRef(new Animated.Value(0)).current;
+    const bubbleOpacity = useRef(new Animated.Value(0)).current;
+    const [bubbleReady, setBubbleReady] = useState(false);
 
     // Responsive
     const { width, height } = useWindowDimensions();
@@ -242,15 +254,23 @@ const MapScreen = () => {
         })();
     }, []);
 
-    // 2. Load Bars
-    useEffect(() => {
-        const loadInitialData = async () => {
-            // Load Bars
+    // 2. Load Bars (filtered by matchId if navigated from Matches page)
+    // Reload every time the screen gains focus (e.g. after reporting a bar)
+    const loadBars = useCallback(async () => {
+        if (matchIdFromNav) {
+            const matchBars = await fetchBarsForMatch(matchIdFromNav);
+            setBars(matchBars);
+        } else {
             const firestoreBars = await fetchBars();
             setBars(firestoreBars);
-        };
-        loadInitialData();
-    }, []);
+        }
+    }, [matchIdFromNav]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadBars();
+        }, [loadBars])
+    );
 
     // 3. Web Specific Initialization (Google Maps JS)
     useEffect(() => {
@@ -310,7 +330,7 @@ const MapScreen = () => {
             
             if (apiKey) {
                 // Afegim 'marker' per utilitzar AdvancedMarkerElement i evitar warnings
-                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,marker&loading=async`;
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,marker`;
                 script.async = true;
                 script.defer = true;
                 script.onload = loadMapAndAutocomplete;
@@ -321,11 +341,34 @@ const MapScreen = () => {
         }
     }, [centerLocation]); 
 
-    // 4. Filtering Logic (distance-only)
+    // 4. Filtering Logic (distance-only, but bypass distance when navigated with matchId)
      useEffect(() => {
         if (!centerLocation) return; // Wait for location
 
-        // Filter Logic
+        if (matchIdFromNav) {
+            // When navigated from a match, show ALL broadcasting bars regardless of distance
+            setFilteredBars(bars);
+
+            // Auto-select the nearest bar
+            if (bars.length > 0) {
+                let nearest = bars[0];
+                let nearestDist = Infinity;
+                bars.forEach(bar => {
+                    const dist = getDistanceFromLatLonInKm(
+                        centerLocation.latitude, centerLocation.longitude,
+                        bar.latitude, bar.longitude
+                    );
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = bar;
+                    }
+                });
+                setSelectedBar(nearest);
+            }
+            return;
+        }
+
+        // Normal mode: filter by distance
         const nearbyBars = bars.filter(bar => {
             const dist = getDistanceFromLatLonInKm(
                 centerLocation.latitude, 
@@ -338,9 +381,24 @@ const MapScreen = () => {
             return true;
         });
         setFilteredBars(nearbyBars);
-    }, [centerLocation, radiusKm, bars]);
+    }, [centerLocation, radiusKm, bars, matchIdFromNav]);
 
-    // 5. Automatic OSM Scanning REMOVED - Now Manual
+    // 5. Clean up scannedBars when bars reload (remove already-registered ones)
+    useEffect(() => {
+        if (bars.length === 0 || scannedBars.length === 0) return;
+        const cleaned = scannedBars.filter(osmItem => {
+            return !bars.some(b => {
+                if (b.id === osmItem.id) return true;
+                const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
+                return dist < 0.05;
+            });
+        });
+        if (cleaned.length !== scannedBars.length) {
+            setScannedBars(cleaned);
+        }
+    }, [bars]);
+
+    // 6. Automatic OSM Scanning REMOVED - Now Manual
     /* 
     useEffect(() => { ... } 
     */
@@ -351,9 +409,11 @@ const MapScreen = () => {
         try {
             const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, radiusKm);
             
-            // Deduplicate
+            // Deduplicate: filter out OSM bars that already exist in Firestore
             const newScanned = osmData.filter(osmItem => {
                 const alreadyExists = bars.some(b => {
+                    // Match by ID (OSM ID used as doc ID) or by proximity
+                    if (b.id === osmItem.id) return true;
                     const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
                     return dist < 0.05; // 50 meters
                 });
@@ -404,22 +464,6 @@ const MapScreen = () => {
         return () => { isMounted = false; };
     }, []);
 
-    // RENDER HELPERS
-    const renderNextMatchBanner = () => {
-        if (!nextMatch) return null;
-        
-        return (
-             <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
-                 {/* Reusing unified MatchCard component for visual consistency */}
-                <MatchCard 
-                    match={nextMatch} 
-                    compact={true} 
-                    onPress={() => {}} // No action needed on banner itself 
-                />
-             </View>
-        );
-    };
-
     // 4. Update Map Visuals & Animation
     useEffect(() => {
         // Animation: Hide bottom sheet if 0 bars, Slide up/bounce if > 0
@@ -449,11 +493,15 @@ const MapScreen = () => {
     }, [filteredBars, isDesktop, bottomSheetTranslateY]); // Added dependencies properly
 
 
-    // 5. Selected Bar Animation (Synced)
+    // 5. Selected Bar Logic (Synced)
     useEffect(() => {
-         // AnimaciÃ³ del BottomSheet
+         // Reset bubble state
+         setBubbleReady(false);
+         bubbleScale.setValue(0);
+         bubbleOpacity.setValue(0);
+
+         // Animació del BottomSheet
          if (Platform.OS !== 'web' || !isDesktop) {
-            // MÃ²bil o Native
             if (selectedBar) {
                 const target = Math.min(Math.max(380, height * 0.58), height * 0.78);
                 Animated.timing(bottomSheetHeight, {
@@ -463,9 +511,7 @@ const MapScreen = () => {
                 }).start();
                 lastHeight.current = target;
             } else {
-                // If closing details but we have results, go to list view (25%) instead of minimizing
                 const hasResults = filteredBars.length > 0;
-                // Reduced from 45% -> 25% (and min 300 -> 160) to be less intrusive initially
                 const target = hasResults ? Math.max(160, height * 0.25) : 120;
                 
                 Animated.timing(bottomSheetHeight, {
@@ -477,27 +523,96 @@ const MapScreen = () => {
             }
          }
 
-         // Web Route
+         // Web: Center bar on map + fetch route
          if (Platform.OS === 'web') {
-             if (selectedBar) fetchWebRoute(selectedBar);
-             else {
+             if (selectedBar) {
+                 if (googleMapRef.current) {
+                     const map = googleMapRef.current;
+                     const targetZoom = Math.max(map.getZoom() || 15, 16);
+                     map.setZoom(targetZoom);
+                     // Center exactly on the bar
+                     map.panTo({ lat: selectedBar.latitude, lng: selectedBar.longitude });
+                 }
+                 fetchWebRoute(selectedBar);
+             } else {
                  setRouteInfo(null);
                  if (polylineRef.current) polylineRef.current.setMap(null);
              }
          }
 
-         // Native Map Centering
+         // Native: Center exactly on the bar
          if (Platform.OS !== 'web' && selectedBar && mapRefNative.current) {
              const newRegion = {
-                latitude: selectedBar.latitude - 0.002, 
+                latitude: selectedBar.latitude,
                 longitude: selectedBar.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
+                latitudeDelta: 0.008,
+                longitudeDelta: 0.008,
              };
              mapRefNative.current.animateToRegion(newRegion, 500);
          }
 
+         // Google Places Details — fetch, then mark bubble ready
+         if (selectedBar) {
+             setPlaceDetails(null);
+             setLoadingPlaceDetails(true);
+             const cleanName = getCleanBarName(selectedBar.name);
+             fetchBarPlaceDetails(cleanName, selectedBar.latitude, selectedBar.longitude)
+                 .then((details) => setPlaceDetails(details))
+                 .catch(() => setPlaceDetails(null))
+                 .finally(() => {
+                     setLoadingPlaceDetails(false);
+                     // Wait a bit for the map pan to settle, then show bubble
+                     setTimeout(() => setBubbleReady(true), 350);
+                 });
+         } else {
+             setPlaceDetails(null);
+         }
+
     }, [selectedBar, isDesktop]);
+
+    // 5b. Animate bubble in when content is ready
+    useEffect(() => {
+        if (!bubbleReady || !selectedBar) return;
+        Animated.parallel([
+            Animated.spring(bubbleScale, {
+                toValue: 1,
+                friction: 9,
+                tension: 50,
+                useNativeDriver: true,
+            }),
+            Animated.timing(bubbleOpacity, {
+                toValue: 1,
+                duration: 120,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    }, [bubbleReady]);
+
+    // 6. Update user marker on web when userLocation becomes available after map init
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !googleMapRef.current || !userLocation) return;
+        
+        // Center map on user's actual position (map may have initialized with default Barcelona center)
+        if (!selectedBar) {
+            googleMapRef.current.panTo({ lat: userLocation.coords.latitude, lng: userLocation.coords.longitude });
+        }
+        
+        if (userMarkerRef.current) userMarkerRef.current.setMap(null);
+        userMarkerRef.current = new window.google.maps.Marker({
+            position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
+            map: googleMapRef.current,
+            title: "La teva ubicació",
+            zIndex: 999,
+            icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 10,
+                fillColor: '#2196F3',
+                fillOpacity: 1,
+                strokeColor: 'white',
+                strokeWeight: 3,
+            }
+        });
+    }, [userLocation]);
 
     // --- WEB HELPERS ---
     const initWebMap = () => {
@@ -530,7 +645,8 @@ const MapScreen = () => {
 
         // User Marker (Legacy Marker for JSON styles compatibility)
         if (userLocation) {
-            new window.google.maps.Marker({
+            if (userMarkerRef.current) userMarkerRef.current.setMap(null);
+            userMarkerRef.current = new window.google.maps.Marker({
                 position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
                 map: map,
                 title: "La teva ubicació", 
@@ -546,7 +662,7 @@ const MapScreen = () => {
             });
         }
         
-        map.addListener("click", () => { setSelectedBar(null); Keyboard.dismiss(); });
+        map.addListener("click", () => { closeBarBubble(); Keyboard.dismiss(); });
         updateWebMapVisuals(filteredBars); // Initial render
     };
 
@@ -728,6 +844,19 @@ const MapScreen = () => {
                     : `${Math.floor(durationSeconds/60)} min`;
                 const distanceKm = (route.distanceMeters / 1000).toFixed(1) + ' km';
                 setRouteInfo({ distance: distanceKm, duration: durationText });
+
+                // Zoom to fit route bounds — only on desktop
+                // On mobile, we keep the bar centered and let the user see the route from there
+                if (isDesktop && googleMapRef.current && decodedPath.length > 0) {
+                    const bounds = new window.google.maps.LatLngBounds();
+                    decodedPath.forEach((point: any) => bounds.extend(point));
+                    googleMapRef.current.fitBounds(bounds, {
+                        top: 60,
+                        bottom: 80,
+                        left: 420,
+                        right: 30,
+                    });
+                }
             }
         }, 'fetchWebRoute');
     };
@@ -754,16 +883,11 @@ const MapScreen = () => {
     };
 
      const openExternalMaps = (bar: Bar) => {
-        // Clean the name in case it has the legacy number suffix (e.g. "Bar Name 12")
-        // We use the Name for destination because our database coordinates are approximate (randomized),
-        // so searching by name gives users the actual real-world location of the venue.
-        const cleanName = getCleanBarName(bar.name);
-        const destinationQuery = encodeURIComponent(`${cleanName}, Barcelona, Spain`);
+        // Use coordinates as destination to match the in-app route exactly
+        const destination = `${bar.latitude},${bar.longitude}`;
         
-        let url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}&travelmode=walking`;
+        let url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=walking`;
 
-        // Afegim l'origen explÃ­citament per assegurar que Google Maps fa servir la mateixa ubicaciÃ³ que l'app
-        // AixÃ² soluciona possibles discrepÃ ncies si el GPS del navegador va amb retard
         if (userLocation) {
             url += `&origin=${userLocation.coords.latitude},${userLocation.coords.longitude}`;
         } else if (centerLocation) {
@@ -773,73 +897,47 @@ const MapScreen = () => {
         Linking.openURL(url);
     };
 
+    const closeBarBubble = () => {
+        Animated.parallel([
+            Animated.timing(bubbleScale, {
+                toValue: 0,
+                duration: 200,
+                easing: Easing.in(Easing.back(2)),
+                useNativeDriver: true,
+            }),
+            Animated.timing(bubbleOpacity, {
+                toValue: 0,
+                duration: 150,
+                useNativeDriver: true,
+            }),
+        ]).start(() => {
+            setSelectedBar(null);
+            setBubbleReady(false);
+        });
+    };
+
     // --- RENDERS ---
 
     const renderContentPanel = () => {
          if (selectedBar) {
+            const distanceText = routeInfo 
+                ? `${routeInfo.duration} caminant (${routeInfo.distance})`
+                : `A ${getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, selectedBar.latitude, selectedBar.longitude).toFixed(1)} km`;
+
             return (
-                <View style={styles.detailContainer}>
-                    <View style={[styles.detailHeader, {flexDirection: 'row'}]}>
-                        <Image
-                            source={failedImages[selectedBar.id] ? DEFAULT_BAR_IMAGE : getBarImageSource(selectedBar.image)}
-                            style={styles.barImage}
-                            resizeMode="cover"
-                            onError={() => setFailedImages((prev) => (prev[selectedBar.id] ? prev : { ...prev, [selectedBar.id]: true }))}
-                        />
-                        <View style={styles.headerInfo}>
-                            <Text style={styles.barName}>{getCleanBarName(selectedBar.name)}</Text>
-                            <View style={styles.ratingContainer}>
-                                <Feather name="star" size={14} color={SKETCH_THEME.colors.text} style={{marginRight: 4}} />
-                                <Text style={styles.ratingText}>{selectedBar.rating}</Text>
-                                <Text style={[styles.statusTag, selectedBar.isOpen ? styles.open : styles.closed]}>
-                                    {selectedBar.isOpen ? 'Obert' : 'Tancat'}
-                                </Text>
-                            </View>
-                            <Text style={{fontSize:12, color:'#666', marginTop:4, fontFamily: 'Lora'}}>
-                                {routeInfo 
-                                    ? `⏱️ ${routeInfo.duration} caminant (${routeInfo.distance})`
-                                    : `📍 A ${getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, selectedBar.latitude, selectedBar.longitude).toFixed(1)} km`
-                                }
-                            </Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setSelectedBar(null)} style={{padding: 5}}>
-                            <Feather name="x" size={24} color="#999" />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* ALWAYS SHOW GLOBAL NEXT MATCH FOR BARCA APP */}
-                    {nextMatch && (
-                        <View style={styles.matchCard}>
-                            <Text style={styles.matchTitle}>
-                                Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
-                            </Text>
-                            <View style={styles.matchTeams}>
-                                <Text style={styles.teamText}>{formatTeamNameForDisplay(nextMatch.homeTeam)}</Text>
-                                <Text style={styles.vsText}>vs</Text>
-                                <Text style={styles.teamText}>{formatTeamNameForDisplay(nextMatch.awayTeam)}</Text>
-                            </View>
-                             <Text style={{color: SKETCH_THEME.colors.textMuted, fontSize: 11, textAlign:'center', marginTop: 4, fontStyle:'italic'}}>
-                                {selectedBar.name} emetrà aquest partit.
-                            </Text>
-                        </View>
-                    )}
-
-                    <TouchableOpacity 
-                        style={{backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 12, padding: 15, alignItems:'center', marginTop: 10}}
-                        onPress={() => openExternalMaps(selectedBar)}
-                    >
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Feather name="navigation" size={18} color="white" style={{marginRight: 8}} />
-                            <Text style={{color:'white', fontWeight:'bold', fontSize: 16, fontFamily: 'Lora'}}>Com arribar-hi</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                <BarDetailCard
+                    bar={selectedBar}
+                    placeDetails={placeDetails}
+                    loadingPlaceDetails={loadingPlaceDetails}
+                    distanceText={distanceText}
+                    onClose={() => closeBarBubble()}
+                    onNavigate={() => openExternalMaps(selectedBar)}
+                />
             );
         }
 
         return (
             <View style={{flex: 1}}>
-                {renderNextMatchBanner()}
                 <View style={{alignItems: 'center', marginBottom: 15, marginTop: 10}}>
                      <View style={{
                          backgroundColor: SKETCH_THEME.colors.text, 
@@ -862,48 +960,15 @@ const MapScreen = () => {
                             </Text>
                         </View>
                     ) : (
-                        filteredBars.map((bar, index) => (
-                        <TouchableOpacity 
-                            key={index} 
-                            style={{
-                                flexDirection:'row', padding: 10, marginBottom: 8, 
-                                backgroundColor: SKETCH_THEME.colors.bg, borderRadius: 12, borderWidth: 1, borderColor: '#D7CCC8',
-                                ...Platform.select({
-                                    web: { boxShadow: '2px 2px 0px rgba(62,39,35,0.1)' },
-                                    default: { shadowColor: '#3E2723', shadowOffset: {width: 1, height: 1}, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
-                                })
-                            }}
-                            onPress={() => setSelectedBar(bar)}
-                        >
-                             <Image
-                                 source={failedImages[bar.id] ? DEFAULT_BAR_IMAGE : getBarImageSource(bar.image)}
-                                 style={{width: 60, height: 60, borderRadius: 8, backgroundColor:'#eee', borderWidth: 1, borderColor: '#D7CCC8'}}
-                                 resizeMode="cover"
-                                 onError={() => setFailedImages((prev) => (prev[bar.id] ? prev : { ...prev, [bar.id]: true }))}
-                             />
-                             <View style={{marginLeft: 12, justifyContent:'center', flex: 1}}>
-                                 <Text style={{fontWeight:'bold', fontSize: 16, fontFamily: 'Lora', color: SKETCH_THEME.colors.text, marginBottom: 2}}>{getCleanBarName(bar.name)}</Text>
-                                 <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
-                                     <Feather name="map-pin" size={10} color={SKETCH_THEME.colors.textMuted} style={{marginRight: 4}} />
-                                     <Text style={{fontSize: 12, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora'}}>
-                                        {getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude).toFixed(1)} km
-                                     </Text>
-                                 </View>
-                                 <View style={{flexDirection:'row', alignItems: 'center'}}>
-                                     <Feather name="star" size={12} color="#FFA000" style={{marginRight: 2}} />
-                                     <Text style={{fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: 'Lora', fontWeight: 'bold'}}>{bar.rating}</Text>
-                                     {bar.nextMatch && (
-                                         <View style={{flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: SKETCH_THEME.colors.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4}}>
-                                             <Feather name="tv" size={10} color="white" style={{marginRight: 4}} />
-                                             <Text style={{fontSize: 10, color:'white', fontFamily: 'Lora', fontWeight: 'bold'}}>PARTIT</Text>
-                                         </View>
-                                     )}
-                                 </View>
-                             </View>
-                             <View style={{justifyContent: 'center'}}>
-                                 <Feather name="chevron-right" size={20} color={SKETCH_THEME.colors.accent} />
-                             </View>
-                        </TouchableOpacity>
+                        filteredBars.map((bar) => (
+                            <BarListItem
+                                key={bar.id}
+                                bar={bar}
+                                distanceKm={getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude)}
+                                onPress={() => setSelectedBar(bar)}
+                                imageError={!!failedImages[bar.id]}
+                                onImageError={() => setFailedImages((prev) => (prev[bar.id] ? prev : { ...prev, [bar.id]: true }))}
+                            />
                         ))
                     )}
                 </ScrollView>
@@ -993,31 +1058,10 @@ const MapScreen = () => {
                  )}
              </View>
              
-             {/* Global Next Match Info Banner */}
+             {/* Global Next Match Info Banner — uses MatchCard for visual consistency */}
              {nextMatch && (!selectedBar || isDesktop) && (
-                <View style={{
-                    marginTop: 12, 
-                    backgroundColor: SKETCH_THEME.colors.primary, 
-                    borderRadius: 8, 
-                    padding: 10,
-                    marginHorizontal: Platform.OS === 'web' ? 0 : 4
-                }}>
-                    <Text style={{color: 'white', fontSize: 13, fontWeight: 'bold', fontFamily: 'Lora', textAlign: 'center'}}>
-                        Pròxim Partit ({nextMatch.category === 'masculino' ? 'M' : 'F'})
-                    </Text>
-                    <View style={{flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 4}}>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{formatTeamNameForDisplay(nextMatch.homeTeam)}</Text>
-                         <Text style={{color: 'white', marginHorizontal: 6, fontSize: 12}}>vs</Text>
-                         <Text style={{color: 'white', fontWeight: 'bold', fontSize: 15}}>{formatTeamNameForDisplay(nextMatch.awayTeam)}</Text>
-                    </View>
-                    <Text style={{color: 'rgba(255,255,255,0.9)', fontSize: 12, textAlign: 'center', marginTop: 4}}>
-                        {/* @ts-ignore */}
-                        {(() => {
-                            // @ts-ignore
-                            const d = nextMatch.date.toDate ? nextMatch.date.toDate() : new Date(nextMatch.date);
-                            return d.toLocaleString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'});
-                        })()}
-                    </Text>
+                <View style={{ marginTop: 8, marginHorizontal: Platform.OS === 'web' ? 0 : 4 }}>
+                    <MatchCard match={nextMatch} compact={true} onPress={() => {}} />
                 </View>
              )}
 
@@ -1108,7 +1152,7 @@ const MapScreen = () => {
                         showsUserLocation={true}
                         showsMyLocationButton={false}
                         toolbarEnabled={false}
-                        onPress={() => setSelectedBar(null)}
+                        onPress={() => closeBarBubble()}
                     >
                          {/* User Location Marker - Custom */}
                          {userLocation && (
@@ -1180,25 +1224,127 @@ const MapScreen = () => {
             {/* MOBILE OVERLAYS */}
             {!isDesktop && (
                 <>
+                    {/* Header — ALWAYS show even when bar is selected, but maybe with reduced opacity or different z-index if needed? 
+                        User complained "Abans ho teníem bé" and showed an image with the search bar VISIBLE. 
+                        Currently it is wrapped in {!selectedBar && ( ... )}
+                    */}
                     <View 
-                        style={{position: 'absolute', top: 0, left: 0, right: 0, height: '100%', zIndex: 10}} 
+                        style={{position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10}} 
                         pointerEvents="box-none"
                     >
-                         {/* Only show header if no bar selected OR if we want it persistent. In original Web it was persistent */}
-                         <SafeAreaView style={{backgroundColor: 'transparent'}} pointerEvents="box-none">
+                        <SafeAreaView style={{backgroundColor: 'transparent'}} pointerEvents="box-none">
                             {renderHeader()}
-                         </SafeAreaView>
+                        </SafeAreaView>
                     </View>
 
                     <TouchableOpacity 
                         style={[
                             styles.fabGps,
-                            { bottom: user ? 100 : 20 } // Adjust position based on auth state
+                            { 
+                                // Move GPS button up if bar is selected to not overlap with lower bubble? 
+                                // Or keep it at bottom. User image shows it at bottom right.
+                                bottom: user ? 100 : 20 
+                            } 
                         ]}
                         onPress={centerMapToGPS}
                     >
                         <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.text} />
                     </TouchableOpacity>
+
+                    {/* Bar Detail Card — bubble just above the bar marker at screen center */}
+                    {selectedBar && bubbleReady && (
+                        <>
+                            {/* Transparent backdrop to close on outside tap */}
+                            <TouchableOpacity
+                                activeOpacity={1}
+                                onPress={closeBarBubble}
+                                style={{
+                                    position: 'absolute',
+                                    top: 0, left: 0, right: 0, bottom: 0,
+                                    zIndex: 99,
+                                }}
+                            />
+                            <Animated.View 
+                                style={{
+                                    position: 'absolute',
+                                    // User says "No veus que no està ben adaptat això?". 
+                                    // Image 1 shows the bubble CENTERED vertically or almost so.
+                                    // Recent change was `bottom: height/2 + 16`. 
+                                    // If user wants "Abans ho teníem bé", maybe they meant the `+30` or even higher?
+                                    // BUT, the complaints were about "poc marge superior".
+                                    // Let's bring it slightly lower to accommodate the HEADER which is now visible again.
+                                    // If header is visible (approx 150px?), we need the bubble to not overlap it.
+                                    // `maxHeight: height/2 - 80` is roughly 40-50% of screen.
+                                    // If `bottom` is center + 16, the bubble extends UP from the center.
+                                    // So top of bubble = Center - HeightOfBubble.
+                                    // If HeightOfBubble is large, it hits the header.
+                                    
+                                    // Let's try to be safer and push it slightly lower, or reduce max height further if header is present.
+                                    bottom: Math.round(height / 2) + 24, 
+                                    left: 14,
+                                    right: 14,
+                                    maxHeight: Math.round(height * 0.45), // Limit height to 45% of screen to avoid header collision
+                                    zIndex: 100,
+                                    opacity: bubbleOpacity,
+                                    transform: [{ scale: bubbleScale }],
+                                }}
+                            >
+                                {/* Bubble body */}
+                                <View style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: 16,
+                                    // Removed black border as requested
+                                    padding: 14,
+                                    ...Platform.select({
+                                        web: { boxShadow: '0px 4px 20px rgba(0,0,0,0.15)' },
+                                        default: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.15, shadowRadius: 10, elevation: 12 }
+                                    })
+                                }}>
+                                    {/* Fixed Close Button — outside ScrollView */}
+                                    {/* <TouchableOpacity
+                                        onPress={closeBarBubble}
+                                        style={{ 
+                                            position: 'absolute', 
+                                            top: 8, 
+                                            right: 8, 
+                                            zIndex: 20,
+                                            padding: 8,
+                                            backgroundColor: 'rgba(255,255,255,0.8)',
+                                            borderRadius: 20
+                                        }}
+                                    >
+                                        <Feather name="x" size={22} color="#999" />
+                                    </TouchableOpacity> */}
+
+                                    <ScrollView 
+                                        showsVerticalScrollIndicator={false}
+                                        style={{ maxHeight: Math.round(height / 2) - 90 }}
+                                        nestedScrollEnabled
+                                        contentContainerStyle={{ paddingTop: 10 }}
+                                    >
+                                        {renderContentPanel()}
+                                    </ScrollView>
+                                </View>
+                                {/* Triangle pointer — points down towards the bar marker */}
+                                <View style={{
+                                    alignSelf: 'center',
+                                    marginTop: -1, // Sligth overlap to merge with bubble
+                                    width: 0, height: 0,
+                                    borderLeftWidth: 14,
+                                    borderRightWidth: 14,
+                                    borderTopWidth: 16,
+                                    borderLeftColor: 'transparent',
+                                    borderRightColor: 'transparent',
+                                    borderTopColor: 'white', // Color match bubble background
+                                    // Add subtle shadow only to triangle? Hard with CSS borders. 
+                                    // Usually easier to just leave it seamless or use SVG. 
+                                    // For now, let's keep it simple as requested: white triangle, no black border.
+                                }} />
+                                {/* Bottom spacer to ensure it clears the marker */}
+                                <View style={{height: 10}} /> 
+                            </Animated.View>
+                        </>
+                    )}
 
                     {/* Bottom Navigation Bar - Only show when authenticated */}
                     {user && (
