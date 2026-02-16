@@ -14,7 +14,7 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import styles from './ProfileScreen.styles';
 
 export default function ProfileScreen() {
-  const { user, logout, refreshProfile, isLoading: authLoading } = useAuth();
+  const { user, logout, deleteAccount, refreshProfile, isLoading: authLoading } = useAuth();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Profile'>>();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +52,38 @@ export default function ProfileScreen() {
       index: 0,
       routes: [{ name: 'Map' }],
     });
+  };
+
+  const handleDeleteAccount = () => {
+      const confirmDelete = async () => {
+          try {
+              setIsLoading(true);
+              await deleteAccount();
+              // After deletion, AuthContext usually handles logout/state clear
+              // Accessing navigation here might be tricky if component unmounts quickly
+              // But handleLogout logic does reset. 
+              // AuthContext likely triggers state change -> null user -> automatic login redirect?
+          } catch (error) {
+              console.error(error);
+              Alert.alert('Error', "No s'ha pogut eliminar el compte. Torna-ho a provar.");
+              setIsLoading(false);
+          }
+      };
+
+      if (Platform.OS === 'web') {
+          if (window.confirm("Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.")) {
+              confirmDelete();
+          }
+      } else {
+          Alert.alert(
+              "Eliminar Compte",
+              "Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.",
+              [
+                  { text: "Cancel·lar", style: "cancel" },
+                  { text: "Eliminar", style: "destructive", onPress: confirmDelete }
+              ]
+          );
+      }
   };
 
   const pickImage = async () => {
@@ -125,80 +157,81 @@ export default function ProfileScreen() {
         <View style={{ width: 44, height: 44 }} /> 
       </View>
 
-      {/* Unified ScrollView for Web and Mobile with flex: 1 handling instead of fixed 100vh */}
-      <View style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
-        <ScrollView 
-          style={styles.scrollContainer} 
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={Platform.OS === 'web'}
-        >
-          {renderContent(avatarUri, pickImage, name, setName, surname, setSurname, user, saveData, isLoading)}
-        </ScrollView>
-      </View>
+      {/* Main Content Area - No ScrollView wrapper for full screen unless overflow */}
+      <View style={{ flex: 1, width: '100%', paddingHorizontal: SKETCH_THEME.spacing.md, paddingTop: SKETCH_THEME.spacing.md, justifyContent: 'space-between' }}>
+        
+        {/* Top Content: Avatar & Form */}
+        <View>
+            {/* Avatar Section */}
+            <View style={styles.avatarContainer}>
+                <Image 
+                    source={{ uri: avatarUri || 'https://placehold.co/150x150/png' }} 
+                    style={styles.avatar} 
+                />
+                <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage} disabled={isLoading}>
+                    {isLoading ? (
+                        <ActivityIndicator size="small" color="white" />
+                    ) : (
+                        <Ionicons name="camera" size={20} color="white" />
+                    )}
+                </TouchableOpacity>
+            </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>Tancar Sessió</Text>
-        </TouchableOpacity>
+            <Text style={[styles.helperText, { textAlign: 'center'}]}>Toca la càmera per canviar la foto</Text>
+
+            {/* Info / Form Section */}
+            <View style={styles.formContainer}>
+                <Text style={styles.label}>Nom</Text>
+                <TextInput 
+                    style={styles.input} 
+                    value={name} 
+                    onChangeText={setName} 
+                    onEndEditing={saveData} 
+                    placeholder="El teu nom"
+                />
+                <Text style={styles.label}>Cognoms</Text>
+                <TextInput 
+                    style={styles.input} 
+                    value={surname} 
+                    onChangeText={setSurname} 
+                    onEndEditing={saveData} 
+                    placeholder="Els teus cognoms"
+                />
+
+                <Text style={styles.label}>Correu electrònic</Text>
+                <Text style={[styles.value, styles.readOnly]}>{user?.email}</Text>
+            </View>
+        </View>
+
+        {/* Bottom Actions: Pinned to bottom */}
+        <View style={{ paddingBottom: 10 }}>
+            <TouchableOpacity style={[styles.logoutButton, {marginBottom: 0}]} onPress={handleLogout}>
+                <Text style={styles.logoutText}>Tancar Sessió</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+                style={{
+                    marginTop: 12,
+                    alignSelf: 'center',
+                    padding: 8,
+                    opacity: 0.8
+                }}
+                onPress={handleDeleteAccount}
+            >
+                <Text style={{
+                    color: SKETCH_THEME.colors.primary, 
+                    fontWeight: 'bold',
+                    fontSize: 12,
+                    textDecorationLine: 'underline'
+                }}>
+                    Eliminar el compte
+                </Text>
+            </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-// Helper to avoid duplicating scrollview content
-function renderContent(
-    avatarUri: string, 
-    pickImage: () => void, 
-    name: string, 
-    setName: (val: string) => void, 
-    surname: string, 
-    setSurname: (val: string) => void,
-    user: any,
-    saveData: () => void,
-    isLoading: boolean
-) {
-    return (
-        <>
-        {/* Avatar Section */}
-        <View style={styles.avatarContainer}>
-            <Image 
-                source={{ uri: avatarUri || 'https://placehold.co/150x150/png' }} 
-                style={styles.avatar} 
-            />
-            <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage} disabled={isLoading}>
-                {isLoading ? (
-                    <ActivityIndicator size="small" color="white" />
-                ) : (
-                    <Ionicons name="camera" size={20} color="white" />
-                )}
-            </TouchableOpacity>
-        </View>
+// Render content helper removed in favor of direct structure
 
-        <Text style={styles.helperText}>Toca la càmera per canviar la foto</Text>
-
-        {/* Info / Form Section */}
-        <View style={styles.formContainer}>
-            <Text style={styles.label}>Nom</Text>
-            <TextInput 
-                style={styles.input} 
-                value={name} 
-                onChangeText={setName} 
-                onEndEditing={saveData} // Trigger save when leaving field or pressing done
-                placeholder="El teu nom"
-            />
-            <Text style={styles.label}>Cognoms</Text>
-            <TextInput 
-                style={styles.input} 
-                value={surname} 
-                onChangeText={setSurname} 
-                onEndEditing={saveData} // Trigger save when leaving field
-                placeholder="Els teus cognoms"
-            />
-
-            <Text style={styles.label}>Correu electrònic</Text>
-            <Text style={[styles.value, styles.readOnly]}>{user?.email}</Text>
-        </View>
-        </>
-    );
-}

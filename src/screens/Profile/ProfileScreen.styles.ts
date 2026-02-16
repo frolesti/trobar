@@ -45,6 +45,7 @@ export default StyleSheet.create({
   avatarContainer: {
       position: 'relative',
       marginBottom: 12,
+      alignSelf: 'center', // Center avatar in flex layout
   },
   avatar: {
     width: 90,
@@ -123,14 +124,13 @@ export default StyleSheet.create({
     width: '100%',
     maxWidth: 600,
     alignSelf: 'center',
-    padding: 16,
+    padding: 10,
     borderRadius: SKETCH_THEME.radius.md,
     backgroundColor: SKETCH_THEME.colors.primarySoft,
     borderWidth: 1,
     borderColor: 'rgba(211, 47, 47, 0.25)',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 20, 
+    // Removed margin top/bottom auto logic as we handle it in flex
   },
   logoutText: {
     ...SKETCH_THEME.typography.body,

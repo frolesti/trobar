@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { executeRequest, executeOrThrow } from '../api/core';
@@ -21,6 +21,13 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
         const userDocRef = doc(db, 'users', userId);
         await setDoc(userDocRef, data, { merge: true });
     }, `updateUserProfile:${userId}`);
+};
+
+export const deleteUserProfile = async (userId: string): Promise<void> => {
+    await executeOrThrow(async () => {
+        const userDocRef = doc(db, 'users', userId);
+        await deleteDoc(userDocRef);
+    }, `deleteUserProfile:${userId}`);
 };
 
 export const uploadProfileImage = async (userId: string, uri: string): Promise<string> => {
