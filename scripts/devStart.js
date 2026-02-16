@@ -22,7 +22,7 @@ const { spawn, spawnSync, execSync } = require('child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 
-const DEV_PORTS = [8787, 8081, 19000, 19001, 19002];
+const DEV_PORTS = [8081, 19000, 19001, 19002];
 
 function getNpmArgvFallback() {
   // npm sets npm_config_argv for scripts. On some Windows setups, args after `--` don't
@@ -284,13 +284,8 @@ function runStartRaw() {
   }
 
   // Run proxy + Expo without concurrently (more reliable on Windows).
-  const proxyProc = spawn(process.execPath, ['scripts/icsProxyServer.js'], {
-    stdio: 'inherit',
-    cwd: projectRoot,
-    env: process.env,
-    shell: false,
-  });
-
+  // Proxy server file scripts/icsProxyServer.js is missing, so we skip it.
+  
   const expoCmd = 'npm';
   const expoArgs = ['run', 'start:raw'];
   if (expoClear) {
@@ -304,26 +299,15 @@ function runStartRaw() {
     shell: true,
   });
 
-  const cleanup = () => {
-    try {
-      if (!proxyProc.killed) proxyProc.kill();
-    } catch {
-      // ignore
-    }
-  };
-
   expoProc.on('exit', (code) => {
-    cleanup();
     process.exit(code ?? 1);
   });
 
   expoProc.on('error', () => {
-    cleanup();
     process.exit(1);
   });
 
   process.on('SIGINT', () => {
-    cleanup();
     process.exit(130);
   });
 }
