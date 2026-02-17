@@ -48,7 +48,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
               setPlaceDetails(details);
           }
       } catch (err) {
-          console.log('[ReportBar] Failed to fetch place details', err);
+          console.error('[ReportBar] Failed to fetch place details', err);
       } finally {
           setLoadingDetails(false);
       }

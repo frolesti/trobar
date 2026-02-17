@@ -12,7 +12,6 @@ const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 Hour
 
 export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5): Promise<Match[]> {
     try {
-        console.log('📜 Loading history matches from DB before:', beforeDate);
         const matchesRef = collection(db, 'matches');
         
         // Query database for matches OLDER than "beforeDate", ordered desc
@@ -66,11 +65,9 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
     try {
         const nowTime = Date.now();
         if (cachedFirestoreMatches && (nowTime - lastFirestoreFetchTime < DB_CACHE_DURATION)) {
-            console.log(`📦 [DB CACHE] Returning ${cachedFirestoreMatches.length} matches from memory.`);
             return cachedFirestoreMatches;
         }
 
-        console.log('🔥 (Engine) Querying Firestore "matches" collection...');
         const matchesRef = collection(db, 'matches');
         
         // Filter: Matches from 2 hours ago onwards
@@ -89,7 +86,7 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
         const matches: Match[] = [];
 
         if (snapshot.empty) {
-            console.log('⚠️ Internal database empty or no upcoming matches found.');
+            // console.log('⚠️ Internal database empty or no upcoming matches found.');
             // Fallback: Check if we have mismatched data (date vs timestamp)
             // Or maybe just fetch recent past matches if upcoming is empty?
         }
@@ -122,7 +119,7 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
             });
         });
 
-        console.log(`✅ [DB SUCCESS] Loaded ${matches.length} matches from Firestore.`);
+        // console.log(`✅ [DB SUCCESS] Loaded ${matches.length} matches from Firestore.`);
         
         // Update cache
         cachedFirestoreMatches = matches;

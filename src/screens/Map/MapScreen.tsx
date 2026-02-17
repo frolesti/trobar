@@ -422,7 +422,7 @@ const MapScreen = () => {
         if (scannedBars.length === 0 || !centerLocation) return;
         
         const timer = setTimeout(() => {
-            console.log('[Map] Radius changed with active scan. Fetching more...');
+            // console.log('[Map] Radius changed with active scan. Fetching more...');
             
             // If shrinking radius significantly, maybe we should filter out the FAR away ones 
             // from the CURRENT view to avoid confusion?

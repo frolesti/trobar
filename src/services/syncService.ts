@@ -28,7 +28,7 @@ export const checkSyncStatus = async (): Promise<SyncStatus> => {
         const metaSnap = await getDoc(metaRef);
 
         if (!metaSnap.exists()) {
-            console.log('ℹ️  No sync metadata found. Run `node scripts/updateMatches.js --force` to populate.');
+            // console.log('ℹ️  No sync metadata found. Run `node scripts/updateMatches.js --force` to populate.');
             return { state: 'unknown', lastUpdated: null, matchCount: 0, competitionCount: 0, teamCount: 0 };
         }
 

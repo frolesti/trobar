@@ -8,7 +8,7 @@ export const getBars = async (): Promise<Bar[]> => {
     // Si no hi ha dades (primera execució o error de connexió), retornem array buit
     // (O podríem retornar les dummyBars com a fallback)
     if (barsSnapshot.empty) {
-      console.log('No matching documents defined on Firestore.');
+      // console.log('No matching documents defined on Firestore.');
       return [];
     }
 

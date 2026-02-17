@@ -28,7 +28,7 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
     const gridKey = getGridCell(lat, lon, radiusKm);
     const cached = cache[gridKey];
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-        console.log('[OSM] Returned from cache:', gridKey);
+        // console.log('[OSM] Returned from cache:', gridKey);
         return cached.data;
     }
 

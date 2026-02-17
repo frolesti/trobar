@@ -123,7 +123,7 @@ export default function ProfileScreen() {
           return;
       }
 
-      console.log("Auto-saving profile data...");
+      // console.log("Auto-saving profile data...");
       try {
           await updateUserProfile(user.id, {
               name: name,
