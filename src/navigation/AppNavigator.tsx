@@ -9,6 +9,8 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import ClaimBusinessScreen from '../screens/ClaimBusiness/ClaimBusinessScreen';
 import ReportBarScreen from '../screens/ReportBar/ReportBarScreen';
 import { OSMBar } from '../services/osmService';
+import { TermsOfService } from '../screens/Legal/TermsOfService';
+import { PrivacyPolicy } from '../screens/Legal/PrivacyPolicy';
 
 // Define the root stack param list
 export type RootStackParamList = {
@@ -19,6 +21,8 @@ export type RootStackParamList = {
   Profile: undefined;
   ClaimBusiness: { barId: string; barName: string };
   ReportBar: { osmBar: OSMBar };
+  TermsOfService: undefined;
+  PrivacyPolicy: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -78,6 +82,17 @@ export default function AppNavigator() {
           name="Login" 
           component={LoginModal} 
           options={{ title: 'troBar' }}
+        />
+        
+        <Stack.Screen 
+          name="TermsOfService" 
+          component={TermsOfService} 
+          options={{ title: 'Termes del Servei' }}
+        />
+        <Stack.Screen 
+          name="PrivacyPolicy" 
+          component={PrivacyPolicy} 
+          options={{ title: 'Política de Privacitat' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -3,7 +3,8 @@ import {
     onAuthStateChanged, 
     signInWithEmailAndPassword, 
     createUserWithEmailAndPassword, 
-    signOut, 
+    signOut,
+    signInWithCredential, 
     User as FirebaseUser,
     GoogleAuthProvider,
     OAuthProvider,
@@ -12,9 +13,11 @@ import {
     sendEmailVerification
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { getUserProfile, UserProfile } from '../services/userService';
+import { getUserProfile, UserProfile, deleteUserProfile } from '../services/userService';
 import { Platform, Alert } from 'react-native';
 import { executeRequest, executeOrThrow } from '../api/core';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 
 // Configurem l'idioma de les notificacions d'auth a Català
 auth.languageCode = 'ca';
@@ -27,6 +30,7 @@ interface AuthContextType {
   loginGoogle: () => Promise<void>;
   loginApple: () => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
   isAuthenticated: boolean;
@@ -146,12 +150,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       await executeOrThrow(async () => {
-          if (Platform.OS === 'web') {
+        if (Platform.OS === 'web') {
+            const provider = new OAuthProvider('apple.com');
+            provider.addScope('email');
+            provider.addScope('name');
+            await signInWithPopup(auth, provider);
+        } else if (Platform.OS === 'ios') {
+            const isAvailable = await AppleAuthentication.isAvailableAsync();
+            if (!isAvailable) {
+              throw new Error("Apple Authentication is not available on this device.");
+            }
+
+            // 1. Generate nonce
+            const rawNonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
+            // 2. Authenticate with Apple
+            const credential = await AppleAuthentication.signInAsync({
+              requestedScopes: [
+                AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                AppleAuthentication.AppleAuthenticationScope.EMAIL,
+              ],
+              nonce: hashedNonce,
+            });
+
+            // 3. Authenticate with Firebase
+            const { identityToken, fullName } = credential;
+            if (identityToken) {
               const provider = new OAuthProvider('apple.com');
-              await signInWithPopup(auth, provider);
-          } else {
-              throw new Error("No disponible: Login amb Apple natiu requereix configuració addicional");
-          }
+              const firebaseCredential = provider.credential({
+                idToken: identityToken,
+                rawNonce: rawNonce,
+              });
+              
+              const userCredential = await signInWithCredential(auth, firebaseCredential);
+
+              // 4. Si Apple ens passa el nom (només passa al primer login), actualitzem el perfil
+              if (fullName && userCredential.user) {
+                  const name = [fullName.givenName, fullName.familyName].filter(Boolean).join(' ');
+                  if (name) {
+                      await updateProfile(userCredential.user, { displayName: name });
+                  }
+              }
+
+            } else {
+              throw new Error("No identity token received from Apple.");
+            }
+        } else {
+            // Android Support via basic WebView flow or similar could be added,
+            // but usually requires more complex setup or a library wrapper.
+            // For now, mirroring web behavior or throwing specialized error.
+             throw new Error("Login amb Apple a Android requereix configuració addicional.");
+        }
       }, 'loginApple');
     } finally {
         setIsLoading(false);
@@ -167,6 +217,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteAccount = async () => {
+    if (!auth.currentUser) return;
+    
+    setIsLoading(true);
+    try {
+        // 1. Delete Firestore Data
+        await deleteUserProfile(auth.currentUser.uid);
+        
+        // 2. Delete Auth Account
+        await auth.currentUser.delete();
+        
+        // State clear happens in onAuthStateChanged
+    } catch (error: any) {
+        console.error("Error deleting account:", error);
+        if (error.code === 'auth/requires-recent-login') {
+            Alert.alert(
+                "Seguretat",
+                "Per eliminar el compte, has d'haver iniciat sessió recentment. Si us plau, tanca la sessió i torna a entrar.",
+                [{ text: "D'acord" }]
+            );
+        } else {
+            throw error;
+        }
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -177,6 +255,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loginGoogle,
         loginApple,
         logout,
+        deleteAccount,
         getAccessToken,
         refreshProfile,
         isAuthenticated: !!user,

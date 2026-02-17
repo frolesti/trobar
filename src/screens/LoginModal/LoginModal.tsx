@@ -290,9 +290,17 @@ const LoginModal = ({ navigation }: Props) => {
                     </View>
 
                     {!showEmailForm && (
-                        <Text style={styles.disclaimer}>
-                            En continuar, acceptes els nostres Termes de Servei i Política de Privacitat.
-                        </Text>
+                        <View style={styles.disclaimerContainer}>
+                            <Text style={styles.disclaimer}>En continuar, acceptes els nostres </Text>
+                            <TouchableOpacity onPress={() => navigation.navigate('TermsOfService' as any)}>
+                                <Text style={styles.linkText}>Termes de Servei</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.disclaimer}> i </Text>
+                            <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy' as any)}>
+                                <Text style={styles.linkText}>Política de Privacitat</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.disclaimer}>.</Text>
+                        </View>
                     )}
                 </View>
             </ScrollView>

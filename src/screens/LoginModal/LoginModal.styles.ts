@@ -166,4 +166,23 @@ export default StyleSheet.create({
         color: SKETCH_THEME.colors.textMuted,
         fontFamily: sketchFontFamily(),
     },
+    disclaimerContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        marginTop: 20,
+    },
+    disclaimer: {
+        fontSize: 12,
+        color: SKETCH_THEME.colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 18,
+        fontFamily: sketchFontFamily(),
+    },
+    linkText: {
+        fontSize: 12,
+        color: SKETCH_THEME.colors.primary,
+        fontFamily: sketchFontFamily(),
+        textDecorationLine: 'underline',
+    },
 });
