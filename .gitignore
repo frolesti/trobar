@@ -5,3 +5,10 @@ web-build
 .env
 *.log
 
+# Next.js web app ignores
+web-app/.next
+web-app/node_modules
+web-app/out
+web-app/build
+.next
+

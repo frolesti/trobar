@@ -245,6 +245,15 @@ function freePorts() {
 }
 
 function runMigrations() {
+  // Skip migrations if firestore directory doesn't exist
+  const fs = require('fs');
+  if (!fs.existsSync(path.join(projectRoot, 'firestore'))) {
+    console.log('-------------------------------------------------------');
+    console.log('🗄️  Skipping Firestore Migrations (firestore directory not found)...');
+    console.log('-------------------------------------------------------');
+    return;
+  }
+
   console.log('-------------------------------------------------------');
   console.log('🗄️  Running Firestore Migrations...');
   const res = spawnSync(process.execPath, ['firestore/migrate.js'], {

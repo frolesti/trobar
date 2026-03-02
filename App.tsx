@@ -1,8 +1,8 @@
 import 'react-native-gesture-handler'; // MUST BE AT THE TOP
 import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
-import AppNavigator from './src/navigation/AppNavigator';
-import { AuthProvider } from './src/context/AuthContext';
+import AppNavigator from './app/src/navigation/AppNavigator';
+import { AuthProvider } from './app/src/context/AuthContext';
 
 LogBox.ignoreLogs(['props.pointerEvents is deprecated']);
 

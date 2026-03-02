@@ -113,14 +113,7 @@ export default StyleSheet.create({
         fontWeight: '700',
         fontFamily: sketchFontFamily(),
     },
-    disclaimer: {
-        marginTop: 18,
-        fontSize: 12,
-        color: SKETCH_THEME.colors.accent,
-        textAlign: 'center',
-        lineHeight: 18,
-        fontFamily: sketchFontFamily(),
-    },
+    /* disclaimer removed (duplicate) - keep a single disclaimer definition below */
     errorContainer: {
         width: '100%',
         padding: 12,
@@ -174,7 +167,7 @@ export default StyleSheet.create({
     },
     disclaimer: {
         fontSize: 12,
-        color: SKETCH_THEME.colors.textSecondary,
+        color: SKETCH_THEME.colors.textMuted,
         textAlign: 'center',
         lineHeight: 18,
         fontFamily: sketchFontFamily(),

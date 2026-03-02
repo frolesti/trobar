@@ -6,7 +6,6 @@ import MapScreen from '../screens/Map/MapScreen';
 import MatchesScreen from '../screens/Matches/MatchesScreen';
 import LoginModal from '../screens/LoginModal/LoginModal';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
-import ClaimBusinessScreen from '../screens/ClaimBusiness/ClaimBusinessScreen';
 import ReportBarScreen from '../screens/ReportBar/ReportBarScreen';
 import { OSMBar } from '../services/osmService';
 import { TermsOfService } from '../screens/Legal/TermsOfService';
@@ -19,7 +18,6 @@ export type RootStackParamList = {
   Matches: undefined;
   Login: undefined;
   Profile: undefined;
-  ClaimBusiness: { barId: string; barName: string };
   ReportBar: { osmBar: OSMBar };
   TermsOfService: undefined;
   PrivacyPolicy: undefined;
@@ -36,7 +34,7 @@ const linking = {
       Map: 'map',
       Login: 'login',
       Profile: 'profile',
-      ClaimBusiness: 'claim-business',
+      
       ReportBar: 'report',
     },
   },
@@ -74,7 +72,7 @@ export default function AppNavigator() {
           component={ProfileScreen} 
           options={{ title: 'troBar' }}
         />
-        <Stack.Screen name="ClaimBusiness" component={ClaimBusinessScreen} options={{ headerShown: true, title: 'Reclamar Negoci', headerBackTitleVisible: false, headerShadowVisible: false, headerStyle: { backgroundColor: '#F0F7F4' } }} />
+        
 
         <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'troBar', presentation: 'transparentModal', headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
         

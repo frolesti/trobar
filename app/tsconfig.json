@@ -13,13 +13,12 @@
     "resolveJsonModule": true,
     "baseUrl": "./",
     "paths": {
-      "app/*": ["app/*"],
-      "app/src/*": ["app/src/*"],
-      "app/src/screens/*": ["app/src/screens/*"],
-      "app/src/navigation/*": ["app/src/navigation/*"],
-      "app/src/services/*": ["app/src/services/*"],
-      "app/src/theme/*": ["app/src/theme/*"],
-      "app/src/context/*": ["app/src/context/*"]
+      "src/*": ["src/*"],
+      "src/screens/*": ["src/screens/*"],
+      "src/navigation/*": ["src/navigation/*"],
+      "src/services/*": ["src/services/*"],
+      "src/theme/*": ["src/theme/*"],
+      "src/context/*": ["src/context/*"]
     }
   },
   "exclude": [
