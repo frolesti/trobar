@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
 import AppNavigator from './app/src/navigation/AppNavigator';
 import { AuthProvider } from './app/src/context/AuthContext';
+import ErrorBoundary from './app/src/components/ErrorBoundary';
 
 LogBox.ignoreLogs(['props.pointerEvents is deprecated']);
 
@@ -29,8 +30,10 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

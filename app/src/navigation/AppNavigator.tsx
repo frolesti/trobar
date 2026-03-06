@@ -10,6 +10,7 @@ import ReportBarScreen from '../screens/ReportBar/ReportBarScreen';
 import { OSMBar } from '../services/osmService';
 import { TermsOfService } from '../screens/Legal/TermsOfService';
 import { PrivacyPolicy } from '../screens/Legal/PrivacyPolicy';
+import NotFoundScreen from '../screens/NotFound/NotFoundScreen';
 
 // Define the root stack param list
 export type RootStackParamList = {
@@ -21,6 +22,7 @@ export type RootStackParamList = {
   ReportBar: { osmBar: OSMBar };
   TermsOfService: undefined;
   PrivacyPolicy: undefined;
+  NotFound: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -36,6 +38,9 @@ const linking = {
       Profile: 'profile',
       
       ReportBar: 'report',
+
+      // Qualsevol ruta desconeguda → redirigeix a Startup (inici)
+      NotFound: '*',
     },
   },
   documentTitle: {
@@ -74,7 +79,7 @@ export default function AppNavigator() {
         />
         
 
-        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'troBar', presentation: 'transparentModal', headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'rgba(0,0,0,0.5)' } }} />
+        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'bar', presentation: 'transparentModal', animationEnabled: false, headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'transparent' } }} />
         
         <Stack.Screen 
           name="Login" 
@@ -91,6 +96,11 @@ export default function AppNavigator() {
           name="PrivacyPolicy" 
           component={PrivacyPolicy} 
           options={{ title: 'Política de Privacitat' }}
+        />
+        <Stack.Screen 
+          name="NotFound" 
+          component={NotFoundScreen} 
+          options={{ title: 'troBar' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
