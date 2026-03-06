@@ -6,6 +6,8 @@
     "start": "node scripts/devStart.js",
     "start:dry-run": "node scripts/devStart.js --dry-run",
     "start:raw": "expo start",
+    "env:dev": "node scripts/loadEnv.js dev",
+    "env:prod": "node scripts/loadEnv.js prod",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
@@ -13,7 +15,8 @@
     "db:migrate": "node firestore/migrate.js",
     "db:migrate:status": "node firestore/migrate.js --status",
     "db:migrate:dry-run": "node firestore/migrate.js --dry-run",
-    "db:validate": "node firestore/validate.js"
+    "db:validate": "node firestore/validate.js",
+    "db:seed-premium": "node scripts/seedPremiumBars.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.1.3",
@@ -38,9 +41,11 @@
     "express": "^5.2.1",
     "firebase": "^12.9.0",
     "ical.js": "^2.2.1",
+    "maplibre-gl": "^5.19.0",
     "node-fetch": "^3.3.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-map-gl": "^8.1.0",
     "react-native": "0.73.6",
     "react-native-gesture-handler": "~2.14.0",
     "react-native-maps": "1.10.0",
@@ -50,6 +55,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.6",
+    "@types/mapbox__point-geometry": "^1.0.87",
+    "@types/mapbox-gl": "^3.4.1",
     "@types/react": "~18.2.45",
     "babel-preset-expo": "^10.0.0",
     "concurrently": "^9.2.1",

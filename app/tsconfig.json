@@ -13,13 +13,30 @@
     "resolveJsonModule": true,
     "baseUrl": "./",
     "paths": {
-      "src/*": ["src/*"],
-      "src/screens/*": ["src/screens/*"],
-      "src/navigation/*": ["src/navigation/*"],
-      "src/services/*": ["src/services/*"],
-      "src/theme/*": ["src/theme/*"],
-      "src/context/*": ["src/context/*"]
-    }
+      "src/*": [
+        "src/*"
+      ],
+      "src/screens/*": [
+        "src/screens/*"
+      ],
+      "src/navigation/*": [
+        "src/navigation/*"
+      ],
+      "src/services/*": [
+        "src/services/*"
+      ],
+      "src/theme/*": [
+        "src/theme/*"
+      ],
+      "src/context/*": [
+        "src/context/*"
+      ]
+    },
+    "typeRoots": [
+      "./types",
+      "../node_modules/@types",
+      "./node_modules/@types"
+    ]
   },
   "exclude": [
     "node_modules",

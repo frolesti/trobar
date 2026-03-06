@@ -23,6 +23,7 @@ export default StyleSheet.create({
     },
     desktopSidebarContent: { padding: 16, backgroundColor: SKETCH_THEME.colors.bg, zIndex: 2 },
     
+    scanButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 4 },
     searchBar: {
         flexDirection: 'row', backgroundColor: SKETCH_THEME.colors.bg, borderRadius: 10, padding: 10, alignItems: 'center',
         borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
@@ -41,8 +42,25 @@ export default StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
 
-    // Markers (Native)
+    // 3D Map Pin Markers
     markerContainer: { alignItems: 'center', ...Platform.select({ web: { cursor: 'pointer' } }) },
+    markerShadow: {
+        width: 20, height: 6, borderRadius: 10,
+        backgroundColor: 'rgba(0,0,0,0.18)',
+        marginTop: -2,
+        ...Platform.select({ web: { filter: 'blur(2px)' } })
+    },
+    markerPin: {
+        width: 36, height: 50, alignItems: 'center',
+    },
+    markerPinSelected: {},
+    markerPinInner: {
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: 'white',
+        justifyContent: 'center', alignItems: 'center',
+    },
+    markerPinIcon: {},
+    // Legacy (unused)
     markerBubble: {
         backgroundColor: SKETCH_THEME.colors.bg, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.2)' } })
