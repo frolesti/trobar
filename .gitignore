@@ -3,6 +3,9 @@ node_modules
 dist
 web-build
 .env
+.env.development
+.env.production
+.env.local
 *.log
 
 # Next.js web app ignores
