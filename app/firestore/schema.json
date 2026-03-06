@@ -181,6 +181,13 @@
         },
         "reportedBy": { "type": "string", "required": false, "description": "UID de l'usuari que l'ha reportat" },
         "isActive":   { "type": "boolean", "required": false, "description": "Actiu = confirmat per propietari" },
+        "tier": {
+          "type": "string",
+          "required": false,
+          "enum": ["free", "premium"],
+          "default": "free",
+          "description": "Tier del bar: 'premium' = perfil de pagament (pin destacat, prioritat de càrrega), 'free' = per defecte"
+        },
         "broadcastingMatches": {
           "type": "array<string>",
           "required": false,

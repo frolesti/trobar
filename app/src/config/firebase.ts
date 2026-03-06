@@ -11,8 +11,8 @@ import { getStorage, FirebaseStorage } from "firebase/storage";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Configura les teves claus a .env o app.json (extra.eas...)
-// Ara utilitzem directament les variables d'entorn d'Expo (EXPO_PUBLIC_*)
+// Configura les teves claus a .env.development / .env.production
+// Canvia d'entorn amb: npm run env:dev | npm run env:prod
 const firebaseConfig = {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -21,6 +21,11 @@ const firebaseConfig = {
     messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
+
+// Log de l'entorn actiu (només en dev)
+if (__DEV__) {
+    console.log(`🔥 Firebase → ${firebaseConfig.projectId} (${process.env.TROBAR_ENV || 'unknown env'})`);
+}
 
 // Initialize Firebase (Singleton)
 let app: FirebaseApp;

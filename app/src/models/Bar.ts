@@ -15,6 +15,8 @@ export interface Bar {
     usuallyShowsBarca?: boolean;
     /** Identificador del bar a Google Maps o similar */
     googlePlaceId?: string;
+    /** Tier del bar: 'premium' = perfil de pagament amb pin destacat, 'free' = per defecte */
+    tier?: 'free' | 'premium';
     /** @deprecated — usar broadcastingMatches/usuallyShowsBarca */
     nextMatch?: {
         teamHome: string;

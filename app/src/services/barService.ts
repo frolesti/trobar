@@ -33,6 +33,8 @@ const mapDocToBar = (doc: any): Bar => {
         source: data.source || undefined,
         broadcastingMatches: data.broadcastingMatches || [],
         usuallyShowsBarca: data.usuallyShowsBarca ?? false,
+        googlePlaceId: data.googlePlaceId || undefined,
+        tier: data.tier || 'free',
         // Camps opcionals que potser no estan a totes les entrades
         nextMatch: data.nextMatch || undefined
     };
