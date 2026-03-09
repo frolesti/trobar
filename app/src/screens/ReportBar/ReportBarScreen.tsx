@@ -26,7 +26,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
-    // Animations matching MapScreen
+    // Animacions coincidents amb MapScreen
     const bubbleScale = useRef(new Animated.Value(0)).current;
     const bubbleOpacity = useRef(new Animated.Value(0)).current;
 
@@ -34,7 +34,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
         ensureLoraOnWeb();
         fetchDetails();
 
-        // Trigger animation on mount
+        // Disparar animació al muntar
         Animated.parallel([
             Animated.spring(bubbleScale, {
                 toValue: 1,
@@ -122,15 +122,15 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
 
     return (
         <View style={{ flex: 1 }}>
-            {/* Tap-to-dismiss background */}
+            {/* Fons per tancar amb un toc */}
             <TouchableOpacity
                 style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
                 activeOpacity={1}
                 onPress={closeScreen}
             />
 
-            {/* Floating bubble — positioned so triangle points at bar pin */}
-            {/* Pin ends up at 25% from bottom after MapScreen's camera offset (0.002/0.008) */}
+            {/* Bafarada flotant — posicionada perquè el triangle apunti al pin del bar */}
+            {/* El pin acaba al 25% des de baix després del desplaçament de càmera de MapScreen (0.002/0.008) */}
             <Animated.View style={{
                 position: 'absolute',
                 bottom: Math.round(height * 0.25) + 30,
@@ -140,7 +140,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                 opacity: bubbleOpacity,
                 transform: [{ scale: bubbleScale }]
             }}>
-                {/* White card body */}
+                {/* Cos de la targeta blanca */}
                 <View style={{
                     backgroundColor: 'white',
                     borderRadius: 16,
@@ -172,7 +172,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                     </ScrollView>
                 </View>
 
-                {/* Triangle pointer — identical to MapScreen */}
+                {/* Indicador triangular — idèntic a MapScreen */}
                 <View style={{
                     alignSelf: 'center',
                     marginTop: -1,

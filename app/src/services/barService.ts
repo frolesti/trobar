@@ -140,18 +140,18 @@ export const fetchBarById = async (id: string): Promise<Bar | null> => {
 export const addUserReportedBar = async (osmBar: OSMBar, userId: string): Promise<void> => {
     // @ts-ignore
     return await executeRequest(async () => {
-        const barRef = doc(db, 'bars', osmBar.id); // Use OSM ID as Document ID
+        const barRef = doc(db, 'bars', osmBar.id); // Usar l'ID d'OSM com a ID de document
         await setDoc(barRef, {
             name: osmBar.name,
-            location: { latitude: osmBar.lat, longitude: osmBar.lon }, // Store as map for consistency with mapDocToBar
-            address: '', // OSM doesn't always give address
+            location: { latitude: osmBar.lat, longitude: osmBar.lon }, // Emmagatzemar com a mapa per consistència amb mapDocToBar
+            address: '', // OSM no sempre dona l'adreça
             amenities: [osmBar.type],
             source: 'user_reported',
             reportedBy: userId,
             createdAt: serverTimestamp(),
-            isActive: false, // "estat desactivat" - Needs admin/owner confirmation to become full verified
+            isActive: false, // "estat desactivat" — Cal confirmació d'admin/propietari per ser verificat complet
             isOpen: true,
-            rating: 0, // No rating yet
+            rating: 0, // Sense puntuació encara
             usuallyShowsBarca: true, // Reportat per un usuari → compta per tots els partits
             broadcastingMatches: [],
         }, { merge: true });

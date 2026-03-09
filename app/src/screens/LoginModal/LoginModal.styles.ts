@@ -113,7 +113,7 @@ export default StyleSheet.create({
         fontWeight: '700',
         fontFamily: sketchFontFamily(),
     },
-    /* disclaimer removed (duplicate) - keep a single disclaimer definition below */
+    /* disclaimer eliminat (duplicat) — mantenir una sola definició a sota */
     errorContainer: {
         width: '100%',
         padding: 12,

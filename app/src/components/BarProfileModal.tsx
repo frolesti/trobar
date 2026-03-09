@@ -8,7 +8,7 @@ import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { Bar } from '../models/Bar';
 import { PlaceDetails } from '../services/placesService';
 
-// ── Types ──────────────────────────────────────────────
+// ── Tipus ──────────────────────────────────────────────
 
 interface BarProfileModalProps {
     visible: boolean;
@@ -84,7 +84,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                 opacity,
             }}
         >
-            {/* Backdrop */}
+            {/* Fons */}
             <TouchableOpacity
                 activeOpacity={1}
                 onPress={onClose}
@@ -94,7 +94,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                 }}
             />
 
-            {/* Sliding panel */}
+            {/* Panell lliscant */}
             <Animated.View
                 style={{
                     position: 'absolute', left: 0, right: 0, bottom: 0,
@@ -110,12 +110,12 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     }),
                 }}
             >
-                {/* Drag indicator */}
+                {/* Indicador d'arrossegament */}
                 <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 6 }}>
                     <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#ccc' }} />
                 </View>
 
-                {/* Close button */}
+                {/* Botó de tancar */}
                 <TouchableOpacity
                     onPress={onClose}
                     style={{
@@ -133,7 +133,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     showsVerticalScrollIndicator={false}
                     bounces={false}
                 >
-                    {/* ── HERO PHOTOS ── */}
+                    {/* ── FOTOS PRINCIPALS ── */}
                     {photos.length > 0 && (
                         <ScrollView
                             horizontal
@@ -157,7 +157,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </ScrollView>
                     )}
 
-                    {/* ── NAME + PREMIUM BADGE ── */}
+                    {/* ── NOM + INSÍGNIA PREMIUM ── */}
                     <View style={{ marginBottom: 6 }}>
                         <Text style={{
                             fontSize: 26, fontWeight: 'bold', color: SKETCH_THEME.colors.text,
@@ -179,7 +179,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     </View>
 
-                    {/* ── RATING + OPEN/CLOSED ── */}
+                    {/* ── PUNTUACIÓ + OBERT/TANCAT ── */}
                     {displayRating > 0 && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 10, gap: 12 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -207,20 +207,20 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     )}
 
-                    {/* ── DIVIDER ── */}
+                    {/* ── SEPARADOR ── */}
                     <View style={{ height: 1, backgroundColor: SKETCH_THEME.colors.border, marginVertical: 6 }} />
 
-                    {/* ── INFO SECTION ── */}
+                    {/* ── SECCIÓ D'INFORMACIÓ ── */}
                     <View style={{ marginTop: 14 }}>
                         <Text style={sectionTitle}>Informació</Text>
 
-                        {/* Address */}
+                        {/* Adreça */}
                         <TouchableOpacity onPress={openGoogleMaps} style={infoRow}>
                             <Feather name="map-pin" size={17} color={SKETCH_THEME.colors.primary} style={{ marginRight: 10 }} />
                             <Text style={[infoText, { textDecorationLine: 'underline' }]}>{displayAddress}</Text>
                         </TouchableOpacity>
 
-                        {/* Phone */}
+                        {/* Telèfon */}
                         {pd?.phoneNumber && (
                             <TouchableOpacity
                                 onPress={() => Linking.openURL(`tel:${pd.phoneNumber}`)}
@@ -231,7 +231,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                             </TouchableOpacity>
                         )}
 
-                        {/* Website */}
+                        {/* Lloc web */}
                         {pd?.websiteUri && (
                             <TouchableOpacity
                                 onPress={() => Linking.openURL(pd.websiteUri!)}
@@ -256,7 +256,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         )}
                     </View>
 
-                    {/* ── OPENING HOURS ── */}
+                    {/* ── HORARI D'OBERTURA ── */}
                     {pd?.currentOpeningHours?.weekdayDescriptions && pd.currentOpeningHours.weekdayDescriptions.length > 0 && (
                         <View style={{ marginTop: 20 }}>
                             <Text style={sectionTitle}>Horaris</Text>
@@ -271,7 +271,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     )}
 
-                    {/* ── BROADCASTS SECTION (placeholder) ── */}
+                    {/* ── SECCIÓ D'EMISSIONS (marcador de posició) ── */}
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitle}>Partits que emet</Text>
                         <View style={{
@@ -288,7 +288,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     </View>
 
-                    {/* ── MENU / CARTA (placeholder) ── */}
+                    {/* ── MENÚ / CARTA (marcador de posició) ── */}
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitle}>Carta</Text>
                         <View style={{
@@ -305,7 +305,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     </View>
 
-                    {/* ── SOCIAL MEDIA (placeholder) ── */}
+                    {/* ── XARXES SOCIALS (marcador de posició) ── */}
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitle}>Xarxes socials</Text>
                         <View style={{
@@ -322,7 +322,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     </View>
 
-                    {/* ── NAVIGATE BUTTON ── */}
+                    {/* ── BOTÓ DE NAVEGACIÓ ── */}
                     <TouchableOpacity
                         style={{
                             backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 14,
@@ -343,7 +343,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     );
 };
 
-// ── Shared styles ──────────────────────────────────────
+// ── Estils compartits ──────────────────────────────────────
 
 const sectionTitle = {
     fontSize: 18,

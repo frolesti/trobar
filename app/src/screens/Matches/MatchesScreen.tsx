@@ -1,14 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, Image, RefreshControl, PanResponder, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, RefreshControl, ScrollView, SafeAreaView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchService';
 import { fetchBroadcastMatchIds } from '../../services/barService';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { ensureLoraOnWeb, SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
-import { formatTeamNameForDisplay } from '../../utils/teamName';
+import { Ionicons } from '@expo/vector-icons';
+import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import MatchCard from '../../components/MatchCard';
 
@@ -26,33 +25,32 @@ const MatchesScreen = ({ navigation }: Props) => {
     const [filter, setFilter] = useState<FilterType>('ALL');
     const [selectedComp, setSelectedComp] = useState<string | null>(null);
     
-    // Custom animation: When pushing to Map, standard. When appearing... default is slide from right.
-    // If we want "Slide from Left", we might need to adjust navigation options or assume this screen is "left" of others.
-    // React Navigation Stack treats screens linearly. To get "slide left", we usually pop().
-    // But this is the initial screen.
-    // The user issue: "When we access scroll component, we slide left BUT animation effect comes from right".
-    // This sounds like they are navigating *to* MatchesScreen and seeing it enter from the right.
-    // They want it to enter from the left?
-    // Setting gestureDirection: 'horizontal-inverted' on the screen options might help.
+    // Animació personalitzada: Quan naveguem al Mapa, estàndard. Quan apareix... per defecte llisca des de la dreta.
+    // Si volem 'Lliscar des de l'esquerra', hauríem d'ajustar opcions de navegació o assumir que aquesta pantalla és a l'esquerra.
+    // React Navigation Stack tracta les pantalles linealment. Per aconseguir 'lliscar esquerra', normalment fem pop().
+    // Però aquesta és la pantalla inicial.
+    // El problema de l'usuari: "Quan accedim al component de scroll, llisquem a l'esquerra PERÒ l'animació ve de la dreta".
+    // Sembla que naveguen *cap a* MatchesScreen i la veuen entrar des de la dreta.
+    // Volen que entri des de l'esquerra?
+    // Configurar gestureDirection: 'horizontal-inverted' a les opcions de pantalla podria ajudar.
     
     const [loading, setLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const isRefreshingRef = React.useRef(false);
     const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
-    const [teamsMap, setTeamsMap] = useState<Record<string, { name: string, badge: string }>>({});
     const [broadcastMatchIds, setBroadcastMatchIds] = useState<Set<string>>(new Set());
     const PAGE_SIZE = 20;
 
-    // --- SCROLL MAINTENANCE FOR LOADING PAST MATCHES ---
+    // --- MANTENIMENT DE SCROLL PER A CÀRREGA DE PARTITS PASSATS ---
     const flatListRef = useRef<FlatList>(null);
     const previousContentHeightRef = useRef<number>(0);
     const previousScrollOffsetRef = useRef<number>(0);
     const isLoadingPastMatchesRef = useRef(false);
 
-    // PanResponder for Swipe-to-Right -> Map navigation
-    // DISABLED: Can conflict with FlatList vertical scroll on some devices/patterns.
-    // Re-enable only if strictly tested or requested.
+    // PanResponder per a lliscar a la dreta -> navegació al Mapa
+    // DESACTIVAT: Pot generar conflictes amb el scroll vertical de FlatList en alguns dispositius.
+    // Reactivar només si s'ha provat estrictament o es demana.
     /*
     const panResponder = useRef(
         PanResponder.create({
@@ -69,31 +67,22 @@ const MatchesScreen = ({ navigation }: Props) => {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                // 1. Load Competitions Map
+                // 1. Carregar mapa de competicions
                 const compsSnap = await getDocs(collection(db, 'competitions'));
                 const cMap: Record<string, { logo: string, name: string }> = {};
 
                 compsSnap.forEach(doc => {
                     const data = doc.data();
                     if (data.id) cMap[data.id] = { logo: data.logo, name: data.name };
-                    // fallback using doc.id if data.id differs or consistency needed
+                    // alternativa usant doc.id si data.id difereix o per consistència
                     cMap[doc.id] = { logo: data.logo, name: data.name };
                 });
                 setCompetitionMap(cMap);
 
-                // 2. Load Teams Map
-                const teamsSnap = await getDocs(collection(db, 'teams'));
-                const tMap: Record<string, { name: string, badge: string }> = {};
-                teamsSnap.forEach(t => {
-                    const tData = t.data();
-                    tMap[t.id] = { name: tData.name, badge: tData.badge };
-                });
-                setTeamsMap(tMap);
-
-                // 3. Fetch Future Matches
+                // 2. Obtenir partits futurs
                 const { matches: fetchedMatches } = await fetchAllMatches();
                 
-                // Sort by date ascending (Future)
+                // Ordenar per data ascendent (futurs)
                 const sortedFuture = fetchedMatches
                     .slice()
                     .map(m => ({ ...m, status: 'scheduled' as const }))
@@ -105,7 +94,7 @@ const MatchesScreen = ({ navigation }: Props) => {
 
                 setAllMatches(sortedFuture);
 
-                // 4. Fetch broadcast data — which matches have at least one bar?
+                // 4. Obtenir dades d'emissió — quins partits tenen almenys un bar?
                 const allIds = sortedFuture.map(m => m.id);
                 const bcastIds = await fetchBroadcastMatchIds(allIds);
                 setBroadcastMatchIds(bcastIds);
@@ -120,11 +109,11 @@ const MatchesScreen = ({ navigation }: Props) => {
         loadInitialData();
     }, [user, navigation]);
 
-    /* REMOVED SEPARATE loadMatches/loadCompetitionLogos EFFECTS TO REDUCE NETWORK CALLS */
+    /* ELIMINATS loadMatches/loadCompetitionLogos SEPARATS PER REDUIR CRIDES DE XARXA */
 
-    // --- Helper Logic ---
+    // --- Lògica auxiliar ---
     const isFemenino = useCallback((match: Match | any) => {
-        // Safe access to team name 
+        // Accés segur al nom de l'equip 
         const getTeamName = (t: any) => (typeof t === 'string' ? t : (t?.name || t?.shortName || ''));
         const homeName = getTeamName(match.homeTeam).toLowerCase();
         const awayName = getTeamName(match.awayTeam).toLowerCase();
@@ -139,7 +128,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                leagueName.includes('femen');
     }, []);
 
-    // --- Derived Data ---
+    // --- Dades derivades ---
     const uniqueCompetitions = useMemo(() => {
          const comps = new Set<string>();
          const matches = [...pastMatches, ...allMatches];
@@ -159,7 +148,7 @@ const MatchesScreen = ({ navigation }: Props) => {
     const filteredFutureMatches = useMemo(() => {
         return allMatches.filter(m => {
             if (filter === 'ALL') {
-                // pass or check comp
+                // passar o comprovar competició
             } else {
                 const isFem = isFemenino(m);
                 const matchCat = isFem ? 'FEMENI' : 'MASCULI';
@@ -168,7 +157,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             
             if (selectedComp) {
                 const cName = m.competition?.name || (m.league && competitionMap[m.league]?.name) || m.league;
-                // Flexible match
+                // Coincidència flexible
                 if (cName !== selectedComp && m.competition?.id !== selectedComp && m.league !== selectedComp) return false;
             }
             return true;
@@ -201,7 +190,7 @@ const MatchesScreen = ({ navigation }: Props) => {
         setIsRefreshing(true);
 
         try {
-            // Prefer oldest past match
+            // Preferir el partit passat més antic
             let oldestDate = new Date();
             if (pastMatches.length > 0) {
                 oldestDate = pastMatches[0].date;
@@ -225,30 +214,14 @@ const MatchesScreen = ({ navigation }: Props) => {
     const loadMoreMatches = useCallback(() => {
         if (isLoadingMore || visibleCount >= filteredFutureMatches.length) return;
         setIsLoadingMore(true);
-        // Just increase visible count
-        setTimeout(() => { // Simulate small delay or just state update
+        // Simplement incrementar el comptador visible
+        setTimeout(() => { // Simular petit retard o simplement actualitzar l'estat
             setVisibleCount(prev => prev + PAGE_SIZE);
             setIsLoadingMore(false);
         }, 100);
     }, [isLoadingMore, visibleCount, filteredFutureMatches.length, PAGE_SIZE]);
 
-    // Format Helpers
-    const getTabStyle = (tab: FilterType) => ({
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        borderRadius: 20,
-        backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : 'transparent',
-        borderWidth: 1,
-        borderColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
-        marginRight: 8,
-    });
-    
-    const getTabText = (tab: FilterType) => ({
-        color: filter === tab ? '#FFF' : SKETCH_THEME.colors.textMuted,
-        fontWeight: filter === tab ? 'bold' as 'bold' : 'normal' as 'normal',
-        fontSize: 13,
-        fontFamily: 'Lora'
-    });
+    // Funcions auxiliars de format
 
     return (
         <SafeAreaView style={Platform.select({
@@ -264,7 +237,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 backgroundColor: SKETCH_THEME.colors.bg 
             }
         })}>
-            {/* Header */}
+            {/* Capçalera */}
             <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -301,7 +274,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: 16, alignItems: 'center' }}
                 >
-                    {/* Category Tabs */}
+                    {/* Pestanyes de categoria */}
                     {(['ALL', 'MASCULI', 'FEMENI'] as const).map((tab) => (
                          <TouchableOpacity 
                             key={tab}
@@ -328,10 +301,10 @@ const MatchesScreen = ({ navigation }: Props) => {
                         </TouchableOpacity>
                     ))}
 
-                    {/* Vertical Divider */}
+                    {/* Divisor vertical */}
                     <View style={{ width: 1, height: 20, backgroundColor: SKETCH_THEME.colors.border, marginHorizontal: 8 }} />
 
-                    {/* Competition Tabs */}
+                    {/* Pestanyes de competició */}
                     {uniqueCompetitions.map(c => (
                         <TouchableOpacity
                             key={c}
@@ -479,6 +452,6 @@ const EmptyState = ({ filter }: { filter: FilterType }) => (
 );
 
 
-// MatchCard was moved to components/MatchCard.tsx for reuse
+// MatchCard es va moure a components/MatchCard.tsx per a reutilització
 
 export default MatchesScreen;

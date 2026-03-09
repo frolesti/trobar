@@ -1,8 +1,8 @@
 import { StyleSheet, Platform } from 'react-native';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
 
-// Note: MapScreen was using a local definition of SKETCHY_COLORS which matches SKETCH_THEME.colors
-// We are switching to the standard SKETCH_THEME.colors
+// Nota: MapScreen usava una definició local de SKETCHY_COLORS que coincideix amb SKETCH_THEME.colors
+// Canviem a l'estàndard SKETCH_THEME.colors
 
 export default StyleSheet.create({
     container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg },
@@ -10,7 +10,7 @@ export default StyleSheet.create({
     map: { width: '100%', height: '100%' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
     
-    // Top Bar & Header
+    // Barra superior i capçalera
     topBarContainer: {
         position: 'absolute', top: 12, left: 0, right: 0,
         marginHorizontal: 'auto', paddingHorizontal: 12, zIndex: 10, maxWidth: 600, width: '100%'
@@ -27,7 +27,7 @@ export default StyleSheet.create({
     searchBar: {
         flexDirection: 'row', backgroundColor: SKETCH_THEME.colors.bg, borderRadius: 10, padding: 10, alignItems: 'center',
         borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
-        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } }) // Hard shadow
+        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } }) // Ombra dura
     },
     searchIconPlaceholder: { width: 12, height: 12, backgroundColor: SKETCH_THEME.colors.text, marginRight: 10, borderRadius: 6 },
     searchInput: { flex: 1, fontSize: 16, color: SKETCH_THEME.colors.text, fontFamily: 'Lora' },
@@ -42,7 +42,7 @@ export default StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
 
-    // 3D Map Pin Markers
+    // Marcadors de pin 3D del mapa
     markerContainer: { alignItems: 'center', ...Platform.select({ web: { cursor: 'pointer' } }) },
     markerShadow: {
         width: 20, height: 6, borderRadius: 10,
@@ -60,7 +60,7 @@ export default StyleSheet.create({
         justifyContent: 'center', alignItems: 'center',
     },
     markerPinIcon: {},
-    // Legacy (unused)
+    // Legat (no utilitzat)
     markerBubble: {
         backgroundColor: SKETCH_THEME.colors.bg, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.2)' } })
@@ -73,7 +73,7 @@ export default StyleSheet.create({
         borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: SKETCH_THEME.colors.primary, marginTop: -2
     },
 
-    // Bottom Sheet
+    // Panell inferior
     bottomSheet: {
         position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: SKETCH_THEME.colors.bg,
         borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 30,
@@ -94,7 +94,7 @@ export default StyleSheet.create({
     },
     bottomSheetTitle: { fontSize: 18, fontWeight: '600', color: SKETCH_THEME.colors.text, fontFamily: 'Lora' },
 
-    // Fab
+    // Botó flotant (Fab)
     fabGps: {
         position: 'absolute', right: 20, width: 32, height: 32, borderRadius: 16, 
         backgroundColor: SKETCH_THEME.colors.bg, borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
@@ -108,7 +108,7 @@ export default StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
 
-    // Web Styles
+    // Estils web
     radiusContainer: {
         backgroundColor: 'transparent', padding: 0, marginTop: 4
     },
@@ -143,7 +143,7 @@ export default StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '3px 3px 0px rgba(0,0,0,0.1)' } })
     },
 
-    // Search settings overlay
+    // Superposició de cerca i configuració
     settingsOverlay: {
         position: 'absolute',
         top: 0,
@@ -230,7 +230,7 @@ export default StyleSheet.create({
     },
 
 
-    // Detail
+    // Detall
     detailContainer: { flex: 1 },
     detailHeader: { flexDirection: 'row', marginBottom: 16 },
     barImage: { width: 80, height: 80, borderRadius: 8, marginRight: 12, backgroundColor: '#eee', borderWidth: 2, borderColor: SKETCH_THEME.colors.text },
@@ -260,7 +260,7 @@ export default StyleSheet.create({
     teamText: { fontSize: 18, fontWeight: 'bold', width: '40%', textAlign: 'center', fontFamily: 'Lora', color: SKETCH_THEME.colors.text },
     vsText: { color: SKETCH_THEME.colors.primary, marginHorizontal: 10, fontFamily: 'Lora', fontWeight: 'bold' },
 
-    // Next MATCH BANNER
+    // Bàner del pròxim partit
     nextMatchContainer: {
         backgroundColor: SKETCH_THEME.colors.bg,
         borderRadius: 12,

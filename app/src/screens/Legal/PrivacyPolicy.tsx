@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Linking, Platform } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Platform } from 'react-native';
 import { SKETCH_THEME, sketchFontFamily } from '../../theme/sketchTheme';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';

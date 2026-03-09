@@ -27,7 +27,7 @@ if (__DEV__) {
     console.log(`🔥 Firebase → ${firebaseConfig.projectId} (${process.env.TROBAR_ENV || 'unknown env'})`);
 }
 
-// Initialize Firebase (Singleton)
+// Inicialitzar Firebase (Singleton)
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;

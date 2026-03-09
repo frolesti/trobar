@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { OSMBar } from '../models/OSMBar';
 
 export type { OSMBar };
@@ -9,22 +8,21 @@ const OVERPASS_SERVERS = [
     'https://interpreter.lazus.de/'
 ];
 
-// Debounce helper to avoid spamming the public API
+// Auxiliar de debounce per evitar saturar l'API pública
 let lastController: AbortController | null = null;
 
-// Caching system: stores results by grid cell (approx 1km)
-const CACHE_GRID_SIZE = 0.01; // ~1km
+// Sistema de cache: emmagatzema resultats per cel·la de graella (aprox 1 km)
 const cache: Record<string, { timestamp: number, data: OSMBar[] }> = {};
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 60; // 1 hora
 
 const getGridCell = (lat: number, lon: number, radius: number) => {
-    // Round lat/lon to ~100m precision (3 decimals) to group nearby searches
-    // Include radius to differentiate scope.
+    // Arrodonir lat/lon a ~100 m de precisió (3 decimals) per agrupar cerques properes
+    // Incloure radi per diferenciar l'abast.
     return `${lat.toFixed(3)},${lon.toFixed(3)},r:${radius.toFixed(1)}`;
 };
 
 export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: number): Promise<OSMBar[]> => {
-    // Check Cache first with stricter key
+    // Comprovar cache primer amb clau més estricta
     const gridKey = getGridCell(lat, lon, radiusKm);
     const cached = cache[gridKey];
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -32,7 +30,7 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
         return cached.data;
     }
 
-    // We strictly use the user's radius now, up to a reasonable safety limit of 5km.
+    // Ara usem estrictament el radi de l'usuari, fins a un límit raonable de 5 km.
     const queryRadiusMeters = Math.min(radiusKm * 1000, 5000); 
 
     if (lastController) {
@@ -41,9 +39,9 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
     lastController = new AbortController();
     const signal = lastController.signal;
 
-    // Overpass QL query
-    // We look for nodes and ways (buildings) with amenity = bar/pub/restaurant/cafe
-    // Increased timeout to 25s for better reliability
+    // Consulta Overpass QL
+    // Busquem nodes i ways (edificis) amb amenity = bar/pub/restaurant/cafe
+    // Timeout augmentat a 25 s per a millor fiabilitat
     const query = `
         [out:json][timeout:25];
         (
@@ -65,7 +63,7 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
 
             if (response.status === 429 || response.status === 504 || !response.ok) {
                 console.warn(`[OSM] Server ${server} failed with ${response.status}. Trying next...`);
-                continue; // Try next server
+                continue; // Provar el servidor següent
             }
 
             const data = await response.json();
@@ -73,28 +71,28 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
 
             const bars: OSMBar[] = elements
                 .filter((el: any) => {
-                    // Filter out unnamed places if we want quality, or keep them if we just want points.
-                    // Usually for "Claiming", having a name helps.
+                    // Filtrar llocs sense nom si volem qualitat, o mantenir-los si només volem punts.
+                    // Normalment per a 'Claiming', tenir un nom ajuda.
                     return el.tags && (el.tags.name || el.tags['name:ca'] || el.tags['name:es']);
                 })
                 .map((el: any) => ({
                     id: `osm_${el.id}`,
                     name: el.tags.name || el.tags['name:ca'] || el.tags['name:es'] || 'Bar sense nom',
-                    // For 'way' (buildings), Overpass 'out center' gives us a 'center' property
+                    // Per a 'way' (edificis), Overpass 'out center' ens dona una propietat 'center'
                     lat: el.lat || el.center?.lat,
                     lon: el.lon || el.center?.lon,
                     type: el.tags.amenity,
                     tags: el.tags || {} 
                 }));
             
-            // Store cache
+            // Emmagatzemar a la cache
             cache[gridKey] = { timestamp: Date.now(), data: bars };
-            return bars; // Success! Return immediately
+            return bars; // Èxit! Retornar immediatament
 
         } catch (error: any) {
-            if (error.name === 'AbortError') return []; // User cancelled
+            if (error.name === 'AbortError') return []; // L'usuari ha cancel·lat
             console.warn(`[OSM] Error fetching from ${server}:`, error);
-            // Continue loop to next server
+            // Continuar el bucle al servidor següent
         }
     }
 

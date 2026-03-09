@@ -4,17 +4,17 @@ import { Match } from '../models/Match';
 
 export type { Match };
 
-// --- FIRESTORE SYNC SUPPORT ---
+// --- SUPORT DE SINCRONITZACIÓ AMB FIRESTORE ---
 
 let cachedFirestoreMatches: Match[] | null = null;
 let lastFirestoreFetchTime = 0;
-const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 Hour
+const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 hora
 
 export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5): Promise<Match[]> {
     try {
         const matchesRef = collection(db, 'matches');
         
-        // Query database for matches OLDER than "beforeDate", ordered desc
+        // Consultar la BD per a partits ANTERIORS a "beforeDate", ordenant desc
         const q = query(
             matchesRef, 
             where('timestamp', '<', Timestamp.fromDate(beforeDate)),
@@ -29,7 +29,7 @@ export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5)
             const data = doc.data();
             if (!data.homeTeam || !data.awayTeam) return;
 
-             // Handle potential date/timestamp format field
+             // Gestionar possible camp de format data/timestamp
              let dateObj = new Date();
              if (data.timestamp && data.timestamp.toDate) {
                  dateObj = data.timestamp.toDate();
@@ -70,11 +70,11 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
 
         const matchesRef = collection(db, 'matches');
         
-        // Filter: Matches from 2 hours ago onwards
+        // Filtre: Partits des de fa 2 hores en endavant
         const now = new Date();
         const activeThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000); // -2h
 
-        // QUERY FIX: Use 'timestamp' field (Firestore Timestamp) instead of 'date' (String)
+        // CORRECCIÓ: Usar camp 'timestamp' (Firestore Timestamp) en lloc de 'date' (String)
         const q = query(
             matchesRef, 
             where('timestamp', '>=', Timestamp.fromDate(activeThreshold)),
@@ -87,16 +87,16 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
 
         if (snapshot.empty) {
             // console.log('⚠️ Internal database empty or no upcoming matches found.');
-            // Fallback: Check if we have mismatched data (date vs timestamp)
-            // Or maybe just fetch recent past matches if upcoming is empty?
+            // Alternativa: Comprovar si tenim dades incoherents (date vs timestamp)
+            // O potser simplement obtenir partits passats recents si no n'hi ha de futurs?
         }
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            // Data validation
+            // Validació de dades
             if (!data.homeTeam || !data.awayTeam) return;
 
-            // Handle potential date/timestamp format field
+            // Gestionar possible camp de format data/timestamp
             let dateObj = new Date();
             if (data.timestamp && data.timestamp.toDate) {
                 dateObj = data.timestamp.toDate();
@@ -121,7 +121,7 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
 
         // console.log(`✅ [DB SUCCESS] Loaded ${matches.length} matches from Firestore.`);
         
-        // Update cache
+        // Actualitzar cache
         cachedFirestoreMatches = matches;
         lastFirestoreFetchTime = Date.now();
 

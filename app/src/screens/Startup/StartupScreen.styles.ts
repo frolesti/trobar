@@ -8,12 +8,12 @@ export default StyleSheet.create({
     ...SKETCH_THEME.layout.centerContent, 
     width: width,
     height: height,
-    // Background color kept as fallback/underlay
+    // Color de fons mantingut com a alternativa
     backgroundColor: SKETCH_THEME.colors.primary, 
   },
   logoContainer: {
     alignItems: 'center',
-    // Push content slightly down if needed, or keeping centered
+    // Empènyer contingut avall si cal, o mantenir centrat
     justifyContent: 'center',
     flex: 1, 
   },
@@ -21,9 +21,9 @@ export default StyleSheet.create({
     ...SKETCH_THEME.typography.display,
     fontSize: 56, 
     letterSpacing: 2,
-    // Position text at the bottom or middle? User wanted GIF above text.
-    // If GIF is background, text overlays it. 
-    // We add margin top to separate from the visual center of the GIF (assuming character is centered)
+    // Posicionar text a baix o al centre? L'usuari volia el GIF sobre el text.
+    // Si el GIF és de fons, el text se superposa. 
+    // Afegim marge superior per separar del centre visual del GIF (assumint que el personatge és centrat)
     marginTop: 200, 
     color: '#FFFFFF',
     ...Platform.select({

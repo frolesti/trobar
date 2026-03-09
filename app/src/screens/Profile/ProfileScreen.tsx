@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, Image, TouchableOpacity, SafeAreaView, Platform, 
-    TextInput, Alert, ScrollView, ActivityIndicator
+    TextInput, Alert, ActivityIndicator
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -19,22 +19,22 @@ export default function ProfileScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Redirect to login if not authenticated, BUT wait for auth check to complete
+  // Redirigir al login si no autenticat, PERÒ esperar que la comprovació d'auth acabi
   useEffect(() => {
     if (!authLoading && !user) {
       navigation.navigate('Login');
     }
   }, [user, authLoading, navigation]);
 
-  // Form State
+  // Estat del formulari
   const [name, setName] = useState(user?.name || '');
   const [surname, setSurname] = useState(user?.surname || '');
   const [avatarUri, setAvatarUri] = useState(user?.avatar || '');
 
-  // Update form when user data changes
+  // Actualitzar formulari quan canviïn les dades d'usuari
   useEffect(() => {
     if (user) {
-        // Only update if the values are different to avoid overwriting local edits if sync happens
+        // Només actualitzar si els valors són diferents per evitar sobreescriure edicions locals
         if (user.name !== name) setName(user.name);
         if ((user.surname || '') !== surname) setSurname(user.surname || '');
         if ((user.avatar || '') !== avatarUri) setAvatarUri(user.avatar || '');
@@ -47,7 +47,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await logout();
-    // Navigate home instead of just "back" to avoid empty stack errors
+    // Navegar a l'inici en lloc de 'enrere' per evitar errors de pila buida
     navigation.reset({
       index: 0,
       routes: [{ name: 'Map' }],
@@ -59,10 +59,10 @@ export default function ProfileScreen() {
           try {
               setIsLoading(true);
               await deleteAccount();
-              // After deletion, AuthContext usually handles logout/state clear
-              // Accessing navigation here might be tricky if component unmounts quickly
-              // But handleLogout logic does reset. 
-              // AuthContext likely triggers state change -> null user -> automatic login redirect?
+              // Després de l'eliminació, AuthContext normalment gestiona logout/neteja d'estat
+              // Accedir a navigation aquí pot ser complicat si el component es desmunta ràpidament
+              // Però la lògica de handleLogout fa el reset. 
+              // AuthContext probablement dispara canvi d'estat -> user null -> redirecció automàtica al login?
           } catch (error) {
               console.error(error);
               Alert.alert('Error', "No s'ha pogut eliminar el compte. Torna-ho a provar.");
@@ -98,7 +98,7 @@ export default function ProfileScreen() {
       const newUri = result.assets[0].uri;
       setAvatarUri(newUri);
       
-      // Auto-save image immediately
+      // Desar imatge automàticament
       if (user) {
           try {
              setIsLoading(true);
@@ -118,7 +118,7 @@ export default function ProfileScreen() {
   const saveData = async () => {
       if (!user) return;
       
-      // Check if there are actual changes before calling API
+      // Comprovar si hi ha canvis reals abans de cridar l'API
       if (name === user.name && surname === (user.surname || '')) {
           return;
       }
@@ -128,12 +128,12 @@ export default function ProfileScreen() {
           await updateUserProfile(user.id, {
               name: name,
               surname: surname,
-              // Keep defaults
+              // Mantenir valors per defecte
               favoriteTeam: 'FC Barcelona', 
               favoriteSport: 'Football',
           });
           await refreshProfile();
-          // No alert needed for auto-save
+          // No cal alerta per al desat automàtic
       } catch (error) {
           console.error("Auto-save error:", error);
       }
@@ -157,12 +157,12 @@ export default function ProfileScreen() {
         <View style={{ width: 44, height: 44 }} /> 
       </View>
 
-      {/* Main Content Area - No ScrollView wrapper for full screen unless overflow */}
+      {/* Àrea de contingut principal — sense ScrollView per pantalla completa */}
       <View style={{ flex: 1, width: '100%', paddingHorizontal: SKETCH_THEME.spacing.md, paddingTop: SKETCH_THEME.spacing.md, justifyContent: 'space-between' }}>
         
-        {/* Top Content: Avatar & Form */}
+        {/* Contingut superior: Avatar i formulari */}
         <View>
-            {/* Avatar Section */}
+            {/* Secció d'avatar */}
             <View style={styles.avatarContainer}>
                 <Image 
                     source={{ uri: avatarUri || 'https://placehold.co/150x150/png' }} 
@@ -179,7 +179,7 @@ export default function ProfileScreen() {
 
             <Text style={[styles.helperText, { textAlign: 'center'}]}>Toca la càmera per canviar la foto</Text>
 
-            {/* Info / Form Section */}
+            {/* Secció d'informació / formulari */}
             <View style={styles.formContainer}>
                 <Text style={styles.label}>Nom</Text>
                 <TextInput 
@@ -203,7 +203,7 @@ export default function ProfileScreen() {
             </View>
         </View>
 
-        {/* Bottom Actions: Pinned to bottom */}
+        {/* Accions inferiors: fixades a baix */}
         <View style={{ paddingBottom: 10 }}>
             <TouchableOpacity style={[styles.logoutButton, {marginBottom: 0}]} onPress={handleLogout}>
                 <Text style={styles.logoutText}>Tancar Sessió</Text>
@@ -233,5 +233,5 @@ export default function ProfileScreen() {
   );
 }
 
-// Render content helper removed in favor of direct structure
+// Funció auxiliar de renderitzat eliminada en favor d'estructura directa
 

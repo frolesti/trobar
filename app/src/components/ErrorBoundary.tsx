@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo } from 'react';
-import { View, Text, TouchableOpacity, Platform, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow, ensureLoraOnWeb } from '../theme/sketchTheme';
 
@@ -30,7 +30,7 @@ class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        // Log to console (could send to Sentry/Crashlytics in production)
+        // Registrar a la consola (es podria enviar a Sentry/Crashlytics en producció)
         console.error('[ErrorBoundary] Uncaught error:', error);
         console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
     }
@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<Props, State> {
         if (Platform.OS === 'web') {
             window.location.href = '/';
         } else {
-            // On native, reset the error state to re-render the app tree
+            // A natiu, reiniciar l'estat d'error per re-renderitzar l'arbre de l'app
             this.setState({ hasError: false, error: null });
         }
     };
@@ -61,7 +61,7 @@ class ErrorBoundary extends Component<Props, State> {
                 alignItems: 'center',
                 padding: 32,
             }}>
-                {/* Icon */}
+                {/* Icona */}
                 <View style={{
                     width: 80, height: 80, borderRadius: 40,
                     backgroundColor: 'rgba(211, 47, 47, 0.1)',
@@ -71,7 +71,7 @@ class ErrorBoundary extends Component<Props, State> {
                     <Feather name="alert-triangle" size={40} color="#D32F2F" />
                 </View>
 
-                {/* Title */}
+                {/* Títol */}
                 <Text style={{
                     fontSize: 24, fontWeight: 'bold',
                     fontFamily: 'Lora', color: SKETCH_THEME.colors.text,
@@ -80,7 +80,7 @@ class ErrorBoundary extends Component<Props, State> {
                     Alguna cosa ha anat malament
                 </Text>
 
-                {/* Subtitle */}
+                {/* Subtítol */}
                 <Text style={{
                     fontSize: 15, color: SKETCH_THEME.colors.textMuted,
                     fontFamily: 'Lora', textAlign: 'center',
@@ -90,7 +90,7 @@ class ErrorBoundary extends Component<Props, State> {
                     Disculpa les molèsties!
                 </Text>
 
-                {/* Reload button */}
+                {/* Botó de recàrrega */}
                 <TouchableOpacity
                     onPress={this.handleReload}
                     style={{
@@ -110,7 +110,7 @@ class ErrorBoundary extends Component<Props, State> {
                     </Text>
                 </TouchableOpacity>
 
-                {/* Error detail (dev only, subtle) */}
+                {/* Detall de l'error (només dev, subtil) */}
                 {__DEV__ && this.state.error && (
                     <View style={{
                         marginTop: 32, padding: 12,

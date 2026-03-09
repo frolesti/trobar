@@ -31,7 +31,7 @@ export interface PlaceDetails {
  */
 export async function searchPlace(name: string, lat: number, lng: number): Promise<string | null> {
     try {
-        // Force "Bar" or "Pub" into the query to avoid finding cities/streets with the same name
+        // Forçar "Bar" o "Pub" a la consulta per evitar trobar ciutats/carrers amb el mateix nom
         // e.g. "Lleida" -> "Bar Lleida" or "Pub Lleida" or "Lleida bar"
         const query = `${name} bar`;
         
@@ -47,10 +47,10 @@ export async function searchPlace(name: string, lat: number, lng: number): Promi
                 locationBias: {
                     circle: {
                         center: { latitude: lat, longitude: lng },
-                        radius: 200, // 200m radius
+                        radius: 200, // Radi de 200 m
                     },
                 },
-                maxResultCount: 3, // Fetch a few to filter by type if needed
+                maxResultCount: 3, // Obtenir-ne uns quants per filtrar per tipus si cal
             }),
         });
 
@@ -63,18 +63,18 @@ export async function searchPlace(name: string, lat: number, lng: number): Promi
 
         const data = await response.json();
         
-        // Filter out obvious administrative entities (cities, neighborhoods)
+        // Filtrar entitats administratives evidents (ciutats, barris)
         if (data.places && data.places.length > 0) {
-            // Find the best match that is likley a bar/restaurant
+            // Trobar la millor coincidència que sigui probablement un bar/restaurant
             const bestMatch = data.places.find((p: any) => {
                 const type = p.primaryType || '';
-                // Avoid localities, transit stations, etc.
+                // Evitar localitats, estacions de trànsit, etc.
                 const badTypes = ['locality', 'administrative_area_level_1', 'administrative_area_level_2', 'train_station'];
                 return !badTypes.includes(type);
             });
 
             if (bestMatch) return bestMatch.id;
-            // Fallback: use first result if nothing is explicitly "bad", or if filtering was too aggressive
+            // Alternativa: usar el primer resultat si res és explícitament "dolent", o si el filtratge ha estat massa agressiu
             return data.places[0].id;
         }
         return null;

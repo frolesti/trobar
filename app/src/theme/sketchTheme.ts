@@ -1,21 +1,21 @@
 import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 export const SKETCHY_COLORS = {
-    bg: '#F0F7F4', // Light Mint Green
+    bg: '#F0F7F4', // Verd menta clar
     uiBg: 'rgba(240, 247, 244, 0.96)',
     card: '#FFFFFF',
-    text: '#1B4D3E', // Deep Forest Green
-    textMuted: '#5C8D75', // Sage Green
-    accent: '#4BB577', // Primary is now Accent too
-    border: 'rgba(27, 77, 62, 0.15)', // Green wash
-    primary: '#4BB577', // New Green Brand Color
+    text: '#1B4D3E', // Verd fosc bosquetà
+    textMuted: '#5C8D75', // Verd salvia
+    accent: '#4BB577', // Primary ara també és Accent
+    border: 'rgba(27, 77, 62, 0.15)', // Rentat verd
+    primary: '#4BB577', // Nou color verd de marca
     primarySoft: 'rgba(75, 181, 119, 0.15)',
     danger: '#D32F2F',
 };
 
 export const sketchFontFamily = () =>
   Platform.select({
-    web: "'Lora', serif", // Ensure CSS syntax for web
+    web: "'Lora', serif", // Assegurar sintaxi CSS per a web
     ios: 'Georgia',
     android: 'serif',
     default: 'serif',
@@ -115,7 +115,7 @@ export const ensureLoraOnWeb = () => {
         fontLink.rel = 'stylesheet';
         document.head.appendChild(fontLink);
 
-        // Inject global styles for web
+        // Injectar estils globals per a web
         const style = document.createElement('style');
         style.textContent = `
           html, body, #root, #root > div { height: 100%; }

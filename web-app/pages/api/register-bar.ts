@@ -15,7 +15,7 @@ export default function handler(
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' })
   }
 
-  const { businessName, address, nif, contactEmail, password } = req.body
+  const { businessName, nif, contactEmail, password } = req.body
 
   // Validació bàsica
   if (!businessName || !nif || !contactEmail || !password) {

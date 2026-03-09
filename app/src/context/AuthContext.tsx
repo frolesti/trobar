@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchAndSetUser = async (firebaseUser: FirebaseUser) => {
     try {
-        // Enforce security: refreshing token ensures we have the latest claims and the user is not disabled
+        // Reforçar seguretat: refrescar el token assegura que tenim les últimes claims i l'usuari no està desactivat
         // Aquest token s'utilitza internament per les SDKs de Firebase (Firestore/Storage) per validar la seguretat
         await firebaseUser.getIdToken(true);
 
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             name: firestoreProfile?.name || firebaseUser.displayName || 'Usuari',
             surname: firestoreProfile?.surname || '',
             email: firebaseUser.email || '',
-            // Prioritize Firestore avatar if it exists; otherwise use Google photo; otherwise undefined
+            // Prioritzar avatar de Firestore si existeix; si no, foto de Google; si no, undefined
             avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : (firebaseUser.photoURL || undefined),
             favoriteTeam: firestoreProfile?.favoriteTeam,
             favoriteSport: firestoreProfile?.favoriteSport
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(combinedUser);
     } catch (error) {
         console.error("Error fetching extended user profile:", error);
-        // Fallback to basic auth info
+        // Alternativa amb info bàsica d'auth
         setUser({
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'Usuari',
@@ -161,11 +161,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               throw new Error("Apple Authentication is not available on this device.");
             }
 
-            // 1. Generate nonce
+            // 1. Generar nonce
             const rawNonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
             const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
 
-            // 2. Authenticate with Apple
+            // 2. Autenticar amb Apple
             const credential = await AppleAuthentication.signInAsync({
               requestedScopes: [
                 AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -174,7 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               nonce: hashedNonce,
             });
 
-            // 3. Authenticate with Firebase
+            // 3. Autenticar amb Firebase
             const { identityToken, fullName } = credential;
             if (identityToken) {
               const provider = new OAuthProvider('apple.com');
@@ -197,9 +197,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               throw new Error("No identity token received from Apple.");
             }
         } else {
-            // Android Support via basic WebView flow or similar could be added,
-            // but usually requires more complex setup or a library wrapper.
-            // For now, mirroring web behavior or throwing specialized error.
+            // Es podria afegir suport Android via flux WebView bàsic o similar,
+            // però normalment requereix configuració més complexa o un wrapper de biblioteca.
+            // Per ara, replicant el comportament web o llançant un error especialitzat.
              throw new Error("Login amb Apple a Android requereix configuració addicional.");
         }
       }, 'loginApple');
@@ -222,13 +222,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setIsLoading(true);
     try {
-        // 1. Delete Firestore Data
+        // 1. Eliminar dades de Firestore
         await deleteUserProfile(auth.currentUser.uid);
         
-        // 2. Delete Auth Account
+        // 2. Eliminar compte d'Auth
         await auth.currentUser.delete();
         
-        // State clear happens in onAuthStateChanged
+        // La neteja d'estat passa a onAuthStateChanged
     } catch (error: any) {
         console.error("Error deleting account:", error);
         if (error.code === 'auth/requires-recent-login') {

@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -17,7 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
-import { ensureLoraOnWeb, sketchFontFamily, sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
 import { getUserFriendlyError } from '../../utils/errorHandler';
 import styles from './LoginModal.styles';
 
@@ -28,14 +26,14 @@ type Props = {
 const LoginModal = ({ navigation }: Props) => {
     const { loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
 
-    // Swipe Right to Go Back Gesture
+    // Gest de lliscar a la dreta per tornar enrere
     const panResponder = useRef(
         PanResponder.create({
-            onMoveShouldSetPanResponder: (evt, gestureState) => {
-                // Return true if horizontal swipe to right (Back)
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                // Retornar true si és un lliscament horitzontal a la dreta (Enrere)
                 return gestureState.dx > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
             },
-            onPanResponderRelease: (evt, gestureState) => {
+            onPanResponderRelease: (_, gestureState) => {
                  if (gestureState.dx > 60) {
                      if (navigation.canGoBack()) navigation.goBack();
                      else navigation.replace('Map');
@@ -44,13 +42,13 @@ const LoginModal = ({ navigation }: Props) => {
         })
     ).current;
 
-    // UI State
+    // Estat de la UI
     const [showEmailForm, setShowEmailForm] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
     const [verificationSent, setVerificationSent] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
 
-    // Form State
+    // Estat del formulari
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
@@ -163,7 +161,7 @@ const LoginModal = ({ navigation }: Props) => {
                         value={firstName}
                         onChangeText={setFirstName}
                         autoCapitalize="words"
-                        autoComplete="name-given" // iOS/Android autocomplete hint
+                        autoComplete="name-given" // Suggeriment d'autocompletar per a iOS/Android
                     />
                     <TextInput
                         style={styles.input}
@@ -233,7 +231,7 @@ const LoginModal = ({ navigation }: Props) => {
                         if (navigation.canGoBack()) {
                             navigation.goBack();
                         } else {
-                            navigation.replace('Map'); // Use replace to avoid stacking Login
+                            navigation.replace('Map'); // Usar replace per evitar apilar Login
                         }
                     }}
                 >

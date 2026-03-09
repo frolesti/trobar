@@ -1,57 +1,57 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator, Platform } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { PlaceDetails } from '../services/placesService';
 
-// ── Types ──────────────────────────────────────────────
+// ── Tipus ──────────────────────────────────────────────
 
 export interface BarCardProps {
-    /** Bar name (fallback if placeDetails has no displayName) */
+    /** Nom del bar (alternativa si placeDetails no té displayName) */
     name: string;
-    /** Address fallback */
+    /** Adreça alternativa */
     address?: string;
-    /** Coordinates for Google Maps link */
+    /** Coordenades per a l'enllaç de Google Maps */
     latitude: number;
     longitude: number;
-    /** Google Places details (shared for both verified and unverified) */
+    /** Detalls de Google Places (compartit per a verificats i no verificats) */
     placeDetails: PlaceDetails | null;
-    /** Whether Place details are still loading */
+    /** Si els detalls de Place encara s'estan carregant */
     loadingPlaceDetails: boolean;
-    /** Is this a verified/registered bar? Drives which action buttons show */
+    /** És un bar verificat/registrat? Determina quins botons d'acció es mostren */
     verified: boolean;
 
-    // ── Verified-only props ──
-    /** Rating fallback (from our own DB) — only used for verified bars */
+    // ── Props només per a verificats ──
+    /** Puntuació alternativa (de la nostra BD) — només per a bars verificats */
     fallbackRating?: number;
-    /** Open/closed fallback from our own DB */
+    /** Obert/tancat alternatiu de la nostra BD */
     fallbackIsOpen?: boolean;
-    /** Distance text ("5 min caminant (300 m)") */
+    /** Text de distància ("5 min caminant (300 m)") */
     distanceText?: string;
-    /** Navigate to bar (Google Maps external) */
+    /** Navegar al bar (Google Maps extern) */
     onNavigate?: () => void;
-    /** Close bubble */
+    /** Tancar bafarada */
     onClose?: () => void;
 
-    // ── Unverified-only props ──
-    /** Confirm / report this bar */
+    // ── Props només per a no verificats ──
+    /** Confirmar / reportar aquest bar */
     onConfirm?: () => void;
-    /** Cancel / go back */
+    /** Cancel·lar / tornar enrere */
     onCancel?: () => void;
-    /** Whether confirm is in progress */
+    /** Si la confirmació està en curs */
     isSubmitting?: boolean;
 
-    /** Bar tier: 'premium' shows enhanced card, 'free' shows minimal */
+    /** Nivell del bar: 'premium' mostra targeta ampliada, 'free' mostra la mínima */
     tier?: 'free' | 'premium';
 
-    /** Opens the full-screen premium profile modal */
+    /** Obre el modal de perfil premium a pantalla completa */
     onProfileOpen?: () => void;
 
-    /** Fallback images when no Google photos */
+    /** Imatges alternatives quan no hi ha fotos de Google */
     fallbackImages?: any[];
 }
 
-// ── Helpers ────────────────────────────────────────────
+// ── Auxiliars ────────────────────────────────────────────
 
 const getCleanBarName = (name: string) => name.replace(/\s+\d+$/, '');
 
@@ -67,15 +67,13 @@ const getPriceLabel = (priceLevel?: string) => {
 
 const BarCard: React.FC<BarCardProps> = (props) => {
     const {
-        name, address, latitude, longitude,
+        name, address,
         placeDetails: pd, loadingPlaceDetails, verified,
         fallbackRating, fallbackIsOpen,
-        distanceText, onNavigate, onClose,
+        distanceText, onNavigate,
         onConfirm, onCancel, isSubmitting,
         fallbackImages, tier, onProfileOpen,
     } = props;
-
-    const [showHours, setShowHours] = useState(false);
 
     const displayName = pd?.displayName || getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
@@ -89,11 +87,11 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
     };
 
-    // ── Render ─────────────────────────────────────────
+    // ── Renderitzat ─────────────────────────────────────────
 
     const isPremium = tier === 'premium';
 
-    // ── FREE BAR: Minimal card (name, address, distance, navigate) ──
+    // ── BAR GRATUÏT: Targeta mínima (nom, adreça, distància, navegar) ──
     if (!isPremium && verified) {
         return (
             <View>
@@ -109,7 +107,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     {displayName}
                 </Text>
 
-                {/* Rating + Open/Closed */}
+                {/* Puntuació + Obert/Tancat */}
                 {displayRating > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -132,7 +130,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </View>
                 )}
 
-                {/* Address */}
+                {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
                     <Feather name="map-pin" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8, marginTop: 2 }} />
                     <Text numberOfLines={2} style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
@@ -140,7 +138,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </Text>
                 </View>
 
-                {/* Distance */}
+                {/* Distància */}
                 {distanceText && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                         <Feather name="navigation" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8 }} />
@@ -150,7 +148,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </View>
                 )}
 
-                {/* Navigate button */}
+                {/* Botó de navegació */}
                 <TouchableOpacity
                     style={{
                         backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 12,
@@ -166,11 +164,11 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         );
     }
 
-    // ── PREMIUM BAR: Full card with green inverted background ──
+    // ── BAR PREMIUM: Targeta completa amb fons verd invertit ──
     if (isPremium && verified) {
         return (
             <View>
-                {/* Clickable name → opens profile */}
+                {/* Nom clicable → obre perfil */}
                 <TouchableOpacity onPress={onProfileOpen} activeOpacity={0.7}>
                     <Text 
                         numberOfLines={2}
@@ -193,7 +191,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </View>
                 </TouchableOpacity>
 
-                {/* Rating + Open/Closed + Price */}
+                {/* Puntuació + Obert/Tancat + Preu */}
                 {displayRating > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -226,7 +224,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </View>
                 )}
 
-                {/* Address */}
+                {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
                     <Feather name="map-pin" size={15} color="rgba(255,255,255,0.6)" style={{ marginRight: 8, marginTop: 2 }} />
                     <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
@@ -234,7 +232,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </Text>
                 </View>
 
-                {/* Distance */}
+                {/* Distància */}
                 {distanceText && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                         <Feather name="navigation" size={15} color="rgba(255,255,255,0.6)" style={{ marginRight: 8 }} />
@@ -244,7 +242,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </View>
                 )}
 
-                {/* Phone */}
+                {/* Telèfon */}
                 {pd?.phoneNumber && (
                     <TouchableOpacity
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
@@ -257,13 +255,13 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </TouchableOpacity>
                 )}
 
-                {/* Photos carousel */}
+                {/* Carrusel de fotos */}
                 {renderPhotos(pd, fallbackImages)}
 
-                {/* Divider */}
+                {/* Separador */}
                 <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 14 }} />
 
-                {/* Navigate button — white on green */}
+                {/* Botó de navegació — blanc sobre verd */}
                 <TouchableOpacity
                     style={{
                         backgroundColor: 'white', borderRadius: 12,
@@ -279,7 +277,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         );
     }
 
-    // ── UNVERIFIED BAR (OSM report flow) — unchanged ──
+    // ── BAR NO VERIFICAT (flux de report OSM) — sense canvis ──
     return (
         <View>
             <Text 
@@ -294,7 +292,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {displayName}
             </Text>
 
-            {/* Address */}
+            {/* Adreça */}
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
                 <Feather name="map-pin" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8, marginTop: 2 }} />
                 <Text style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
@@ -310,7 +308,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 </Text>
             </TouchableOpacity>
 
-            {/* Loading */}
+            {/* Carregant */}
             {loadingPlaceDetails && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                     <ActivityIndicator size="small" color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 6 }} />
@@ -318,12 +316,12 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 </View>
             )}
 
-            {/* Photos */}
+            {/* Fotos */}
             {renderPhotos(pd, fallbackImages)}
 
             <View style={{ height: 1, backgroundColor: SKETCH_THEME.colors.border, marginVertical: 14 }} />
 
-            {/* Report action */}
+            {/* Acció de report */}
             <View>
                 <Text style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'Lora', marginBottom: 15, textAlign: 'center' }}>
                     Es poden veure partits aquí?
@@ -360,7 +358,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
     );
 };
 
-// ── Photos sub-render ──────────────────────────────────
+// ── Sub-renderitzat de fotos ──────────────────────────────────
 
 const renderPhotos = (pd: PlaceDetails | null, fallbackImages?: any[]) => {
     const hasGooglePhotos = pd?.photoUrls && pd.photoUrls.length > 0;

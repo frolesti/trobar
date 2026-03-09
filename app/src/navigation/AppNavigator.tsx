@@ -12,7 +12,7 @@ import { TermsOfService } from '../screens/Legal/TermsOfService';
 import { PrivacyPolicy } from '../screens/Legal/PrivacyPolicy';
 import NotFoundScreen from '../screens/NotFound/NotFoundScreen';
 
-// Define the root stack param list
+// Definir la llista de paràmetres del stack principal
 export type RootStackParamList = {
   Startup: undefined;
   Map: { matchId?: string } | undefined;
@@ -27,7 +27,7 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-// Define linking configuration to force the title to 'troBar'
+// Configuració de linking per forçar el títol a 'troBar'
 const linking = {
   prefixes: [],
   config: {
@@ -44,7 +44,7 @@ const linking = {
     },
   },
   documentTitle: {
-    enabled: false, // Completely disable React Navigation's title handling
+    enabled: false, // Desactivar completament la gestió de títols de React Navigation
   },
 };
 
@@ -55,8 +55,8 @@ export default function AppNavigator() {
         initialRouteName="Startup"
         screenOptions={{
           headerShown: false,
-          title: 'troBar', // Default title for all screens
-          // This ensures the lateral slide animation works on Web too
+          title: 'troBar', // Títol per defecte per a totes les pantalles
+          // Això assegura que l'animació de lliscament lateral funcioni també a web
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
       >
@@ -67,7 +67,7 @@ export default function AppNavigator() {
           component={MatchesScreen} 
           options={{ 
             title: 'troBar',
-            // When navigating TO Matches, slide from Left (as if it was on the left)
+            // Quan naveguem cap a Matches, lliscar des de l'esquerra (com si estigués a l'esquerra)
             gestureDirection: 'horizontal-inverted',
             cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS
           }} 

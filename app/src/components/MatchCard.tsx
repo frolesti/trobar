@@ -8,7 +8,7 @@ import { formatTeamNameForDisplay } from '../utils/teamName';
 type MatchCardProps = {
     match: Match;
     onPress?: () => void;
-    compact?: boolean; // For Map Banner usage
+    compact?: boolean; // Per a ús al bàner del mapa
     /** Si true, almenys un bar emet aquest partit → mostra botó 'Trobar bars' */
     hasBroadcast?: boolean;
 };
@@ -23,7 +23,7 @@ const getTeam = (key: any) => {
     return { name: String(key), badge: null };
 };
 
-// Hardcoded logos for fail-safe
+// Logos codificats com a alternativa segura
 const LOGO_FALLBACKS: Record<string, string> = {
     'CL': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions.png?alt=media&token=eafb909f-a41d-463a-81ee-c3fbbbb5a98d',
     'UWCL': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions-w.png?alt=media&token=ff772840-f75e-4d8b-9c1e-3a42ac395237',
@@ -39,21 +39,21 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
     const homeTeam = getTeam(match.homeTeam);
     const awayTeam = getTeam(match.awayTeam);
     
-    // Determine Competition Display
+    // Determinar la visualització de la competició
     const compName = match.competition?.name || match.league || 'Partit';
     
-    // Improved Logo Logic: Check object, check fallback map, check derived ID
+    // Lògica de logo millorada: comprovar objecte, alternativa, ID derivat
     let compLogo = match.competition?.logo;
     
     if (!compLogo) {
-        // Try to match by ID if logo missing
+        // Intentar coincidir per ID si falta el logo
         const leagueId = match.competition?.id || match.league;
         if (leagueId && LOGO_FALLBACKS[leagueId]) {
             compLogo = LOGO_FALLBACKS[leagueId];
         }
     }
     
-    // Last resort: Name matching
+    // Últim recurs: coincidència per nom
     if (!compLogo) {
         const lower = compName.toLowerCase();
         if (lower.includes('champions')) compLogo = LOGO_FALLBACKS['CL'];
@@ -104,7 +104,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
              );
         }
         
-        // Scheduled
+        // Programat
         if (compLogo) {
              const logoSize = compact ? 18 : 28;
              return (
@@ -161,7 +161,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
     if (compact) {
         return (
             <View style={cardStyle}>
-                {/* Header: "Proper partit · Avui, 21:00" */}
+                {/* Capçalera: "Pròxim partit · Avui, 21:00" */}
                 <Text style={{ 
                     fontSize: 10, fontWeight: '600',
                     color: SKETCH_THEME.colors.primary, fontFamily: 'Lora', 
@@ -170,9 +170,9 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                     Proper partit  ·  {formatDate(match)}
                 </Text>
 
-                {/* Teams Row — compact */}
+                {/* Fila d'equips — compacta */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    {/* HOME */}
+                    {/* LOCAL */}
                     <View style={{ alignItems: 'center', width: 70 }}>
                         {homeTeam.badge ? (
                             <Image source={{ uri: homeTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
@@ -187,12 +187,12 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                         </Text>
                     </View>
 
-                    {/* VS / SCORE */}
+                    {/* VS / RESULTAT */}
                     <View style={{ marginHorizontal: 8, alignItems: 'center' }}>
                         <StatusBadge />
                     </View>
 
-                    {/* AWAY */}
+                    {/* VISITANT */}
                     <View style={{ alignItems: 'center', width: 70 }}>
                         {awayTeam.badge ? (
                             <Image source={{ uri: awayTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
@@ -213,7 +213,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
 
     return (
         <View style={cardStyle}>
-            {/* Header: Comp + Date */}
+            {/* Capçalera: Competició + Data */}
             <View style={{ 
                 flexDirection: 'row', 
                 justifyContent: 'space-between', 
@@ -233,10 +233,10 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                 </Text>
             </View>
 
-            {/* Teams Row */}
+            {/* Fila d'equips */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 
-                {/* HOME */}
+                {/* LOCAL */}
                 <View style={{ flex: 1, alignItems: 'center' }}>
                      {homeTeam.badge ? (
                          <Image source={{ uri: homeTeam.badge }} style={{ width: 48, height: 48, marginBottom: 8 }} resizeMode="contain" />
@@ -251,12 +251,12 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                      </Text>
                 </View>
 
-                {/* VS / SCORE */}
+                {/* VS / RESULTAT */}
                 <View style={{ marginHorizontal: 12, alignItems: 'center', minWidth: 40 }}>
                     <StatusBadge />
                 </View>
 
-                {/* AWAY */}
+                {/* VISITANT */}
                 <View style={{ flex: 1, alignItems: 'center' }}>
                      {awayTeam.badge ? (
                          <Image source={{ uri: awayTeam.badge }} style={{ width: 48, height: 48, marginBottom: 8 }} resizeMode="contain" />
@@ -272,7 +272,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                 </View>
             </View>
 
-            {/* Action Button — only when at least one bar broadcasts this match */}
+            {/* Botó d'acció — només quan almenys un bar emet aquest partit */}
             {hasBroadcast && match.status !== 'finished' && onPress && (
                  <TouchableOpacity
                     style={{

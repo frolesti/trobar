@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, ImageBackground } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
+import { ensureLoraOnWeb } from '../../theme/sketchTheme';
 import styles from './StartupScreen.styles';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -13,16 +13,16 @@ const StartupScreen = ({ navigation }: Props) => {
   useEffect(() => {
     ensureLoraOnWeb();
     
-    // Self-executing async function
+    // Funció asíncrona autoexecutable
     const initApp = async () => {
-      // Note: Data sync is now handled by the 'server' (scripts/updateMatches.js)
-      // which runs automatically during development start or scheduled jobs.
-      // The app simply consumes the Firestore data.
+      // Nota: La sincronització de dades la gestiona el 'server' (scripts/updateMatches.js)
+      // que s'executa automàticament a l'inici del desenvolupament o com a tasca programada.
+      // L'app simplement consumeix les dades de Firestore.
 
-      // Short delay to show completion if needed, or instant navigation
+      // Petit retard per mostrar la pantalla o navegació instantània
       setTimeout(() => {
           navigation.replace('Map');
-      }, 2000); // Increased delay so the user can enjoy the GIF animation
+      }, 2000); // Retard augmentat perquè l'usuari pugui gaudir de l'animació GIF
     };
 
     initApp();
@@ -32,10 +32,10 @@ const StartupScreen = ({ navigation }: Props) => {
     <ImageBackground 
         source={require('../../../assets/img/trobar-gif.gif')} 
         style={styles.container}
-        resizeMode="cover" // Fills the screen, fixing the 'white details/borders' issue
+        resizeMode="cover" // Omple la pantalla, arreglant el problema de 'vores blanques'
     >
       <View style={styles.logoContainer}>
-        {/* GIF Background covers screen. Text matches positioning request. */}
+        {/* El GIF de fons cobreix la pantalla. El text segueix el posicionament demanat. */}
         <Text style={styles.logoText}>troBar</Text>
       </View>
       <Text style={styles.copyright}>© frolesti</Text>

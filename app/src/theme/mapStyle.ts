@@ -1,12 +1,12 @@
-// OVERRIDE WITH BRAND COLORS - "ALL GREEN" THEME
-// Land: Light Mint (#F0F7F4) -> Matches App Background
-// Text: Deep Forest Green (#1B4D3E)
-// Roads: White
+// SOBREESCRIPTURA AMB COLORS DE MARCA — TEMA "TOT VERD"
+// Terra: Menta clar (#F0F7F4) -> Fons de l'app
+// Text: Verd fosc bosquetà (#1B4D3E)
+// Carrers: Blanc
 
 export const CUSTOM_MAP_STYLE = [
     {
       "elementType": "geometry",
-      "stylers": [{ "color": "#F0F7F4" }] // Default Land color
+      "stylers": [{ "color": "#F0F7F4" }] // Color de terra per defecte
     },
     {
       "elementType": "labels.icon",
@@ -28,7 +28,7 @@ export const CUSTOM_MAP_STYLE = [
     {
       "featureType": "landscape",
       "elementType": "geometry",
-      "stylers": [{ "color": "#F0F7F4" }] // App Background
+      "stylers": [{ "color": "#F0F7F4" }] // Fons de l'app
     },
     {
       "featureType": "landscape.natural",
@@ -42,12 +42,12 @@ export const CUSTOM_MAP_STYLE = [
     {
       "featureType": "poi.park",
       "elementType": "geometry",
-      "stylers": [{ "visibility": "on" }, { "color": "#D8F3DC" }] // Slightly Darker Mint for Parks
+      "stylers": [{ "visibility": "on" }, { "color": "#D8F3DC" }] // Menta lleugerament més fosc per a parcs
     },
     {
         "featureType": "poi.park",
         "elementType": "labels.text.fill",
-        "stylers": [{ "visibility": "on" }, { "color": "#4BB577" }] // Brand Green Label
+        "stylers": [{ "visibility": "on" }, { "color": "#4BB577" }] // Etiqueta de verd de marca
     },
     {
       "featureType": "road",
@@ -57,12 +57,12 @@ export const CUSTOM_MAP_STYLE = [
     {
         "featureType": "road",
         "elementType": "geometry.stroke",
-        "stylers": [{ "color": "#E6ECDA" }] // Subtle Green-ish border
+        "stylers": [{ "color": "#E6ECDA" }] // Vora subtilment verdosa
     },
     {
       "featureType": "road",
       "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#5C8D75" }] // Muted Green for road names
+      "stylers": [{ "color": "#5C8D75" }] // Verd apagat per a noms de carrer
     },
     {
       "featureType": "water",

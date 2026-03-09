@@ -1,4 +1,4 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
@@ -22,30 +22,10 @@ export default StyleSheet.create({
     ...SKETCH_THEME.typography.h3,
     fontSize: 20,
   },
-  editButton: {
-    padding: SKETCH_THEME.spacing.xs,
-  },
-  editButtonText: {
-    ...SKETCH_THEME.typography.body,
-    color: SKETCH_THEME.colors.primary,
-    fontWeight: 'bold' },
-  scrollContainer: {
-    height: '100%',
-    width: '100%',
-    flex: 1,
-  },
-  content: {
-    width: '100%',
-    paddingHorizontal: SKETCH_THEME.spacing.md,
-    paddingTop: SKETCH_THEME.spacing.md,
-    paddingBottom: 120, 
-    alignItems: 'center',
-    flexGrow: 1, 
-  },
   avatarContainer: {
       position: 'relative',
       marginBottom: 12,
-      alignSelf: 'center', // Center avatar in flex layout
+      alignSelf: 'center',
   },
   avatar: {
     width: 90,
@@ -74,18 +54,15 @@ export default StyleSheet.create({
   },
   formContainer: {
       width: '100%',
-      // WEB FIX: Limit width on large screens
       maxWidth: 600,
       alignSelf: 'center',
-      // Removed flex: 1 to prevent forced stretching leaving empty space
-      // Replaced with flexShrink + flexGrow but limited
       backgroundColor: SKETCH_THEME.colors.uiBg,
       borderRadius: SKETCH_THEME.radius.lg,
       padding: 16,
       borderWidth: 1,
       borderColor: SKETCH_THEME.colors.border,
       ...(sketchShadow() as object),
-      marginBottom: 20 // Space between card and logout button
+      marginBottom: 20,
   },
   label: {
       ...SKETCH_THEME.typography.caption,
@@ -94,7 +71,7 @@ export default StyleSheet.create({
       marginBottom: 2,
       marginTop: 8,
       letterSpacing: 1,
-      fontSize: 10, // Slightly smaller labels
+      fontSize: 10,
   },
   value: {
       ...SKETCH_THEME.typography.body,
@@ -111,15 +88,6 @@ export default StyleSheet.create({
   readOnly: {
       color: SKETCH_THEME.colors.textMuted,
   },
-  divider: {
-      height: 1,
-      backgroundColor: SKETCH_THEME.colors.border,
-      marginVertical: 20
-  },
-  sectionTitle: {
-      ...SKETCH_THEME.typography.h3,
-      marginBottom: 8,
-  },
   logoutButton: {
     width: '100%',
     maxWidth: 600,
@@ -130,44 +98,10 @@ export default StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(211, 47, 47, 0.25)',
     alignItems: 'center',
-    // Removed margin top/bottom auto logic as we handle it in flex
   },
   logoutText: {
     ...SKETCH_THEME.typography.body,
     color: SKETCH_THEME.colors.primary,
     fontWeight: '700',
   },
-  cancelButton: {
-      marginTop: 10,
-      padding: 12,
-      alignItems: 'center',
-  },
-  cancelText: {
-      ...SKETCH_THEME.typography.bodySmall,
-      color: SKETCH_THEME.colors.textMuted,
-  },
-  pickerContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: SKETCH_THEME.colors.border,
-  },
-  picker: {
-    width: '100%',
-    ...Platform.select({
-      android: {
-         color: SKETCH_THEME.colors.text,
-      }
-    })
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 50,
-    alignItems: 'center',
-    width: '100%'
-  },
-  versionText: {
-    ...SKETCH_THEME.typography.caption,
-    marginTop: 10,
-    color: SKETCH_THEME.colors.textMuted
-  }
 });

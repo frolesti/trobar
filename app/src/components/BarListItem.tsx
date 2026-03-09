@@ -14,7 +14,7 @@ interface BarListItemProps {
     onImageError?: () => void;
 }
 
-/** Helper to strip numeric suffix from bar name */
+/** Auxiliar per eliminar el sufix numèric del nom del bar */
 const getCleanBarName = (name: string) => {
     return name.replace(/\s+\d+$/, '');
 };

@@ -7,5 +7,5 @@ export interface UserProfile {
     favoriteTeam?: string;
     favoriteSport?: string;
     role?: 'user' | 'bar_owner' | 'admin';
-    ownedBars?: string[]; // Array of bar IDs owned by this user
+    ownedBars?: string[]; // Array d'IDs de bars propietat d'aquest usuari
 }
