@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "troBar Firestore Schema",
   "description": "Definició canònica de totes les col·leccions de Firestore per a troBar. Versió controlada — qualsevol canvi ha de passar per una migració.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "collections": {
     "matches": {
       "description": "Partits del FC Barcelona (masculí i femení). Sincronitzats des de football-data.org.",
@@ -172,7 +172,12 @@
         "rating":    { "type": "number", "required": false, "default": 0 },
         "isOpen":    { "type": "boolean", "required": false, "default": true },
         "image":     { "type": "string", "required": false, "description": "URL de la imatge del bar" },
-        "amenities": { "type": "array<string>", "required": false, "description": "Etiquetes/tags del bar" },
+        "amenities": {
+          "type": "array<string>",
+          "required": false,
+          "description": "Amenitats del bar. Valors permesos: projector, multiple_screens, outdoor_seating, wifi, accessible, air_conditioning, reservations, parking, pet_friendly, live_music, darts, pool_table, sports_bar, craft_beer, food_served, late_night",
+          "enum": ["projector", "multiple_screens", "outdoor_seating", "wifi", "accessible", "air_conditioning", "reservations", "parking", "pet_friendly", "live_music", "darts", "pool_table", "sports_bar", "craft_beer", "food_served", "late_night"]
+        },
         "source": {
           "type": "string",
           "required": false,
@@ -210,11 +215,49 @@
             "competition": { "type": "string" }
           }
         },
+        "socialMedia": {
+          "type": "map",
+          "required": false,
+          "description": "Xarxes socials del bar (només bars premium verificats)",
+          "fields": {
+            "instagram": { "type": "string", "required": false, "description": "Nom d'usuari sense @ (ex: 'georgepayne_bcn')" },
+            "facebook":  { "type": "string", "required": false, "description": "Slug de la pàgina (ex: 'thegeorgepayne')" },
+            "whatsapp":  { "type": "string", "required": false, "description": "Número complet amb prefix (ex: '+34612345678')" },
+            "telegram":  { "type": "string", "required": false, "description": "Nom d'usuari (ex: 'georgepayne_bcn')" }
+          }
+        },
+        "description": {
+          "type": "string",
+          "required": false,
+          "description": "Descripció lliure del propietari (ex: 'Irish pub al cor de l'Eixample...')"
+        },
+        "promotionalText": {
+          "type": "string",
+          "required": false,
+          "description": "Text promocional visible a la targeta (ex: '2x1 en cerveses durant partits!')"
+        },
+        "gallery": {
+          "type": "array<string>",
+          "required": false,
+          "description": "URLs de Firebase Storage amb fotos pròpies del propietari (complement a les fotos de Google Places)"
+        },
+        "ownerId": {
+          "type": "string",
+          "required": false,
+          "description": "UID de Firebase Auth del propietari verificat (referència a users/)"
+        },
+        "verifiedAt": {
+          "type": "timestamp",
+          "required": false,
+          "description": "Data de verificació del negoci"
+        },
         "createdAt": { "type": "timestamp", "required": false }
       },
       "indexes": [
         { "fields": ["broadcastingMatches"], "usage": "Bars que emeten un partit concret (array-contains)" },
-        { "fields": ["usuallyShowsBarca"], "usage": "Bars que normalment fan el Barça" }
+        { "fields": ["usuallyShowsBarca"], "usage": "Bars que normalment fan el Barça" },
+        { "fields": ["tier"], "usage": "Filtrar bars per tier (premium primer)" },
+        { "fields": ["ownerId"], "usage": "Trobar bars d'un propietari concret" }
       ]
     },
 

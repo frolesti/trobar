@@ -35,6 +35,14 @@ const mapDocToBar = (doc: any): Bar => {
         usuallyShowsBarca: data.usuallyShowsBarca ?? false,
         googlePlaceId: data.googlePlaceId || undefined,
         tier: data.tier || 'free',
+        // Camps premium
+        socialMedia: data.socialMedia || undefined,
+        description: data.description || undefined,
+        promotionalText: data.promotionalText || undefined,
+        gallery: Array.isArray(data.gallery) ? data.gallery : undefined,
+        amenities: Array.isArray(data.amenities) ? data.amenities : undefined,
+        ownerId: data.ownerId || undefined,
+        verifiedAt: data.verifiedAt?.toDate?.() || undefined,
         // Camps opcionals que potser no estan a totes les entrades
         nextMatch: data.nextMatch || undefined
     };
