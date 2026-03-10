@@ -55,14 +55,6 @@ export interface BarCardProps {
 
 const getCleanBarName = (name: string) => name.replace(/\s+\d+$/, '');
 
-const getPriceLabel = (priceLevel?: string) => {
-    if (priceLevel === 'PRICE_LEVEL_INEXPENSIVE') return '€';
-    if (priceLevel === 'PRICE_LEVEL_MODERATE') return '€€';
-    if (priceLevel === 'PRICE_LEVEL_EXPENSIVE') return '€€€';
-    if (priceLevel === 'PRICE_LEVEL_VERY_EXPENSIVE') return '€€€€';
-    return null;
-};
-
 // ── Component ──────────────────────────────────────────
 
 const BarCard: React.FC<BarCardProps> = (props) => {
@@ -78,9 +70,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
     const displayName = pd?.displayName || getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
     const displayRating = pd?.rating ?? fallbackRating ?? 0;
-    const ratingCount = pd?.userRatingCount;
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
-    const priceLabel = getPriceLabel(pd?.priceLevel);
 
     const openGoogleMaps = () => {
         const query = encodeURIComponent(`${name}, ${displayAddress}`);
@@ -91,28 +81,55 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
     const isPremium = tier === 'premium';
 
-    // ── BAR GRATUÏT: Targeta mínima (nom, adreça, distància, navegar) ──
-    if (!isPremium && verified) {
+    // ── Helpers de color per reutilitzar entre free i premium ──
+    const C = isPremium
+        ? { text: 'white', muted: 'rgba(255,255,255,0.7)', icon: 'rgba(255,255,255,0.6)',
+            badgeOpen: { bg: 'rgba(255,255,255,0.15)', color: '#A5D6A7', border: 'rgba(255,255,255,0.25)' },
+            badgeClosed: { bg: 'rgba(255,255,255,0.1)', color: '#EF9A9A', border: 'rgba(255,255,255,0.2)' },
+            btnBg: 'white', btnText: SKETCH_THEME.colors.primary, btnIcon: SKETCH_THEME.colors.primary }
+        : { text: SKETCH_THEME.colors.text, muted: SKETCH_THEME.colors.textMuted, icon: SKETCH_THEME.colors.textMuted,
+            badgeOpen: { bg: '#E8F5E9', color: '#2E7D32', border: '#C8E6C9' },
+            badgeClosed: { bg: '#FFEBEE', color: '#C62828', border: '#FFCDD2' },
+            btnBg: SKETCH_THEME.colors.primary, btnText: 'white', btnIcon: 'white' };
+
+    // ── BAR VERIFICAT (free o premium) — mateixa estructura, colors diferenciats ──
+    if (verified) {
         return (
             <View>
-                <Text 
+                {/* Nom */}
+                <Text
                     numberOfLines={2}
                     adjustsFontSizeToFit
                     minimumFontScale={0.75}
                     style={{
-                        fontSize: 18, fontWeight: 'bold', color: SKETCH_THEME.colors.text,
-                        fontFamily: 'Lora', marginBottom: 8, lineHeight: 24
+                        fontSize: 18, fontWeight: 'bold', color: C.text,
+                        fontFamily: 'Lora', marginBottom: isPremium ? 4 : 8, lineHeight: 24,
                     }}
                 >
                     {displayName}
                 </Text>
+
+                {/* Insígnia PREMIUM + Veure perfil (només premium) */}
+                {isPremium && (
+                    <TouchableOpacity
+                        onPress={onProfileOpen}
+                        activeOpacity={0.7}
+                        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
+                    >
+                        <Feather name="star" size={11} color="#FFD700" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFD700', fontFamily: 'Lora', letterSpacing: 0.3 }}>
+                            PREMIUM · Veure perfil
+                        </Text>
+                        <Feather name="chevron-right" size={13} color="#FFD700" style={{ marginLeft: 2 }} />
+                    </TouchableOpacity>
+                )}
 
                 {/* Puntuació + Obert/Tancat */}
                 {displayRating > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Feather name="star" size={14} color="#FFA000" style={{ marginRight: 3 }} />
-                            <Text style={{ fontWeight: 'bold', fontSize: 14, color: SKETCH_THEME.colors.text, fontFamily: 'Lora' }}>
+                            <Text style={{ fontWeight: 'bold', fontSize: 14, color: C.text, fontFamily: 'Lora' }}>
                                 {displayRating.toFixed(1)}
                             </Text>
                         </View>
@@ -120,9 +137,9 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                             <Text style={{
                                 paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
                                 overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,
-                                ...(openStatus
-                                    ? { backgroundColor: '#E8F5E9', color: '#2E7D32', borderColor: '#C8E6C9' }
-                                    : { backgroundColor: '#FFEBEE', color: '#C62828', borderColor: '#FFCDD2' })
+                                backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
+                                color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
+                                borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
                             }}>
                                 {openStatus ? 'Obert' : 'Tancat'}
                             </Text>
@@ -132,8 +149,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
                 {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <Feather name="map-pin" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8, marginTop: 2 }} />
-                    <Text numberOfLines={2} style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
+                    <Feather name="map-pin" size={15} color={C.icon} style={{ marginRight: 8, marginTop: 2 }} />
+                    <Text numberOfLines={2} style={{ fontSize: 14, color: C.muted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
                         {displayAddress}
                     </Text>
                 </View>
@@ -141,8 +158,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {/* Distància */}
                 {distanceText && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                        <Feather name="navigation" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora' }}>
+                        <Feather name="navigation" size={15} color={C.icon} style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, color: C.muted, fontFamily: 'Lora' }}>
                             {distanceText}
                         </Text>
                     </View>
@@ -151,127 +168,14 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {/* Botó de navegació */}
                 <TouchableOpacity
                     style={{
-                        backgroundColor: SKETCH_THEME.colors.primary, borderRadius: 12,
+                        backgroundColor: C.btnBg, borderRadius: 12,
                         paddingVertical: 12, paddingHorizontal: 16,
                         alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
                     }}
                     onPress={onNavigate}
                 >
-                    <Feather name="navigation" size={16} color="white" style={{ marginRight: 8 }} />
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 15, fontFamily: 'Lora' }}>Com arribar-hi</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    // ── BAR PREMIUM: Targeta completa amb fons verd invertit ──
-    if (isPremium && verified) {
-        return (
-            <View>
-                {/* Nom clicable → obre perfil */}
-                <TouchableOpacity onPress={onProfileOpen} activeOpacity={0.7}>
-                    <Text 
-                        numberOfLines={2}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.75}
-                        style={{
-                            fontSize: 18, fontWeight: 'bold', color: 'white',
-                            fontFamily: 'Lora', marginBottom: 4, paddingRight: 28, lineHeight: 24,
-                            textDecorationLine: 'underline',
-                        }}
-                    >
-                        {displayName}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <Feather name="star" size={11} color="#FFD700" style={{ marginRight: 4 }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFD700', fontFamily: 'Lora', letterSpacing: 0.3 }}>
-                            PREMIUM · Veure perfil
-                        </Text>
-                        <Feather name="chevron-right" size={13} color="#FFD700" style={{ marginLeft: 2 }} />
-                    </View>
-                </TouchableOpacity>
-
-                {/* Puntuació + Obert/Tancat + Preu */}
-                {displayRating > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Feather name="star" size={14} color="#FFA000" style={{ marginRight: 3 }} />
-                            <Text style={{ fontWeight: 'bold', fontSize: 14, color: 'white', fontFamily: 'Lora' }}>
-                                {displayRating.toFixed(1)}
-                            </Text>
-                            {ratingCount != null && (
-                                <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'Lora', marginLeft: 3 }}>
-                                    ({ratingCount})
-                                </Text>
-                            )}
-                        </View>
-                        {openStatus != null && (
-                            <Text style={{
-                                paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
-                                overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,
-                                ...(openStatus
-                                    ? { backgroundColor: 'rgba(255,255,255,0.15)', color: '#A5D6A7', borderColor: 'rgba(255,255,255,0.25)' }
-                                    : { backgroundColor: 'rgba(255,255,255,0.1)', color: '#EF9A9A', borderColor: 'rgba(255,255,255,0.2)' })
-                            }}>
-                                {openStatus ? 'Obert' : 'Tancat'}
-                            </Text>
-                        )}
-                        {priceLabel && (
-                            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'Lora' }}>
-                                {priceLabel}
-                            </Text>
-                        )}
-                    </View>
-                )}
-
-                {/* Adreça */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <Feather name="map-pin" size={15} color="rgba(255,255,255,0.6)" style={{ marginRight: 8, marginTop: 2 }} />
-                    <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
-                        {displayAddress}
-                    </Text>
-                </View>
-
-                {/* Distància */}
-                {distanceText && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <Feather name="navigation" size={15} color="rgba(255,255,255,0.6)" style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', fontFamily: 'Lora' }}>
-                            {distanceText}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Telèfon */}
-                {pd?.phoneNumber && (
-                    <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
-                        onPress={() => Linking.openURL(`tel:${pd.phoneNumber}`)}
-                    >
-                        <Feather name="phone" size={15} color="rgba(255,255,255,0.8)" style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', fontFamily: 'Lora' }}>
-                            {pd.phoneNumber}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Carrusel de fotos */}
-                {renderPhotos(pd, fallbackImages)}
-
-                {/* Separador */}
-                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 14 }} />
-
-                {/* Botó de navegació — blanc sobre verd */}
-                <TouchableOpacity
-                    style={{
-                        backgroundColor: 'white', borderRadius: 12,
-                        paddingVertical: 14, paddingHorizontal: 20,
-                        alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
-                    }}
-                    onPress={onNavigate}
-                >
-                    <Feather name="navigation" size={18} color={SKETCH_THEME.colors.primary} style={{ marginRight: 8 }} />
-                    <Text style={{ color: SKETCH_THEME.colors.primary, fontWeight: 'bold', fontSize: 16, fontFamily: 'Lora' }}>Com arribar-hi</Text>
+                    <Feather name="map-pin" size={16} color={C.btnIcon} style={{ marginRight: 8 }} />
+                    <Text style={{ color: C.btnText, fontWeight: 'bold', fontSize: 15, fontFamily: 'Lora' }}>Com arribar-hi</Text>
                 </TouchableOpacity>
             </View>
         );

@@ -238,6 +238,8 @@ const MapScreen = () => {
 
     const [nextMatch, setNextMatch] = useState<Match | null>(null);
 
+    const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
+
     
 
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
@@ -962,9 +964,13 @@ const MapScreen = () => {
 
                         setNextMatch(upcoming[0]);
 
+                        setUpcomingMatches(upcoming);
+
                     } else {
 
                         setNextMatch(null);
+
+                        setUpcomingMatches([]);
 
                     }
 
@@ -3040,6 +3046,8 @@ const MapScreen = () => {
             <BarProfileModal
 
                 visible={showBarProfile}
+
+                allMatches={upcomingMatches}
 
                 bar={selectedBar}
 

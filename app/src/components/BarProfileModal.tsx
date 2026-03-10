@@ -7,6 +7,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { Bar } from '../models/Bar';
 import { PlaceDetails } from '../services/placesService';
+import { Match } from '../services/matchService';
+import MatchCard from './MatchCard';
 
 // ── Tipus ──────────────────────────────────────────────
 
@@ -14,6 +16,8 @@ interface BarProfileModalProps {
     visible: boolean;
     bar: Bar | null;
     placeDetails: PlaceDetails | null;
+    /** Tots els partits disponibles (el component filtra per broadcastingMatches) */
+    allMatches?: Match[];
     onClose: () => void;
     onNavigate?: () => void;
 }
@@ -33,17 +37,17 @@ const P = {
 };
 
 // Mapa de xarxes socials a icones i URLs
-const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; label: string; urlPrefix: string }> = {
-    instagram: { icon: 'instagram', family: 'feather', label: 'Instagram', urlPrefix: 'https://instagram.com/' },
-    facebook:  { icon: 'facebook',  family: 'feather', label: 'Facebook',  urlPrefix: 'https://facebook.com/' },
-    whatsapp:  { icon: 'whatsapp',  family: 'mci',     label: 'WhatsApp',  urlPrefix: 'https://wa.me/' },
-    telegram:  { icon: 'telegram',  family: 'mci',     label: 'Telegram',  urlPrefix: 'https://t.me/' },
+const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; urlPrefix: string }> = {
+    instagram: { icon: 'instagram', family: 'feather', urlPrefix: 'https://instagram.com/' },
+    facebook:  { icon: 'facebook',  family: 'feather', urlPrefix: 'https://facebook.com/' },
+    whatsapp:  { icon: 'whatsapp',  family: 'mci',     urlPrefix: 'https://wa.me/' },
+    telegram:  { icon: 'telegram',  family: 'mci',     urlPrefix: 'https://t.me/' },
 };
 
 // ── Component ──────────────────────────────────────────
 
 const BarProfileModal: React.FC<BarProfileModalProps> = ({
-    visible, bar, placeDetails: pd, onClose, onNavigate,
+    visible, bar, placeDetails: pd, allMatches = [], onClose, onNavigate,
 }) => {
     const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const [showHours, setShowHours] = useState(false);
@@ -78,12 +82,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     const social = bar?.socialMedia;
     const hasSocial = social && Object.values(social).some(v => !!v);
 
-    const openGoogleMaps = () => {
-        if (bar) {
-            const query = encodeURIComponent(`${bar.name}, ${displayAddress}`);
-            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-        }
-    };
+    // Partits que el bar emet (filtrats des de la llista completa)
+    const broadcastMatches = bar?.broadcastingMatches && bar.broadcastingMatches.length > 0
+        ? allMatches.filter(m => bar.broadcastingMatches!.includes(m.id))
+        : [];
 
     // Contingut interior del modal
     const modalContent = (
@@ -215,11 +217,11 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     <View style={{ marginTop: 14 }}>
                         <Text style={sectionTitleStyle}>Informació</Text>
 
-                        {/* Adreça */}
-                        <TouchableOpacity onPress={openGoogleMaps} style={infoRowStyle}>
+                        {/* Adreça (text pla, sense link) */}
+                        <View style={infoRowStyle}>
                             <Feather name="map-pin" size={17} color={P.accent} style={{ marginRight: 10 }} />
-                            <Text style={[infoTextStyle, { textDecorationLine: 'underline', flex: 1 }]}>{displayAddress}</Text>
-                        </TouchableOpacity>
+                            <Text style={[infoTextStyle, { flex: 1 }]}>{displayAddress}</Text>
+                        </View>
 
                         {/* Telèfon */}
                         {pd?.phoneNumber && (
@@ -242,17 +244,6 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 <Text numberOfLines={1} style={[infoTextStyle, { flex: 1 }]}>
                                     {pd.websiteUri.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
                                 </Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Google Maps */}
-                        {pd?.googleMapsUri && (
-                            <TouchableOpacity
-                                onPress={() => Linking.openURL(pd.googleMapsUri!)}
-                                style={infoRowStyle}
-                            >
-                                <Feather name="map" size={17} color="#FF8A65" style={{ marginRight: 10 }} />
-                                <Text style={[infoTextStyle, { color: '#FF8A65' }]}>Veure a Google Maps</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -316,18 +307,19 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     {/* ── PARTITS QUE EMET ── */}
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitleStyle}>Partits que emet</Text>
-                        {bar?.broadcastingMatches && bar.broadcastingMatches.length > 0 ? (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 14, padding: 16, gap: 10 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                    <Feather name="tv" size={18} color={P.accent} style={{ marginRight: 8 }} />
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: 'Lora' }}>
-                                        {bar.broadcastingMatches.length} {bar.broadcastingMatches.length === 1 ? 'partit confirmat' : 'partits confirmats'}
-                                    </Text>
-                                </View>
-                                <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', lineHeight: 19 }}>
-                                    Aquest bar ha confirmat que emetrà els pròxims partits. Vine a veure'ls!
-                                </Text>
-                            </View>
+                        {broadcastMatches.length > 0 ? (
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={{ marginHorizontal: -20 }}
+                                contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+                            >
+                                {broadcastMatches.map(match => (
+                                    <View key={match.id} style={{ width: Math.min(260, SCREEN_WIDTH * 0.65) }}>
+                                        <MatchCard match={match} compact />
+                                    </View>
+                                ))}
+                            </ScrollView>
                         ) : bar?.usuallyShowsBarca ? (
                             <View style={{ backgroundColor: P.cardBg, borderRadius: 14, padding: 16 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
@@ -354,7 +346,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitleStyle}>Xarxes socials</Text>
                         {hasSocial ? (
-                            <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                            <View style={{ flexDirection: 'row', gap: 14 }}>
                                 {Object.entries(SOCIAL_CONFIG).map(([key, config]) => {
                                     const value = social?.[key as keyof typeof social];
                                     if (!value) return null;
@@ -364,19 +356,16 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             key={key}
                                             onPress={() => Linking.openURL(url)}
                                             style={{
-                                                flexDirection: 'row', alignItems: 'center',
-                                                backgroundColor: P.cardBg, borderRadius: 12,
-                                                paddingHorizontal: 14, paddingVertical: 10, gap: 8,
+                                                width: 44, height: 44, borderRadius: 22,
+                                                backgroundColor: P.cardBg,
+                                                alignItems: 'center', justifyContent: 'center',
                                             }}
                                         >
                                             {config.family === 'mci' ? (
-                                                <MaterialCommunityIcons name={config.icon as any} size={20} color={P.text} />
+                                                <MaterialCommunityIcons name={config.icon as any} size={22} color={P.text} />
                                             ) : (
-                                                <Feather name={config.icon as any} size={18} color={P.text} />
+                                                <Feather name={config.icon as any} size={20} color={P.text} />
                                             )}
-                                            <Text style={{ fontSize: 14, color: P.text, fontFamily: 'Lora' }}>
-                                                {config.label}
-                                            </Text>
                                         </TouchableOpacity>
                                     );
                                 })}
@@ -404,7 +393,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         <Feather name="navigation" size={20} color={P.bg} style={{ marginRight: 10 }} />
                         <Text style={{ color: P.bg, fontWeight: 'bold', fontSize: 17, fontFamily: 'Lora' }}>
                             Com arribar-hi
-                        </Text>
+                        </Text>map-pi
                     </TouchableOpacity>
                 </ScrollView>
             </Animated.View>
