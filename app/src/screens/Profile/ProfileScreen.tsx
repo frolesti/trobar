@@ -11,13 +11,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile, uploadProfileImage } from '../../services/userService';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import SettingsModal from './SettingsModal';
 import styles from './ProfileScreen.styles';
 
 export default function ProfileScreen() {
-  const { user, logout, deleteAccount, refreshProfile, isLoading: authLoading } = useAuth();
+  const { user, logout, refreshProfile, isLoading: authLoading } = useAuth();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Profile'>>();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   // Redirigir al login si no autenticat, PERÒ esperar que la comprovació d'auth acabi
   useEffect(() => {
@@ -52,38 +54,6 @@ export default function ProfileScreen() {
       index: 0,
       routes: [{ name: 'Map' }],
     });
-  };
-
-  const handleDeleteAccount = () => {
-      const confirmDelete = async () => {
-          try {
-              setIsLoading(true);
-              await deleteAccount();
-              // Després de l'eliminació, AuthContext normalment gestiona logout/neteja d'estat
-              // Accedir a navigation aquí pot ser complicat si el component es desmunta ràpidament
-              // Però la lògica de handleLogout fa el reset. 
-              // AuthContext probablement dispara canvi d'estat -> user null -> redirecció automàtica al login?
-          } catch (error) {
-              console.error(error);
-              Alert.alert('Error', "No s'ha pogut eliminar el compte. Torna-ho a provar.");
-              setIsLoading(false);
-          }
-      };
-
-      if (Platform.OS === 'web') {
-          if (window.confirm("Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.")) {
-              confirmDelete();
-          }
-      } else {
-          Alert.alert(
-              "Eliminar Compte",
-              "Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.",
-              [
-                  { text: "Cancel·lar", style: "cancel" },
-                  { text: "Eliminar", style: "destructive", onPress: confirmDelete }
-              ]
-          );
-      }
   };
 
   const pickImage = async () => {
@@ -151,10 +121,12 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.text} />
+          <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.textInverse} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
-        <View style={{ width: 44, height: 44 }} /> 
+        <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.backButton}>
+          <Ionicons name="settings-outline" size={24} color={SKETCH_THEME.colors.textInverse} />
+        </TouchableOpacity> 
       </View>
 
       {/* Àrea de contingut principal — sense ScrollView per pantalla completa */}
@@ -205,30 +177,13 @@ export default function ProfileScreen() {
 
         {/* Accions inferiors: fixades a baix */}
         <View style={{ paddingBottom: 10 }}>
-            <TouchableOpacity style={[styles.logoutButton, {marginBottom: 0}]} onPress={handleLogout}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutText}>Tancar Sessió</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-                style={{
-                    marginTop: 12,
-                    alignSelf: 'center',
-                    padding: 8,
-                    opacity: 0.8
-                }}
-                onPress={handleDeleteAccount}
-            >
-                <Text style={{
-                    color: SKETCH_THEME.colors.primary, 
-                    fontWeight: 'bold',
-                    fontSize: 12,
-                    textDecorationLine: 'underline'
-                }}>
-                    Eliminar el compte
-                </Text>
             </TouchableOpacity>
         </View>
       </View>
+
+      <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </SafeAreaView>
   );
 }

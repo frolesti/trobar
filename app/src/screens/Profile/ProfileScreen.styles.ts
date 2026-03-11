@@ -13,7 +13,7 @@ export default StyleSheet.create({
     paddingVertical: SKETCH_THEME.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: SKETCH_THEME.colors.border,
-    backgroundColor: SKETCH_THEME.colors.uiBg,
+    backgroundColor: SKETCH_THEME.colors.bg,
   },
   backButton: {
     padding: SKETCH_THEME.spacing.xs,
@@ -21,6 +21,7 @@ export default StyleSheet.create({
   headerTitle: {
     ...SKETCH_THEME.typography.h3,
     fontSize: 20,
+    color: SKETCH_THEME.colors.textInverse,
   },
   avatarContainer: {
       position: 'relative',
@@ -50,17 +51,17 @@ export default StyleSheet.create({
   },
   helperText: {
       ...SKETCH_THEME.typography.caption,
+      color: SKETCH_THEME.colors.mutedInverse,
       marginBottom: 12,
   },
   formContainer: {
       width: '100%',
       maxWidth: 600,
       alignSelf: 'center',
-      backgroundColor: SKETCH_THEME.colors.uiBg,
+      backgroundColor: SKETCH_THEME.colors.card,
       borderRadius: SKETCH_THEME.radius.lg,
       padding: 16,
-      borderWidth: 1,
-      borderColor: SKETCH_THEME.colors.border,
+      borderWidth: 0,
       ...(sketchShadow() as object),
       marginBottom: 20,
   },
@@ -94,14 +95,14 @@ export default StyleSheet.create({
     alignSelf: 'center',
     padding: 10,
     borderRadius: SKETCH_THEME.radius.md,
-    backgroundColor: SKETCH_THEME.colors.primarySoft,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(211, 47, 47, 0.25)',
+    borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
   },
   logoutText: {
     ...SKETCH_THEME.typography.body,
-    color: SKETCH_THEME.colors.primary,
+    color: SKETCH_THEME.colors.textInverse,
     fontWeight: '700',
   },
 });
