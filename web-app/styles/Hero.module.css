@@ -41,9 +41,9 @@
   height: 92px;
   display: flex;
   align-items: center;
-  background: #dbead6;
+  background: var(--bg);
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 -8px 24px rgba(2,6,23,0.03);
+  box-shadow: none;
 }
 
 .press-track {
@@ -63,7 +63,7 @@
   max-width:160px;
   width:auto;
   object-fit:contain;
-  filter:grayscale(100%) opacity(0.9) contrast(0.95);
+  filter:grayscale(100%) brightness(10) opacity(0.85);
 }
 
 @keyframes pressScroll {
@@ -76,7 +76,7 @@
   justify-content: space-between;
   padding: 160px 0 60px;
   position: relative;
-  background: linear-gradient(120deg,#f3f8ef 80%,#eaf5e2 100%);
+  background: linear-gradient(120deg,var(--bg) 80%,var(--bg-light) 100%);
   overflow: visible;
 }
 
@@ -96,7 +96,7 @@
 .title {
   font-size: clamp(54px, 8vw, 88px);
   font-weight: 900;
-  color: var(--text);
+  color: #fff;
   margin-bottom: 18px;
   line-height: 0.98;
   letter-spacing: -1px;
@@ -105,7 +105,7 @@
 
 .description {
   font-size: 22px;
-  color: var(--muted);
+  color: rgba(255,255,255,0.75);
   margin-bottom: 28px;
   max-width: 540px;
   animation: fadeIn 1.2s ease-in-out;
@@ -128,31 +128,31 @@
 }
 
 .ctaPrimary {
-  background: #234F1E;
+  background: var(--accent);
   color: #fff;
   font-weight: 700;
   font-size: 20px;
   padding: 18px 38px;
   border-radius: 18px;
-  box-shadow: 0 10px 26px rgba(47,107,55,0.15);
+  box-shadow: 0 10px 26px rgba(165,0,68,0.15);
 }
 .ctaSecondary {
-  background: #FFD86A;
-  color: #234F1E;
+  background: var(--blue);
+  color: #fff;
   font-weight: 700;
   font-size: 20px;
   padding: 18px 38px;
   border-radius: 18px;
-  box-shadow: 0 10px 26px rgba(255,216,106,0.15);
+  box-shadow: 0 10px 26px rgba(0,77,152,0.15);
   border: none;
 }
 
 .secondary{background:#fff;color:var(--accent);box-shadow:none}
 
 .secondary{
-  background: transparent;
-  color: var(--text);
-  border: 1px solid rgba(0,0,0,0.06);
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
   box-shadow: none;
 }
 

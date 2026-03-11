@@ -1,16 +1,21 @@
 import { Platform, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 export const SKETCHY_COLORS = {
-    bg: '#F0F7F4', // Verd menta clar
-    uiBg: 'rgba(240, 247, 244, 0.96)',
+    bg: '#a50044',           // GRANA PUR — fons principal
+    bgLight: '#8a003a',      // Grana fosc — seccions alternes
+    uiBg: 'rgba(165, 0, 68, 0.96)',
     card: '#FFFFFF',
-    text: '#1B4D3E', // Verd fosc bosquetà
-    textMuted: '#5C8D75', // Verd salvia
-    accent: '#4BB577', // Primary ara també és Accent
-    border: 'rgba(27, 77, 62, 0.15)', // Rentat verd
-    primary: '#4BB577', // Nou color verd de marca
-    primarySoft: 'rgba(75, 181, 119, 0.15)',
-    danger: '#D32F2F',
+    text: '#1A1A2E',         // Blau molt fosc (gairebé negre, llegible dins targetes)
+    textInverse: '#FFFFFF',  // Text sobre fons grana
+    textMuted: '#6B7280',    // Gris neutre (dins targetes)
+    mutedInverse: 'rgba(255,255,255,0.70)', // Text secundari sobre fons grana
+    accent: '#a50044',       // Granate Barça — botons secundaris, accents
+    accentSoft: 'rgba(255, 255, 255, 0.10)',
+    border: 'rgba(255, 255, 255, 0.12)', // Vora subtil sobre fons fosc
+    primary: '#004d98',      // Blau Barça — color principal
+    primarySoft: 'rgba(0, 77, 152, 0.10)',
+    gold: '#edbb00',         // Or Barça — indicadors premium, estrelles
+    danger: '#db0030',       // Vermell Barça
 };
 
 export const sketchFontFamily = () =>

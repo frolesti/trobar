@@ -2,16 +2,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
 :root{
-  --bg:#F3F8EF; /* soft mint background */
-  --ui-bg: #FFFFFFcc; /* white glass */
+  /* ═══ PALETA CENTRALITZADA ═══ */
+  /* Només cal canviar aquí per propagar a tot arreu */
+  --bg: #a50044;             /* GRANA PUR — fons principal */
+  --bg-light: #8a003a;       /* grana fosc — seccions alternes */
+  --ui-bg: rgba(255,255,255,0.85); /* glass overlay */
   --card: #FFFFFF;
-  --text: #123922; /* dark green */
-  --muted: #6b8f72;
-  --accent: #2f6b37; /* button green */
-  --border: rgba(47,107,55,0.08);
-  --primary-soft: rgba(47,107,55,0.12);
-  --max-width:1200px;
-  --footer-bg: #0f2a1d;
+  --text: #1A1A2E;           /* blau fosc — text dins targetes */
+  --text-inverse: #FFFFFF;   /* text sobre fons grana */
+  --muted: #6B7280;          /* gris — text secundari dins targetes */
+  --muted-inverse: rgba(255,255,255,0.70); /* text secundari sobre fons grana */
+  --accent: #a50044;         /* granate Barça — CTA, enllaços */
+  --accent-soft: rgba(255,255,255,0.10);
+  --blue: #004d98;           /* blau Barça — primari */
+  --blue-soft: rgba(0,77,152,0.10);
+  --gold: #edbb00;           /* or Barça — badge, premium */
+  --danger: #db0030;         /* vermell Barça — errors */
+  --border: rgba(255,255,255,0.12);
+  --shadow: rgba(0,0,0,0.15);
+  --max-width: 1200px;
+  --footer-bg: #1A1A2E;
 }
 
 *{box-sizing:border-box}
@@ -22,7 +32,7 @@ a{color:var(--accent);text-decoration:none}
 body{
   margin:0;
   font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background:#F3F8EF;
+  background:var(--bg);
   color:var(--text);
   min-height:100vh;
   position:relative;
@@ -43,7 +53,7 @@ video[aria-hidden="true"] {
   z-index: -1;
   pointer-events: none;
   opacity: 0.92;
-  background: #F3F8EF;
+  background: var(--bg);
   filter: blur(0.5px) brightness(1.04) saturate(1.08);
 }
 
@@ -79,33 +89,33 @@ h1, h2, h3 {
 .nav-link{padding:8px 10px;border-radius:8px;color:var(--muted);transition:all .14s ease}
 .nav-link:hover{color:var(--text)}
 .login{color:var(--text);text-decoration:none;font-weight:600;font-size:16px;font-family:'Inter',sans-serif}
-.cta{padding:12px 24px;border-radius:999px;background:var(--text);color:white;font-weight:600;font-size:16px;box-shadow:0 10px 26px rgba(47,107,55,0.15);text-decoration:none;font-family:'Inter',sans-serif}
+.cta{padding:12px 24px;border-radius:999px;background:var(--accent);color:white;font-weight:600;font-size:16px;box-shadow:0 10px 26px var(--shadow);text-decoration:none;font-family:'Inter',sans-serif}
 .cta:hover{transform:translateY(-2px)}
 .hero{display:flex;align-items:center;justify-content:space-between;padding:160px 0 60px;background:var(--bg);position:relative}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 10%, rgba(47,107,55,0.04), transparent 20%);pointer-events:none}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 10%, var(--accent-soft), transparent 20%);pointer-events:none}
 .hero .container{display:flex;gap:48px;max-width:1200px;margin:0 auto;padding:0 24px}
 .hero .left{flex:0 1 56%;max-width:620px}
 .hero .right{flex:0 1 44%}
-.hero .title{font-size:64px;font-weight:800;color:var(--text);margin-bottom:18px;line-height:0.98}
-.hero .description{font-size:18px;color:var(--muted);margin-bottom:26px;max-width:640px}
+.hero .title{font-size:64px;font-weight:800;color:var(--text-inverse);margin-bottom:18px;line-height:0.98}
+.hero .description{font-size:18px;color:var(--muted-inverse);margin-bottom:26px;max-width:640px}
 .hero .ctaWrapper{margin-top:24px}
-.hero .cta{display:inline-block;padding:12px 24px;background:var(--accent);color:white;font-weight:600;border-radius:8px;text-decoration:none;box-shadow:0 6px 18px rgba(47,107,55,0.14);transition:transform 0.2s}
+.hero .cta{display:inline-block;padding:12px 24px;background:var(--accent);color:white;font-weight:600;border-radius:8px;text-decoration:none;box-shadow:0 6px 18px var(--shadow);transition:transform 0.2s}
 .hero .cta:hover{transform:translateY(-4px)}
 .hero .right{flex:1;display:flex;justify-content:center;align-items:center}
 .hero .image{width:100%;max-width:520px;transform:rotate(-12deg)}
 .hero-badge{position:absolute;right:10%;top:18%;background:#F7EDD5;padding:10px 14px;border-radius:999px;box-shadow:0 8px 24px rgba(2,6,23,0.06);color:#4b4b2f;font-weight:600}
-.cta{display:inline-block;padding:12px 18px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent));color:white;font-weight:600;box-shadow:0 8px 20px rgba(75,181,119,0.12);transition:transform .14s ease}
+.cta{display:inline-block;padding:12px 18px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent));color:white;font-weight:600;box-shadow:0 8px 20px rgba(165,0,68,0.12);transition:transform .14s ease}
 .cta:hover{transform:translateY(-3px)}
 .hero .left{flex:1}
-.hero h1{font-size:40px;margin:0 0 12px;color:var(--text)}
-.hero p{color:var(--muted);margin:0 0 18px}
+.hero h1{font-size:40px;margin:0 0 12px;color:var(--text-inverse)}
+.hero p{color:var(--muted-inverse);margin:0 0 18px}
 .cta{display:inline-block;padding:12px 18px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent));color:white;font-weight:600}
-.panel{background:var(--card);border-radius:12px;padding:18px;border:1px solid var(--border);box-shadow:0 8px 20px rgba(27,77,62,0.06)}
+.panel{background:var(--card);border-radius:12px;padding:18px;border:1px solid var(--border);box-shadow:0 8px 20px rgba(26,26,46,0.06)}
 .features{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin:56px 0}
-.feature{padding:28px;border-radius:16px;background:linear-gradient(180deg, #f7faf3, #eef6ea);border:1px solid var(--border)}
-.footer{padding:48px 0;color:#d7e6d9;background:var(--footer-bg);margin-top:64px}
+.feature{padding:28px;border-radius:16px;background:linear-gradient(180deg, var(--bg-light), var(--bg));border:1px solid var(--border)}
+.footer{padding:48px 0;color:#d7dde6;background:var(--footer-bg);margin-top:64px}
 .footer .container{display:flex;justify-content:space-between;align-items:flex-start}
-.footer small{display:block;color:#c6e0c9}
+.footer small{display:block;color:#a8b0c0}
 .contact-grid{display:grid;grid-template-columns:1fr 420px;gap:24px}
 @media(max-width:900px){.hero{flex-direction:column}.contact-grid{grid-template-columns:1fr}}
 
@@ -123,18 +133,18 @@ section[id], div[id] {
 /* Features grid used by new scaffold */
 .features-section{padding:56px 0}
 .features-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px}
-.feature-card{background:linear-gradient(180deg,#f7faf3,#eef6ea);border-radius:12px;padding:22px;border:1px solid var(--border)}
+.feature-card{background:linear-gradient(180deg,var(--bg-light),var(--bg));border-radius:12px;padding:22px;border:1px solid var(--border)}
 .feature-card h3{margin:0 0 8px}
 .muted{color:var(--muted)}
 
 /* Footer layout */
 .footer-inner{display:flex;gap:40px;align-items:flex-start}
-.footer-brand{font-size:32px;color:#dff0dd;font-weight:800}
-.footer-columns{display:flex;gap:56px;color:#cfe6cf}
-.footer-columns h4{color:#e7f3e7;margin-bottom:8px}
+.footer-brand{font-size:32px;color:#e0dff0;font-weight:800}
+.footer-columns{display:flex;gap:56px;color:#c0c0d0}
+.footer-columns h4{color:#e7e7f3;margin-bottom:8px}
 .footer-columns ul{list-style:none;padding:0;margin:0}
 .footer-columns li{margin-bottom:8px}
-.footer-copy{margin-left:auto;color:#c6e0c9;align-self:end}
+.footer-copy{margin-left:auto;color:#a8b0c0;align-self:end}
 
 /* global press-strip styles (used by PressStrip component) */
 .press-strip {
@@ -144,9 +154,9 @@ section[id], div[id] {
   height: 92px;
   display: flex;
   align-items: center;
-  background: #dbead6;
+  background: var(--bg);
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 -8px 24px rgba(2,6,23,0.03);
+  box-shadow: none;
 }
 
 .press-track {
@@ -166,7 +176,7 @@ section[id], div[id] {
   max-width:160px;
   width:auto;
   object-fit:contain;
-  filter:grayscale(100%) opacity(0.9) contrast(0.95);
+  filter:grayscale(100%) brightness(10) opacity(0.85);
 }
 
 @keyframes pressScroll {
