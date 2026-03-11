@@ -9,7 +9,20 @@ import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { getUserPreferences } from '../../services/userService';
 import MatchCard from '../../components/MatchCard';
+
+// Temporada futbolística: agost any N → juliol any N+1
+function getSeason(d: Date): string {
+    const y = d.getFullYear();
+    const m = d.getMonth(); // 0-indexed
+    // Agost (7) en endavant → temporada y/(y+1), abans → temporada (y-1)/y
+    return m >= 7 ? `${y}/${y + 1}` : `${y - 1}/${y}`;
+}
+
+type SeasonHeader = { type: 'season'; season: string; id: string };
+type MatchItem = Match & { type?: 'match' };
+type ListItem = SeasonHeader | MatchItem;
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Matches'>;
@@ -24,6 +37,17 @@ const MatchesScreen = ({ navigation }: Props) => {
     const [visibleCount, setVisibleCount] = useState(20);
     const [filter, setFilter] = useState<FilterType>('ALL');
     const [selectedComp, setSelectedComp] = useState<string | null>(null);
+
+    // Carregar categoria per defecte des de les preferències d'usuari
+    useEffect(() => {
+        if (user) {
+            getUserPreferences(user.id).then(prefs => {
+                if (prefs.display.defaultCategory === 'masculino') setFilter('MASCULI');
+                else if (prefs.display.defaultCategory === 'femenino') setFilter('FEMENI');
+                // 'all' ja és el default
+            }).catch(console.error);
+        }
+    }, [user]);
     
     // Animació personalitzada: Quan naveguem al Mapa, estàndard. Quan apareix... per defecte llisca des de la dreta.
     // Si volem 'Lliscar des de l'esquerra', hauríem d'ajustar opcions de navegació o assumir que aquesta pantalla és a l'esquerra.
@@ -46,7 +70,7 @@ const MatchesScreen = ({ navigation }: Props) => {
     const flatListRef = useRef<FlatList>(null);
     const previousContentHeightRef = useRef<number>(0);
     const previousScrollOffsetRef = useRef<number>(0);
-    const isLoadingPastMatchesRef = useRef(false);
+    const scrollAdjustRef = useRef<{ offset: number; height: number } | null>(null);
 
     // PanResponder per a lliscar a la dreta -> navegació al Mapa
     // DESACTIVAT: Pot generar conflictes amb el scroll vertical de FlatList en alguns dispositius.
@@ -184,9 +208,33 @@ const MatchesScreen = ({ navigation }: Props) => {
         return [...filteredPast, ...futureSlice];
     }, [pastMatches, filteredFutureMatches, visibleCount, filter, isFemenino, selectedComp]);
 
+    // Llista amb separadors de temporada intercalats
+    const listItems: ListItem[] = useMemo(() => {
+        const items: ListItem[] = [];
+        let currentSeason = '';
+        for (const m of displayedMatches) {
+            const d = m.date instanceof Date ? m.date : new Date(m.date);
+            const s = getSeason(d);
+            if (s !== currentSeason) {
+                // Inserir capçalera de temporada només si ja hi havia una temporada anterior
+                if (currentSeason !== '') {
+                    items.push({ type: 'season', season: s, id: `season-${s}` });
+                }
+                currentSeason = s;
+            }
+            items.push(m as MatchItem);
+        }
+        return items;
+    }, [displayedMatches]);
+
     const handleRefresh = useCallback(async () => {
         if (isRefreshingRef.current) return;
         isRefreshingRef.current = true;
+
+        // Capturar posició de scroll ABANS de qualsevol canvi d'estat
+        const savedOffset = previousScrollOffsetRef.current;
+        const savedHeight = previousContentHeightRef.current;
+
         setIsRefreshing(true);
 
         try {
@@ -202,8 +250,10 @@ const MatchesScreen = ({ navigation }: Props) => {
             const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
             
             if (sortedHistory.length > 0) {
-                isLoadingPastMatchesRef.current = true;
+                scrollAdjustRef.current = { offset: savedOffset, height: savedHeight };
                 setPastMatches(prev => [...sortedHistory, ...prev]);
+                // Cancel·lar ajust després d'1s (vàlvula de seguretat)
+                setTimeout(() => { scrollAdjustRef.current = null; }, 1000);
             }
         } finally {
             setIsRefreshing(false);
@@ -246,13 +296,14 @@ const MatchesScreen = ({ navigation }: Props) => {
                 paddingVertical: SKETCH_THEME.spacing.md,
                 borderBottomWidth: 1,
                 borderBottomColor: SKETCH_THEME.colors.border,
-                backgroundColor: SKETCH_THEME.colors.uiBg,
+                backgroundColor: SKETCH_THEME.colors.bg,
             }}>
                 <View style={{ width: 32 }} />
 
                 <Text style={{
                     ...SKETCH_THEME.typography.h3,
                     fontSize: 20,
+                    color: SKETCH_THEME.colors.textInverse,
                 }}>
                     Partits
                 </Text>
@@ -265,7 +316,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                     style={{ padding: SKETCH_THEME.spacing.xs }}
                     hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
                 >
-                    <Ionicons name="arrow-forward" size={24} color={SKETCH_THEME.colors.text} />
+                    <Ionicons name="arrow-forward" size={24} color={SKETCH_THEME.colors.textInverse} />
                 </TouchableOpacity>
             </View>
             <View style={{ height: 50, backgroundColor: SKETCH_THEME.colors.bg }}>
@@ -283,14 +334,14 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 paddingVertical: 6,
                                 paddingHorizontal: 12,
                                 borderRadius: 18,
-                                backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.bg,
+                                backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
-                                borderColor: filter === tab ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
+                                borderColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
                                 marginRight: 8,
                             }}
                         >
                             <Text style={{
-                                color: filter === tab ? '#FFF' : SKETCH_THEME.colors.textMuted,
+                                color: filter === tab ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
                                 fontWeight: filter === tab ? 'bold' : 'normal',
                                 fontSize: 12,
                                 fontFamily: 'Lora',
@@ -313,14 +364,14 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 paddingVertical: 6,
                                 paddingHorizontal: 12,
                                 borderRadius: 18,
-                                backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'transparent',
+                                backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
-                                borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.border,
+                                borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
                                 marginRight: 8
                             }}
                         >
                             <Text style={{
-                                color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.textMuted,
+                                color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
                                 fontSize: 12, fontFamily: 'Lora'
                             }}>{c}</Text>
                         </TouchableOpacity>
@@ -330,10 +381,10 @@ const MatchesScreen = ({ navigation }: Props) => {
 
             <FlatList
                 ref={flatListRef}
-                data={loading ? [] : displayedMatches}
+                data={loading ? [] : listItems}
                 style={Platform.select({ web: { flex: 1, minHeight: 0 } as any, default: { flex: 1 } })}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 100 }}
+                keyExtractor={(item) => (item as any).type === 'season' ? (item as SeasonHeader).id : (item as MatchItem).id}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 0 }}
                 showsVerticalScrollIndicator={true}
                 bounces={true}
                 alwaysBounceVertical={true}
@@ -342,15 +393,22 @@ const MatchesScreen = ({ navigation }: Props) => {
                     previousScrollOffsetRef.current = e.nativeEvent.contentOffset.y;
                 }}
                 scrollEventThrottle={16}
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                 onContentSizeChange={(_w, h) => {
-                    if (isLoadingPastMatchesRef.current && previousContentHeightRef.current > 0) {
-                        const delta = h - previousContentHeightRef.current;
+                    if (scrollAdjustRef.current) {
+                        const { offset, height } = scrollAdjustRef.current;
+                        const delta = h - height;
                         if (delta > 0) {
-                            const newOffset = previousScrollOffsetRef.current + delta;
-                            flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                            const newOffset = offset + delta;
+                            if (Platform.OS === 'web') {
+                                requestAnimationFrame(() => {
+                                    flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                                });
+                            } else {
+                                flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                            }
                             previousScrollOffsetRef.current = newOffset;
                         }
-                        isLoadingPastMatchesRef.current = false;
                     }
                     previousContentHeightRef.current = h;
                 }}
@@ -373,27 +431,42 @@ const MatchesScreen = ({ navigation }: Props) => {
                 }
                 ListHeaderComponent={
                     Platform.OS === 'web' ? (
-                        <View style={{ paddingVertical: 4, alignItems: 'center' }}>
-                             <TouchableOpacity 
-                                onPress={handleRefresh} 
-                                disabled={isRefreshing}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            >
-                                {isRefreshing ? (
-                                    <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
-                                ) : (
-                                    <Ionicons name="chevron-up-circle-outline" size={24} color={SKETCH_THEME.colors.textMuted} />
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity 
+                            onPress={handleRefresh} 
+                            disabled={isRefreshing}
+                            activeOpacity={0.7}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                paddingVertical: 10,
+                                marginBottom: 6,
+                                borderRadius: 12,
+                                backgroundColor: 'transparent',
+                                opacity: isRefreshing ? 0.5 : 1,
+                            }}
+                        >
+                            {isRefreshing ? (
+                                <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
+                            ) : (
+                                <>
+                                    <Ionicons name="chevron-up-circle-outline" size={16} color={SKETCH_THEME.colors.mutedInverse} />
+                                    <Text style={{ 
+                                        marginLeft: 6, fontSize: 12, color: SKETCH_THEME.colors.mutedInverse, fontFamily: 'Lora', fontWeight: '600'
+                                    }}>
+                                        Carregar partits anteriors
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
                     ) : null
                 }
                 ListFooterComponent={
                     !loading && visibleCount < filteredFutureMatches.length ? (
                         <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                            <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
+                            <ActivityIndicator size="small" color={SKETCH_THEME.colors.gold} />
                             <Text style={{
-                                color: SKETCH_THEME.colors.textMuted,
+                                color: SKETCH_THEME.colors.mutedInverse,
                                 marginTop: 8,
                                 fontSize: 12,
                                 fontFamily: 'Lora'
@@ -401,23 +474,75 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 Carregant més partits...
                             </Text>
                         </View>
+                    ) : !loading && displayedMatches.length > 0 ? (
+                        <View style={{ alignItems: 'center', marginTop: 12, paddingBottom: 8 }}>
+                            <Ionicons name="checkmark-circle-outline" size={26} color={SKETCH_THEME.colors.mutedInverse} />
+                            <Text style={{
+                                color: SKETCH_THEME.colors.mutedInverse,
+                                marginTop: 6,
+                                fontSize: 12,
+                                fontFamily: 'Lora',
+                                fontWeight: '600',
+                            }}>
+                                Ja estàs al dia!
+                            </Text>
+                            <Text style={{
+                                color: SKETCH_THEME.colors.mutedInverse,
+                                marginTop: 2,
+                                fontSize: 11,
+                                fontFamily: 'Lora',
+                                textAlign: 'center',
+                                paddingHorizontal: 40,
+                                opacity: 0.6,
+                            }}>
+                                No hi ha més partits programats
+                            </Text>
+                        </View>
                     ) : null
                 }
-                renderItem={({ item }) => (
-                    <MatchCard
-                        match={item}
-                        hasBroadcast={broadcastMatchIds.has(item.id)}
-                        onPress={() => navigation.navigate('Map', { matchId: item.id })}
-                    />
-                )}
+                renderItem={({ item }) => {
+                    if ((item as any).type === 'season') {
+                        const sh = item as SeasonHeader;
+                        return (
+                            <View style={{
+                                flexDirection: 'row', alignItems: 'center',
+                                marginVertical: 12, paddingHorizontal: 4,
+                            }}>
+                                <View style={{ flex: 1, height: 1, backgroundColor: SKETCH_THEME.colors.border }} />
+                                <View style={{
+                                    paddingHorizontal: 14, paddingVertical: 5,
+                                    backgroundColor: SKETCH_THEME.colors.uiBg,
+                                    borderRadius: 12,
+                                    borderWidth: 1, borderColor: SKETCH_THEME.colors.border,
+                                }}>
+                                    <Text style={{
+                                        fontSize: 11, fontWeight: 'bold', fontFamily: 'Lora',
+                                        color: SKETCH_THEME.colors.mutedInverse, letterSpacing: 0.5,
+                                    }}>
+                                        Temporada {sh.season}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, height: 1, backgroundColor: SKETCH_THEME.colors.border }} />
+                            </View>
+                        );
+                    }
+                    const m = item as MatchItem;
+                    return (
+                        <MatchCard
+                            match={m}
+                            hasBroadcast={broadcastMatchIds.has(m.id)}
+                            onPress={() => navigation.navigate('Map', { matchId: m.id })}
+                        />
+                    );
+                }}
             />
         </SafeAreaView>    );
 };
 const LoadingState = () => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} />
+        <ActivityIndicator size="large" color={SKETCH_THEME.colors.gold} />
         <Text style={{ 
-            color: SKETCH_THEME.colors.textMuted, 
+            color: SKETCH_THEME.colors.mutedInverse, 
             marginTop: 16, 
             fontSize: 14,
             fontFamily: 'Lora'
@@ -429,9 +554,9 @@ const LoadingState = () => (
 
 const EmptyState = ({ filter }: { filter: FilterType }) => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <Ionicons name="calendar-outline" size={64} color={SKETCH_THEME.colors.textMuted} />
+        <Ionicons name="calendar-outline" size={64} color={SKETCH_THEME.colors.mutedInverse} />
         <Text style={{ 
-            color: SKETCH_THEME.colors.text, 
+            color: SKETCH_THEME.colors.textInverse, 
             marginTop: 20, 
             fontSize: 18,
             fontWeight: 'bold',
@@ -440,7 +565,7 @@ const EmptyState = ({ filter }: { filter: FilterType }) => (
             No hi ha partits {filter === 'ALL' ? '' : filter === 'MASCULI' ? 'masculins' : 'femenins'} properament
         </Text>
         <Text style={{ 
-            color: SKETCH_THEME.colors.textMuted, 
+            color: SKETCH_THEME.colors.mutedInverse, 
             marginTop: 8, 
             fontSize: 14,
             textAlign: 'center',
