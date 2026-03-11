@@ -26,10 +26,10 @@ const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Colors del tema premium (igual que la BarCard premium)
 const P = {
-    bg: SKETCH_THEME.colors.primary,               // Verd fosc
+    bg: SKETCH_THEME.colors.accent,                // Grana Barça
     text: 'white',
     textMuted: 'rgba(255,255,255,0.75)',
-    accent: '#FFD700',                              // Or
+    accent: '#edbb00',                              // Or Barça
     separator: 'rgba(255,255,255,0.18)',
     cardBg: 'rgba(255,255,255,0.12)',
     badgeOpen: { bg: 'rgba(255,255,255,0.15)', text: '#A5D6A7', border: 'rgba(255,255,255,0.25)' },
@@ -186,7 +186,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     {displayRating > 0 && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 10, gap: 12 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Feather name="star" size={16} color="#FFA000" style={{ marginRight: 4 }} />
+                                <Feather name="star" size={16} color="#edbb00" style={{ marginRight: 4 }} />
                                 <Text style={{ fontWeight: 'bold', fontSize: 16, color: P.text, fontFamily: 'Lora' }}>
                                     {displayRating.toFixed(1)}
                                 </Text>
@@ -346,19 +346,21 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitleStyle}>Xarxes socials</Text>
                         {hasSocial ? (
-                            <View style={{ flexDirection: 'row', gap: 14 }}>
+                            <View style={{ gap: 10 }}>
                                 {Object.entries(SOCIAL_CONFIG).map(([key, config]) => {
                                     const value = social?.[key as keyof typeof social];
                                     if (!value) return null;
                                     const url = value.startsWith('http') ? value : `${config.urlPrefix}${value}`;
+                                    const displayHandle = value.replace(/^https?:\/\/(www\.)?[^/]+\/?/, '').replace(/\/$/, '') || value;
                                     return (
                                         <TouchableOpacity
                                             key={key}
                                             onPress={() => Linking.openURL(url)}
                                             style={{
-                                                width: 44, height: 44, borderRadius: 22,
+                                                flexDirection: 'row', alignItems: 'center',
                                                 backgroundColor: P.cardBg,
-                                                alignItems: 'center', justifyContent: 'center',
+                                                paddingVertical: 10, paddingHorizontal: 14,
+                                                borderRadius: 14, gap: 10,
                                             }}
                                         >
                                             {config.family === 'mci' ? (
@@ -366,6 +368,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             ) : (
                                                 <Feather name={config.icon as any} size={20} color={P.text} />
                                             )}
+                                            <Text style={{ color: P.text, fontSize: 14, fontFamily: 'Lora', fontWeight: '600', flex: 1 }}>
+                                                {displayHandle}
+                                            </Text>
+                                            <Feather name="external-link" size={14} color={P.textMuted} />
                                         </TouchableOpacity>
                                     );
                                 })}
@@ -393,7 +399,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         <Feather name="navigation" size={20} color={P.bg} style={{ marginRight: 10 }} />
                         <Text style={{ color: P.bg, fontWeight: 'bold', fontSize: 17, fontFamily: 'Lora' }}>
                             Com arribar-hi
-                        </Text>map-pi
+                        </Text>
                     </TouchableOpacity>
                 </ScrollView>
             </Animated.View>

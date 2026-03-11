@@ -86,7 +86,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         ? { text: 'white', muted: 'rgba(255,255,255,0.7)', icon: 'rgba(255,255,255,0.6)',
             badgeOpen: { bg: 'rgba(255,255,255,0.15)', color: '#A5D6A7', border: 'rgba(255,255,255,0.25)' },
             badgeClosed: { bg: 'rgba(255,255,255,0.1)', color: '#EF9A9A', border: 'rgba(255,255,255,0.2)' },
-            btnBg: 'white', btnText: SKETCH_THEME.colors.primary, btnIcon: SKETCH_THEME.colors.primary }
+            btnBg: 'white', btnText: SKETCH_THEME.colors.accent, btnIcon: SKETCH_THEME.colors.accent }
         : { text: SKETCH_THEME.colors.text, muted: SKETCH_THEME.colors.textMuted, icon: SKETCH_THEME.colors.textMuted,
             badgeOpen: { bg: '#E8F5E9', color: '#2E7D32', border: '#C8E6C9' },
             badgeClosed: { bg: '#FFEBEE', color: '#C62828', border: '#FFCDD2' },
@@ -116,11 +116,11 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         activeOpacity={0.7}
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
                     >
-                        <Feather name="star" size={11} color="#FFD700" style={{ marginRight: 4 }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFD700', fontFamily: 'Lora', letterSpacing: 0.3 }}>
+                        <Feather name="star" size={11} color="#edbb00" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#edbb00', fontFamily: 'Lora', letterSpacing: 0.3 }}>
                             PREMIUM · Veure perfil
                         </Text>
-                        <Feather name="chevron-right" size={13} color="#FFD700" style={{ marginLeft: 2 }} />
+                        <Feather name="chevron-right" size={13} color="#edbb00" style={{ marginLeft: 2 }} />
                     </TouchableOpacity>
                 )}
 
@@ -128,7 +128,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {displayRating > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Feather name="star" size={14} color="#FFA000" style={{ marginRight: 3 }} />
+                            <Feather name="star" size={14} color="#edbb00" style={{ marginRight: 3 }} />
                             <Text style={{ fontWeight: 'bold', fontSize: 14, color: C.text, fontFamily: 'Lora' }}>
                                 {displayRating.toFixed(1)}
                             </Text>
@@ -174,7 +174,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     }}
                     onPress={onNavigate}
                 >
-                    <Feather name="map-pin" size={16} color={C.btnIcon} style={{ marginRight: 8 }} />
+                    <Feather name="navigation" size={16} color={C.btnIcon} style={{ marginRight: 8 }} />
                     <Text style={{ color: C.btnText, fontWeight: 'bold', fontSize: 15, fontFamily: 'Lora' }}>Com arribar-hi</Text>
                 </TouchableOpacity>
             </View>
@@ -204,14 +204,6 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 </Text>
             </View>
 
-            {/* Google Maps link */}
-            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }} onPress={openGoogleMaps}>
-                <Feather name="map" size={14} color="#E53935" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 13, color: '#E53935', textDecorationLine: 'underline', fontFamily: 'Lora' }}>
-                    Veure a Google Maps
-                </Text>
-            </TouchableOpacity>
-
             {/* Carregant */}
             {loadingPlaceDetails && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -227,7 +219,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
             {/* Acció de report */}
             <View>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'Lora', marginBottom: 15, textAlign: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'Lora', marginBottom: 15, textAlign: 'center', color: SKETCH_THEME.colors.primary }}>
                     Es poden veure partits aquí?
                 </Text>
 

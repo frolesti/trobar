@@ -69,7 +69,7 @@ const BarListItem: React.FC<BarListItemProps> = ({
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="star" size={12} color="#FFA000" style={{ marginRight: 2 }} />
+                    <Feather name="star" size={12} color="#edbb00" style={{ marginRight: 2 }} />
                     <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: 'Lora', fontWeight: 'bold' }}>
                         {bar.rating}
                     </Text>
