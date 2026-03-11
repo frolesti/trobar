@@ -115,6 +115,8 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
                 competition: data.competition,
                 location: data.location || '',
                 category: data.category,
+                homeScore: data.homeScore,
+                awayScore: data.awayScore,
                 status: data.status
             });
         });
