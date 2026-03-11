@@ -36,6 +36,8 @@ import { fetchAllMatches, Match } from '../../services/matchService';
 
 import { fetchBarsFromOSM, OSMBar } from '../../services/osmService';
 
+import { getUserPreferences } from '../../services/userService';
+
 import styles from './MapScreen.styles';
 
 import MatchCard from '../../components/MatchCard';
@@ -154,35 +156,24 @@ const CAMERA_LAT_OFFSET = 0.002;   // graus que el centre de la càmera es despl
 
 const MAP_REGION_DELTA   = 0.008;  // latitudeDelta de la regió animada
 
-
-
-// Suprimeix avisos de deprecació de Google Maps
-
-const originalWarn = console.warn;
-
-const originalError = console.error;
-
-
-
-if (Platform.OS === 'web') {
-
-    console.warn = (...args) => {
-
-        if (args[0] && typeof args[0] === 'string' && (args[0].includes('google.maps.places.Autocomplete') || args[0].includes('As of March 1st, 2025'))) return;
-
-        originalWarn(...args);
-
-    };
-
-    console.error = (...args) => {
-
-        if (args[0] && typeof args[0] === 'string' && (args[0].includes('google.maps.places.Autocomplete') || args[0].includes('As of March 1st, 2025'))) return;
-
-        originalError(...args);
-
-    }
-
+/** Converteix el radi de cerca (km) a un zoom level de Mapbox/MapLibre */
+function radiusToZoom(km: number): number {
+    if (km <= 0.5) return 16;
+    if (km <= 1)   return 15;
+    if (km <= 2)   return 14;
+    if (km <= 5)   return 12.5;
+    return 12;
 }
+
+/** Converteix el radi de cerca (km) a latitudeDelta per a MapView natiu */
+function radiusToLatDelta(km: number): number {
+    // ~0.009 graus ≈ 1 km a latituds d'Espanya
+    return km * 0.012;
+}
+
+
+
+
 
 
 
@@ -226,6 +217,10 @@ const MapScreen = () => {
 
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Suggeriments de geocodificació (Nominatim)
+    const [geoSuggestions, setGeoSuggestions] = useState<{display_name: string, lat: string, lon: string}[]>([]);
+    const searchTimerRef = useRef<any>(null);
+
     // Filtratge per viewport (el radi ja no s'utilitza)
 
     const [visibleBounds, setVisibleBounds] = useState<{ minLat: number, maxLat: number, minLng: number, maxLng: number } | null>(null);
@@ -255,6 +250,9 @@ const MapScreen = () => {
     // Placeholder local si una imatge remota falla
 
     const [failedImages, setFailedImages] = useState<Record<string, true>>({});
+
+    // Radi de cerca configurable des de preferències d'usuari (km)
+    const [searchRadiusKm, setSearchRadiusKm] = useState(2);
 
 
 
@@ -371,6 +369,44 @@ const MapScreen = () => {
 
 
     // --- EFECTES ---
+
+    // 0. Carregar radi de cerca des de preferències d'usuari
+    useEffect(() => {
+        if (!user) return;
+        (async () => {
+            try {
+                const prefs = await getUserPreferences(user.id);
+                // El model guarda en metres (500, 1000, 2000, 5000), OSM necessita km
+                setSearchRadiusKm(prefs.display.searchRadius / 1000);
+            } catch (e) {
+                console.warn('No s\'han pogut carregar les preferències de radi:', e);
+            }
+        })();
+    }, [user]);
+
+    // 0b. Quan canvia el radi de cerca, ajustar el zoom del mapa
+    useEffect(() => {
+        if (!centerLocation) return;
+        if (Platform.OS === 'web') {
+            if (mapboxLoaded && mapRef.current) {
+                mapRef.current.flyTo({
+                    center: [centerLocation.longitude, centerLocation.latitude],
+                    zoom: radiusToZoom(searchRadiusKm),
+                    speed: 1.2,
+                });
+            } else if (googleMapRef.current) {
+                googleMapRef.current.setZoom(radiusToZoom(searchRadiusKm));
+            }
+        } else if (mapRefNative.current) {
+            const delta = radiusToLatDelta(searchRadiusKm);
+            mapRefNative.current.animateToRegion({
+                latitude: centerLocation.latitude,
+                longitude: centerLocation.longitude,
+                latitudeDelta: delta,
+                longitudeDelta: delta,
+            }, 500);
+        }
+    }, [searchRadiusKm]);
 
 
 
@@ -500,6 +536,12 @@ const MapScreen = () => {
 
             }
 
+            input::placeholder {
+
+                color: rgba(255,255,255) !important;
+
+            }
+
             .maplibregl-popup-content {
 
                 padding: 0 !important;
@@ -538,57 +580,7 @@ const MapScreen = () => {
 
         
 
-        const loadMapAndAutocomplete = () => {
-
-            if (window.google && window.google.maps) {
-
-                if (autocompleteInputRef.current) {
-
-                    try {
-
-                        initWebAutocomplete();
-
-                    } catch (e) {
-
-                        console.error("Error initializing autocomplete: ", e);
-
-                    }
-
-                }
-
-            }
-
-        };
-
-
-
-        if (!window.google) {
-
-            const script = document.createElement('script');
-
-            const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-
-            
-
-            if (apiKey) {
-
-                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
-
-                script.async = true;
-
-                script.defer = true;
-
-                script.onload = loadMapAndAutocomplete;
-
-                document.head.appendChild(script);
-
-            }
-
-        } else {
-
-            loadMapAndAutocomplete();
-
-        }
+        // Ja no carreguem el Google Maps JS API — usem Nominatim per a geocodificació
 
     }, [centerLocation]); 
 
@@ -662,7 +654,7 @@ const MapScreen = () => {
 
              // A poc zoom: amagar bars gratuïts per reduir soroll, però mantenir els premium
 
-             const FREE_HIDE_ZOOM = 13;
+             const FREE_HIDE_ZOOM = 11;
 
              if (currentZoom < FREE_HIDE_ZOOM) {
 
@@ -842,9 +834,9 @@ const MapScreen = () => {
 
         try {
 
-            // Radi per defecte per a escaneig manual en lloc de l'estat radiusKm
+            // Radi per defecte per a escaneig manual — llegit des de preferències d'usuari
 
-            const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, 1.5);
+            const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, searchRadiusKm);
 
             
 
@@ -1266,7 +1258,7 @@ const MapScreen = () => {
 
                     center: [userLocation.coords.longitude, userLocation.coords.latitude],
 
-                    zoom: 14,
+                    zoom: radiusToZoom(searchRadiusKm),
 
                     speed: 1.2
 
@@ -1330,55 +1322,37 @@ const MapScreen = () => {
 
     // --- AJUDANTS WEB ---
 
-    function initWebAutocomplete() {
+    // Cerca Nominatim (OpenStreetMap) — substitueix Google Places Autocomplete
+    const searchNominatim = useCallback(async (query: string) => {
+        if (query.length < 3) { setGeoSuggestions([]); return; }
+        try {
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=es&accept-language=ca`,
+                { headers: { 'User-Agent': 'troBar/1.3 (contact@trobar.app)' } }
+            );
+            const data = await res.json();
+            setGeoSuggestions(data);
+        } catch (e) {
+            console.error('Error Nominatim:', e);
+            setGeoSuggestions([]);
+        }
+    }, []);
 
-        if (!autocompleteInputRef.current) return;
+    const handleSearchInput = useCallback((text: string) => {
+        setSearchQuery(text);
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = setTimeout(() => searchNominatim(text), 350);
+    }, [searchNominatim]);
 
-        if (autocompleteInputRef.current.classList.contains('pac-target-input')) return;
-
-
-
-        const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-
-             types: ['geocode', 'establishment'], componentRestrictions: { country: 'es' },
-
-        });
-
-
-
-        autocomplete.addListener('place_changed', () => {
-
-            const place = autocomplete.getPlace();
-
-            if (!place.geometry || !place.geometry.location) {
-
-                alert("No s'ha trobat: " + place.name); return;
-
-            }
-
-            const newLocation = {
-
-                latitude: place.geometry.location.lat(),
-
-                longitude: place.geometry.location.lng()
-
-            };
-
-            setCenterLocation(newLocation);
-
-            setSearchQuery(place.formatted_address || place.name);
-
-            if (googleMapRef.current) {
-
-                googleMapRef.current.panTo(place.geometry.location);
-
-                googleMapRef.current.setZoom(15);
-
-            }
-
-        });
-
-    }
+    const selectGeoSuggestion = useCallback((s: {display_name: string, lat: string, lon: string}) => {
+        const newLocation = { latitude: parseFloat(s.lat), longitude: parseFloat(s.lon) };
+        setCenterLocation(newLocation);
+        setSearchQuery(s.display_name.split(',').slice(0, 2).join(','));
+        setGeoSuggestions([]);
+        if (mapRef.current) {
+            mapRef.current.flyTo({ center: [newLocation.longitude, newLocation.latitude], zoom: 15 });
+        }
+    }, []);
 
 
 
@@ -1585,6 +1559,7 @@ const MapScreen = () => {
                  
 
                  if (autocompleteInputRef.current) autocompleteInputRef.current.value = '';
+                 setSearchQuery(''); setGeoSuggestions([]);
 
              }
 
@@ -1832,9 +1807,11 @@ const MapScreen = () => {
 
              return (
 
+                 <View style={{ position: 'relative', zIndex: 1000 }}>
+
                  <View style={styles.searchBar}>
 
-                    <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
+                    <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
 
                     {/* @ts-ignore */}
 
@@ -1848,17 +1825,19 @@ const MapScreen = () => {
 
                         style={{
 
-                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: '#333', fontFamily: 'Lora'
+                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: SKETCH_THEME.colors.textInverse, fontFamily: 'Lora'
 
                         }}
 
-                        defaultValue={searchQuery}
+                        value={searchQuery}
+
+                        onChange={(e: any) => handleSearchInput(e.target.value)}
 
                     />
 
                      {searchQuery !== '' && (
 
-                        <TouchableOpacity onPress={centerMapToGPS} style={{marginRight: 8}}>
+                        <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 8}}>
 
                             <Feather name="x" size={16} color="#666" />
 
@@ -1868,17 +1847,73 @@ const MapScreen = () => {
 
                  </View>
 
+                 {/* Dropdown de suggeriments */}
+
+                 {geoSuggestions.length > 0 && (
+
+                    <View style={{
+
+                        position: 'absolute', top: '100%', left: 0, right: 0,
+
+                        backgroundColor: SKETCH_THEME.colors.card,
+
+                        borderRadius: 12, marginTop: 4,
+
+                        borderWidth: 1, borderColor: SKETCH_THEME.colors.border,
+
+                        ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' } as any, default: {} }),
+
+                        overflow: 'hidden',
+
+                    }}>
+
+                        {geoSuggestions.map((s, i) => (
+
+                            <TouchableOpacity
+
+                                key={`${s.lat}-${s.lon}-${i}`}
+
+                                style={{
+
+                                    paddingVertical: 10, paddingHorizontal: 14,
+
+                                    borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
+
+                                    borderBottomColor: SKETCH_THEME.colors.bg,
+
+                                }}
+
+                                onPress={() => selectGeoSuggestion(s)}
+
+                            >
+
+                                <Text numberOfLines={1} style={{ fontSize: 13, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+
+                                    {s.display_name}
+
+                                </Text>
+
+                            </TouchableOpacity>
+
+                        ))}
+
+                    </View>
+
+                 )}
+
+                 </View>
+
              )
 
         }
 
-        // Input natiu (TextInput simple per ara, sense Autocomplete)
+        // Input natiu
 
         return (
 
              <View style={styles.searchBar}>
 
-                <Feather name="search" size={20} color={SKETCH_THEME.colors.text} style={{marginRight: 10}} />
+                <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
 
                 <TextInput 
 
@@ -1890,9 +1925,9 @@ const MapScreen = () => {
 
                     value={searchQuery}
 
-                    onChangeText={setSearchQuery}
+                    onChangeText={handleSearchInput}
 
-                    // Per a natiu, aquí s'integraria la crida a Google Places API a onSubmitEditing
+                    onSubmitEditing={() => searchNominatim(searchQuery)}
 
                 />
 
@@ -1982,7 +2017,7 @@ const MapScreen = () => {
 
                                 style={{
 
-                                    backgroundColor: SKETCH_THEME.colors.bg,
+                                    backgroundColor: SKETCH_THEME.colors.card,
 
                                     borderWidth: 2, 
 
@@ -2133,11 +2168,11 @@ const MapScreen = () => {
 
                         mapLib={(window as any).maplibregl}
 
-                        initialViewState={{ longitude: centerLocation?.longitude || 2.1734, latitude: centerLocation?.latitude || 41.3851, zoom: 14 }}
-
-                        onMove={(evt: any) => setCenterLocation({ latitude: evt.viewState.latitude, longitude: evt.viewState.longitude })}
+                        initialViewState={{ longitude: centerLocation?.longitude || 2.1734, latitude: centerLocation?.latitude || 41.3851, zoom: radiusToZoom(searchRadiusKm) }}
 
                         onMoveEnd={(evt: any) => {
+
+                             setCenterLocation({ latitude: evt.viewState.latitude, longitude: evt.viewState.longitude });
 
                              const bounds = evt.target.getBounds();
 
@@ -2315,7 +2350,7 @@ const MapScreen = () => {
 
                                                         ? 'linear-gradient(135deg, #555 0%, #222 100%)'
 
-                                                        : `linear-gradient(135deg, ${SKETCH_THEME.colors.primary} 0%, #2d8a56 100%)`,
+                                                        : `linear-gradient(135deg, ${SKETCH_THEME.colors.primary} 0%, #003270 100%)`,
 
                                                     boxShadow: '0px 4px 10px rgba(0,0,0,0.35), inset 0px 1px 2px rgba(255,255,255,0.3)',
 
@@ -2355,7 +2390,7 @@ const MapScreen = () => {
 
                                                 width: 20, height: 20, borderRadius: 10,
 
-                                                backgroundColor: '#FFD700', justifyContent: 'center', alignItems: 'center',
+                                                backgroundColor: '#edbb00', justifyContent: 'center', alignItems: 'center',
 
                                                 borderWidth: 2, borderColor: 'white',
 
@@ -2395,7 +2430,7 @@ const MapScreen = () => {
 
                                 anchor="bottom" 
 
-                                offset={[0, -55]} // Flotar per sobre del marcador 3D del pin
+                                offset={[0, -47]} // Flotar per sobre del marcador 3D del pin
 
                                 onClose={() => closeBarBubble()} 
 
@@ -2413,7 +2448,7 @@ const MapScreen = () => {
 
                                     width: Math.min(340, width * 0.88),
 
-                                    backgroundColor: selectedBar?.tier === 'premium' ? SKETCH_THEME.colors.primary : 'white',
+                                    backgroundColor: selectedBar?.tier === 'premium' ? SKETCH_THEME.colors.accent : 'white',
 
                                     borderRadius: 14,
 
@@ -2501,9 +2536,9 @@ const MapScreen = () => {
 
                             longitude: centerLocation!.longitude,
 
-                            latitudeDelta: 0.01,
+                            latitudeDelta: radiusToLatDelta(searchRadiusKm),
 
-                            longitudeDelta: 0.01,
+                            longitudeDelta: radiusToLatDelta(searchRadiusKm),
 
                         }}
 
@@ -2681,6 +2716,8 @@ const MapScreen = () => {
 
                                     title={getCleanBarName(bar.name)}
 
+                                    anchor={{ x: 0.5, y: 1.0 }}
+
                                     onPress={() => setSelectedBar(bar)}
 
                                     zIndex={isPremium ? 100 : 1}
@@ -2735,7 +2772,7 @@ const MapScreen = () => {
 
                                                     width: 20, height: 20, borderRadius: 10,
 
-                                                    backgroundColor: '#FFD700', justifyContent: 'center', alignItems: 'center',
+                                                    backgroundColor: '#edbb00', justifyContent: 'center', alignItems: 'center',
 
                                                     borderWidth: 2, borderColor: 'white',
 
@@ -2827,7 +2864,7 @@ const MapScreen = () => {
 
                     >
 
-                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.text} />
+                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.primary} />
 
                     </TouchableOpacity>
 
@@ -2855,7 +2892,7 @@ const MapScreen = () => {
 
                             borderTopWidth: 1,
 
-                            borderTopColor: '#ddd',
+                            borderTopColor: 'rgba(255,255,255,0.15)',
 
                             paddingBottom: 20,
 
@@ -2887,9 +2924,9 @@ const MapScreen = () => {
 
                         >
 
-                            <Ionicons name="calendar-outline" size={26} color={SKETCH_THEME.colors.textMuted} />
+                            <Ionicons name="calendar-outline" size={26} color={SKETCH_THEME.colors.mutedInverse} />
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, marginTop: 4, fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.mutedInverse, marginTop: 4, fontFamily: 'Lora' }}>
 
                                 Partits
 
@@ -2909,7 +2946,7 @@ const MapScreen = () => {
 
                             <View style={{
 
-                                backgroundColor: SKETCH_THEME.colors.primary,
+                                backgroundColor: SKETCH_THEME.colors.accent,
 
                                 width: 56,
 
@@ -2935,7 +2972,7 @@ const MapScreen = () => {
 
                             </View>
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.primary, marginTop: 8, fontWeight: 'bold', fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textInverse, marginTop: 8, fontWeight: 'bold', fontFamily: 'Lora' }}>
 
                                 Mapa
 
@@ -2969,7 +3006,7 @@ const MapScreen = () => {
 
                                         borderWidth: 1.5,
 
-                                        borderColor: SKETCH_THEME.colors.textMuted
+                                        borderColor: SKETCH_THEME.colors.mutedInverse
 
                                     }} 
 
@@ -2977,11 +3014,11 @@ const MapScreen = () => {
 
                             ) : (
 
-                                <Feather name="user" size={26} color={SKETCH_THEME.colors.textMuted} />
+                                <Feather name="user" size={26} color={SKETCH_THEME.colors.mutedInverse} />
 
                             )}
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, marginTop: 4, fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.mutedInverse, marginTop: 4, fontFamily: 'Lora' }}>
 
                                 Perfil
 
@@ -3007,7 +3044,7 @@ const MapScreen = () => {
 
                     <TouchableOpacity style={[styles.fabGps, { right: 20, bottom: 20 }]} onPress={centerMapToGPS}>
 
-                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.text} />
+                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.primary} />
 
                     </TouchableOpacity>
 

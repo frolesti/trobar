@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Platform, ImageSourcePropType } from 'react-native';
 import { Match } from '../services/matchService';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -23,16 +23,30 @@ const getTeam = (key: any) => {
     return { name: String(key), badge: null };
 };
 
-// Logos codificats com a alternativa segura
-const LOGO_FALLBACKS: Record<string, string> = {
-    'CL': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions.png?alt=media&token=eafb909f-a41d-463a-81ee-c3fbbbb5a98d',
-    'UWCL': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fchampions-w.png?alt=media&token=ff772840-f75e-4d8b-9c1e-3a42ac395237',
-    'CDR': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fcopa-del-rey.png?alt=media&token=d66387f6-cb30-4e4f-bedd-1703d26d7171',
-    'CDR_FEM': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fcopa-del-rey.png?alt=media&token=d66387f6-cb30-4e4f-bedd-1703d26d7171',
-    'PD': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fliga.png?alt=media&token=d035d3f5-5ab1-405f-861b-d94009c858f0', // La Liga
-    'LIGAF': 'https://firebasestorage.googleapis.com/v0/b/trobar-1123f.firebasestorage.app/o/competitions%2Flogos%2Fligaf.png?alt=media&token=46bfc314-95d9-4a7d-862a-ef477389ebd6',
-    'SCDR': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Supercopa_de_Espa%C3%B1a_logo_2020.svg/512px-Supercopa_de_Espa%C3%B1a_logo_2020.svg.png'
+// Logos locals empaquetats des de assets/img/competicions/
+const LOCAL_LOGOS: Record<string, ImageSourcePropType> = {
+    'liga':         require('../../assets/img/competicions/liga.png'),
+    'champions':    require('../../assets/img/competicions/champions.png'),
+    'champions-w':  require('../../assets/img/competicions/champions-w.png'),
+    'copa-del-rey': require('../../assets/img/competicions/copa-del-rey.png'),
+    'copa-reina':   require('../../assets/img/competicions/copa-reina.png'),
+    'ligaf':        require('../../assets/img/competicions/ligaf.png'),
 };
+
+/** Retorna el source local (require) pel nom de la competició */
+function resolveCompLogo(match: Match): ImageSourcePropType | null {
+    const name = (match.competition?.name || match.league || '').toLowerCase();
+
+    if (name.includes('women') && name.includes('champions')) return LOCAL_LOGOS['champions-w'];
+    if (name.includes('uwcl')) return LOCAL_LOGOS['champions-w'];
+    if (name.includes('champions')) return LOCAL_LOGOS['champions'];
+    if (name.includes('copa') && (name.includes('reina') || name.includes('queen'))) return LOCAL_LOGOS['copa-reina'];
+    if (name.includes('copa') || name.includes('king')) return LOCAL_LOGOS['copa-del-rey'];
+    if (name.includes('liga f') || name.includes('femen')) return LOCAL_LOGOS['ligaf'];
+    if (name.includes('primera') || name.includes('la liga') || name.includes('liga')) return LOCAL_LOGOS['liga'];
+    if (name.includes('supercopa')) return LOCAL_LOGOS['copa-del-rey']; // reutilitzar copa
+    return null;
+}
 
 const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: MatchCardProps) => {
 
@@ -41,27 +55,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
     
     // Determinar la visualització de la competició
     const compName = match.competition?.name || match.league || 'Partit';
-    
-    // Lògica de logo millorada: comprovar objecte, alternativa, ID derivat
-    let compLogo = match.competition?.logo;
-    
-    if (!compLogo) {
-        // Intentar coincidir per ID si falta el logo
-        const leagueId = match.competition?.id || match.league;
-        if (leagueId && LOGO_FALLBACKS[leagueId]) {
-            compLogo = LOGO_FALLBACKS[leagueId];
-        }
-    }
-    
-    // Últim recurs: coincidència per nom
-    if (!compLogo) {
-        const lower = compName.toLowerCase();
-        if (lower.includes('champions')) compLogo = LOGO_FALLBACKS['CL'];
-        else if (lower.includes('uwcl')) compLogo = LOGO_FALLBACKS['UWCL'];
-        else if (lower.includes('copa') || lower.includes('king')) compLogo = LOGO_FALLBACKS['CDR'];
-        else if (lower.includes('liga f')) compLogo = LOGO_FALLBACKS['LIGAF'];
-        else if (lower.includes('liga')) compLogo = LOGO_FALLBACKS['PD'];
-    }
+    const compLogoSource = resolveCompLogo(match);
 
     const isFemenino = match.category === 'FEMENI' || (compName.toLowerCase().includes('feman') || compName.toLowerCase().includes('liga f') || compName.toLowerCase().includes('uwcl'));
 
@@ -97,20 +91,20 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
         if (match.status === 'finished') {
              return (
                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 24, fontWeight: 'bold', fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+                    <Text style={{ fontSize: 22, fontWeight: 'bold', fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
                         {match.homeScore ?? '-'} - {match.awayScore ?? '-'}
                     </Text>
                  </View>
              );
         }
         
-        // Programat
-        if (compLogo) {
-             const logoSize = compact ? 18 : 28;
+        // Programat — logo de competició entre escuts
+        const logoSize = compact ? 28 : 30;
+        if (compLogoSource) {
              return (
                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                     <Image 
-                        source={{ uri: compLogo }} 
+                        source={compLogoSource} 
                         style={{ width: logoSize, height: logoSize }} 
                         resizeMode="contain"
                     />
@@ -118,15 +112,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
              )
         }
         
-        return (
-            <View style={{ 
-                width: 30, height: 30, borderRadius: 15, 
-                backgroundColor: SKETCH_THEME.colors.primarySoft,
-                justifyContent: 'center', alignItems: 'center'
-            }}>
-                <Text style={{ fontSize: 10, fontWeight: 'bold', color: SKETCH_THEME.colors.primary }}>VS</Text>
-            </View>
-        );
+        return <View style={{ width: logoSize }} />;
     };
 
     const cardStyle = compact ? {
@@ -144,13 +130,13 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
         })
     } : {
         backgroundColor: SKETCH_THEME.colors.card,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
+        borderRadius: 14,
+        padding: 10,
+        marginBottom: 6,
         borderWidth: 1,
         borderColor: SKETCH_THEME.colors.border,
         ...Platform.select({
-            web: { boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
+            web: { boxShadow: '0 3px 8px rgba(0,0,0,0.05)' },
             default: sketchShadow()
         })
     };
@@ -213,21 +199,29 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
 
     return (
         <View style={cardStyle}>
-            {/* Capçalera: Competició + Data */}
+            {/* Capçalera: Logo/Competició + Data */}
             <View style={{ 
                 flexDirection: 'row', 
+                alignItems: 'center',
                 justifyContent: 'space-between', 
-                marginBottom: 16,
-                paddingBottom: 8,
+                marginBottom: 10,
+                paddingBottom: 6,
                 borderBottomWidth: 1,
-                borderBottomColor: SKETCH_THEME.colors.bg
+                borderBottomColor: 'rgba(0,0,0,0.05)'
             }}>
-                <Text style={{ 
-                    fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', 
-                    color: subTextColor, fontFamily: 'Lora', letterSpacing: 0.5 
-                }}>
-                    {compName}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {compLogoSource && (
+                        <Image source={compLogoSource} style={{ width: 16, height: 16, marginRight: 6 }} resizeMode="contain" />
+                    )}
+                    {match.status !== 'finished' && (
+                        <Text style={{ 
+                            fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', 
+                            color: subTextColor, fontFamily: 'Lora', letterSpacing: 0.5 
+                        }}>
+                            {compName}
+                        </Text>
+                    )}
+                </View>
                 <Text style={{ fontSize: 11, color: subTextColor, fontFamily: 'Lora' }}>
                     {formatDate(match)}
                 </Text>
@@ -239,33 +233,33 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                 {/* LOCAL */}
                 <View style={{ flex: 1, alignItems: 'center' }}>
                      {homeTeam.badge ? (
-                         <Image source={{ uri: homeTeam.badge }} style={{ width: 48, height: 48, marginBottom: 8 }} resizeMode="contain" />
+                         <Image source={{ uri: homeTeam.badge }} style={{ width: 44, height: 44, marginBottom: 6 }} resizeMode="contain" />
                      ) : (
-                         <Ionicons name="shield-outline" size={32} color={subTextColor} style={{ marginBottom: 8 }} />
+                         <Ionicons name="shield-outline" size={30} color={subTextColor} style={{ marginBottom: 6 }} />
                      )}
                      <Text numberOfLines={2} style={{ 
-                         textAlign: 'center', fontWeight: 'bold', fontSize: 13, 
-                         color: textColor, fontFamily: 'Lora', lineHeight: 16 
+                         textAlign: 'center', fontWeight: 'bold', fontSize: 12, 
+                         color: textColor, fontFamily: 'Lora', lineHeight: 15 
                      }}>
                          {formatTeamNameForDisplay(homeTeam.name)}
                      </Text>
                 </View>
 
                 {/* VS / RESULTAT */}
-                <View style={{ marginHorizontal: 12, alignItems: 'center', minWidth: 40 }}>
+                <View style={{ marginHorizontal: 10, alignItems: 'center', minWidth: 36 }}>
                     <StatusBadge />
                 </View>
 
                 {/* VISITANT */}
                 <View style={{ flex: 1, alignItems: 'center' }}>
                      {awayTeam.badge ? (
-                         <Image source={{ uri: awayTeam.badge }} style={{ width: 48, height: 48, marginBottom: 8 }} resizeMode="contain" />
+                         <Image source={{ uri: awayTeam.badge }} style={{ width: 44, height: 44, marginBottom: 6 }} resizeMode="contain" />
                      ) : (
-                         <Ionicons name="shield-outline" size={32} color={subTextColor} style={{ marginBottom: 8 }} />
+                         <Ionicons name="shield-outline" size={30} color={subTextColor} style={{ marginBottom: 6 }} />
                      )}
                      <Text numberOfLines={2} style={{ 
-                         textAlign: 'center', fontWeight: 'bold', fontSize: 13, 
-                         color: textColor, fontFamily: 'Lora', lineHeight: 16 
+                         textAlign: 'center', fontWeight: 'bold', fontSize: 12, 
+                         color: textColor, fontFamily: 'Lora', lineHeight: 15 
                      }}>
                          {formatTeamNameForDisplay(awayTeam.name)}
                      </Text>
@@ -276,11 +270,11 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
             {hasBroadcast && match.status !== 'finished' && onPress && (
                  <TouchableOpacity
                     style={{
-                        backgroundColor: isFemenino ? '#9C27B0' : SKETCH_THEME.colors.primary,
-                        paddingVertical: 12,
-                        borderRadius: 12,
+                        backgroundColor: isFemenino ? '#a50044' : SKETCH_THEME.colors.primary,
+                        paddingVertical: 10,
+                        borderRadius: 10,
                         alignItems: 'center',
-                        marginTop: 16
+                        marginTop: 10
                     }}
                     onPress={onPress}
                 >
@@ -297,4 +291,4 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
     );
 };
 
-export default MatchCard;
+export default React.memo(MatchCard);

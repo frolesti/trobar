@@ -68,7 +68,7 @@ class ErrorBoundary extends Component<Props, State> {
                     justifyContent: 'center', alignItems: 'center',
                     marginBottom: 24,
                 }}>
-                    <Feather name="alert-triangle" size={40} color="#D32F2F" />
+                    <Feather name="alert-triangle" size={40} color="#db0030" />
                 </View>
 
                 {/* Títol */}

@@ -43,7 +43,7 @@ export default StyleSheet.create({
     },
 
     // Marcadors de pin 3D del mapa
-    markerContainer: { alignItems: 'center', ...Platform.select({ web: { cursor: 'pointer' } }) },
+    markerContainer: { alignItems: 'center', overflow: 'visible' as const, ...Platform.select({ web: { cursor: 'pointer' } }) },
     markerShadow: {
         width: 20, height: 6, borderRadius: 10,
         backgroundColor: 'rgba(0,0,0,0.18)',
@@ -51,7 +51,7 @@ export default StyleSheet.create({
         ...Platform.select({ web: { filter: 'blur(2px)' } })
     },
     markerPin: {
-        width: 36, height: 50, alignItems: 'center',
+        width: 36, height: 42, alignItems: 'center', overflow: 'visible' as const,
     },
     markerPinSelected: {},
     markerPinInner: {
@@ -97,7 +97,7 @@ export default StyleSheet.create({
     // Botó flotant (Fab)
     fabGps: {
         position: 'absolute', right: 20, width: 32, height: 32, borderRadius: 16, 
-        backgroundColor: SKETCH_THEME.colors.bg, borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
+        backgroundColor: SKETCH_THEME.colors.card, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
     },
