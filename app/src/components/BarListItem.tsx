@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME } from '../theme/sketchTheme';
 import { Bar } from '../models/Bar';
 
@@ -69,7 +69,7 @@ const BarListItem: React.FC<BarListItemProps> = ({
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="star" size={12} color="#edbb00" style={{ marginRight: 2 }} />
+                    <MaterialCommunityIcons name="star" size={14} color="#edbb00" style={{ marginRight: 2 }} />
                     <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: 'Lora', fontWeight: 'bold' }}>
                         {bar.rating}
                     </Text>

@@ -14,10 +14,6 @@ type Props = {
     route: RouteProp<RootStackParamList, 'ReportBar'>;
 };
 
-const FALLBACK_IMAGES = [
-    require('../../../assets/img/bar-fallout.jpg'),
-];
-
 const ReportBarScreen = ({ navigation, route }: Props) => {
     const { osmBar } = route.params;
     const { user } = useAuth();
@@ -164,7 +160,6 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                             placeDetails={placeDetails}
                             loadingPlaceDetails={loadingDetails}
                             verified={false}
-                            fallbackImages={FALLBACK_IMAGES}
                             onConfirm={handleConfirm}
                             onCancel={closeScreen}
                             isSubmitting={isSubmitting}

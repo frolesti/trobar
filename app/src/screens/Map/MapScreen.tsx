@@ -34,7 +34,7 @@ import { executeRequest } from '../../api/core';
 
 import { fetchAllMatches, Match } from '../../services/matchService';
 
-import { fetchBarsFromOSM, OSMBar } from '../../services/osmService';
+import { fetchBarsFromOSM, fetchBarsFromOSMBounds, OSMBar } from '../../services/osmService';
 
 import { getUserPreferences } from '../../services/userService';
 
@@ -834,9 +834,11 @@ const MapScreen = () => {
 
         try {
 
-            // Radi per defecte per a escaneig manual — llegit des de preferències d'usuari
+            // Usar els bounds visibles del mapa si estan disponibles, sinó radi
 
-            const osmData = await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, searchRadiusKm);
+            const osmData = visibleBounds
+                ? await fetchBarsFromOSMBounds(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.maxLat, visibleBounds.maxLng)
+                : await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, searchRadiusKm);
 
             
 
@@ -2005,6 +2007,16 @@ const MapScreen = () => {
 
                     {renderRadiusSlider()}
 
+                        {/* Amagar botó de cerca si l'àrea visible > 5 km */}
+
+                        {(() => {
+                            const visibleWidthKm = visibleBounds
+                                ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
+                                : 0;
+                            if (visibleBounds && visibleWidthKm > 5) return null;
+                            return (
+                                <>
+
                         {/* Acció de bars escanejats/trobats */}
 
                         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10}}>
@@ -2109,6 +2121,10 @@ const MapScreen = () => {
                         </View>
 
                     )}
+
+                                </>
+                            );
+                        })()}
 
                  </>
 

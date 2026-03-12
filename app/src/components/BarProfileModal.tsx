@@ -1,13 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity, Image, ScrollView, Linking,
-    Animated, Dimensions, Platform, Modal,
+    Animated, Dimensions, Platform, Modal, TextInput, Alert,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { Bar } from '../models/Bar';
 import { PlaceDetails } from '../services/placesService';
 import { Match } from '../services/matchService';
+import { Review, BarReviewStats } from '../models/Review';
+import { fetchReviews, addReview, deleteReview, getBarReviewStats, getUserReview } from '../services/reviewService';
+import { useAuth } from '../context/AuthContext';
 import MatchCard from './MatchCard';
 
 // ── Tipus ──────────────────────────────────────────────
@@ -49,8 +52,73 @@ const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; u
 const BarProfileModal: React.FC<BarProfileModalProps> = ({
     visible, bar, placeDetails: pd, allMatches = [], onClose, onNavigate,
 }) => {
+    const { user } = useAuth();
     const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
     const [showHours, setShowHours] = useState(false);
+
+    // ── Estat de ressenyes internes ──
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [reviewStats, setReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
+    const [myReview, setMyReview] = useState<Review | null>(null);
+    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [newRating, setNewRating] = useState(5);
+    const [newComment, setNewComment] = useState('');
+    const [submittingReview, setSubmittingReview] = useState(false);
+
+    // Carregar ressenyes quan s'obre el modal
+    const loadReviews = useCallback(async () => {
+        if (!bar?.id) return;
+        try {
+            const [revs, stats] = await Promise.all([
+                fetchReviews(bar.id),
+                getBarReviewStats(bar.id),
+            ]);
+            setReviews(revs);
+            setReviewStats(stats);
+            if (user) {
+                const mine = revs.find(r => r.userId === user.id) || null;
+                setMyReview(mine);
+            }
+        } catch (e) {
+            console.error('Error loading reviews:', e);
+        }
+    }, [bar?.id, user]);
+
+    useEffect(() => {
+        if (visible && bar) {
+            loadReviews();
+            setShowReviewForm(false);
+            setNewRating(5);
+            setNewComment('');
+        }
+    }, [visible, bar?.id]);
+
+    const handleSubmitReview = async () => {
+        if (!bar || !user) return;
+        setSubmittingReview(true);
+        try {
+            await addReview(bar.id, user.id, user.name || 'Anònim', user.avatar, newRating, newComment);
+            setShowReviewForm(false);
+            setNewComment('');
+            setNewRating(5);
+            await loadReviews();
+        } catch (e) {
+            console.error('Error submitting review:', e);
+            Alert.alert('Error', "No s'ha pogut publicar la ressenya.");
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const handleDeleteReview = async (reviewId: string) => {
+        if (!bar) return;
+        try {
+            await deleteReview(bar.id, reviewId);
+            await loadReviews();
+        } catch (e) {
+            console.error('Error deleting review:', e);
+        }
+    };
 
     useEffect(() => {
         if (visible) {
@@ -74,8 +142,6 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
 
     const displayName = pd?.displayName || bar?.name || '';
     const displayAddress = pd?.formattedAddress || bar?.address || 'Barcelona';
-    const displayRating = pd?.rating ?? bar?.rating ?? 0;
-    const ratingCount = pd?.userRatingCount;
     const openStatus = pd?.currentOpeningHours?.openNow ?? bar?.isOpen;
     const photos = pd?.photoUrls ?? [];
     const hours = pd?.currentOpeningHours?.weekdayDescriptions ?? [];
@@ -182,21 +248,22 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     </View>
 
-                    {/* ── PUNTUACIÓ + OBERT/TANCAT ── */}
-                    {displayRating > 0 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 10, gap: 12 }}>
+                    {/* ── PUNTUACIÓ INTERNA + OBERT/TANCAT ── */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 10, gap: 12, flexWrap: 'wrap' }}>
+                        {reviewStats.totalReviews > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Feather name="star" size={16} color="#edbb00" style={{ marginRight: 4 }} />
-                                <Text style={{ fontWeight: 'bold', fontSize: 16, color: P.text, fontFamily: 'Lora' }}>
-                                    {displayRating.toFixed(1)}
+                                {[1,2,3,4,5].map(s => (
+                                    <MaterialCommunityIcons key={s} name="star" size={16} color={s <= Math.round(reviewStats.averageRating) ? '#edbb00' : 'rgba(255,255,255,0.25)'} style={{ marginRight: 1 }} />
+                                ))}
+                                <Text style={{ fontWeight: 'bold', fontSize: 15, color: P.text, fontFamily: 'Lora', marginLeft: 6 }}>
+                                    {reviewStats.averageRating.toFixed(1)}
                                 </Text>
-                                {ratingCount != null && (
-                                    <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', marginLeft: 4 }}>
-                                        ({ratingCount} ressenyes)
-                                    </Text>
-                                )}
+                                <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', marginLeft: 4 }}>
+                                    ({reviewStats.totalReviews} {reviewStats.totalReviews === 1 ? 'ressenya' : 'ressenyes'})
+                                </Text>
                             </View>
-                            {openStatus != null && (
+                        )}
+                        {openStatus != null && (
                                 <Text style={{
                                     paddingHorizontal: 10, paddingVertical: 3, borderRadius: 14, fontSize: 13,
                                     fontFamily: 'Lora', fontWeight: '600', overflow: 'hidden', borderWidth: 1,
@@ -208,7 +275,6 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 </Text>
                             )}
                         </View>
-                    )}
 
                     {/* ── SEPARADOR ── */}
                     <View style={{ height: 1, backgroundColor: P.separator, marginVertical: 6 }} />
@@ -381,6 +447,146 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 <Feather name="share-2" size={28} color={P.textMuted} style={{ marginBottom: 8, opacity: 0.5 }} />
                                 <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: 'Lora', textAlign: 'center', lineHeight: 20 }}>
                                     Les xarxes socials d'aquest bar apareixeran aquí.
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* ── MUR DE RESSENYES (INTERN) ── */}
+                    <View style={{ marginTop: 24 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <Text style={sectionTitleStyle}>Ressenyes</Text>
+                            {user && !myReview && !showReviewForm && (
+                                <TouchableOpacity
+                                    onPress={() => setShowReviewForm(true)}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center',
+                                        backgroundColor: P.accent, paddingHorizontal: 12, paddingVertical: 6,
+                                        borderRadius: 14,
+                                    }}
+                                >
+                                    <Feather name="edit-3" size={13} color={P.bg} style={{ marginRight: 4 }} />
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: P.bg, fontFamily: 'Lora' }}>Escriure</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Formulari de nova ressenya */}
+                        {showReviewForm && (
+                            <View style={{
+                                backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14,
+                                padding: 16, marginBottom: 16,
+                            }}>
+                                <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: 'Lora', marginBottom: 10 }}>
+                                    La teva valoració
+                                </Text>
+                                {/* Selector d'estrelles */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 }}>
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                        <TouchableOpacity key={s} onPress={() => setNewRating(s)}>
+                                            <MaterialCommunityIcons
+                                                name="star"
+                                                size={28}
+                                                color={s <= newRating ? '#edbb00' : 'rgba(255,255,255,0.25)'}
+                                            />
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                                {/* Camp de comentari */}
+                                <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', marginBottom: 8 }}>Comentari (opcional)</Text>
+                                <TextInput
+                                    placeholder="Què t'ha semblat aquest bar?"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={newComment}
+                                    onChangeText={setNewComment}
+                                    multiline
+                                    numberOfLines={3}
+                                    style={{
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        borderRadius: 10, padding: 12,
+                                        color: P.text, fontFamily: 'Lora', fontSize: 14,
+                                        minHeight: 70, textAlignVertical: 'top',
+                                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                    }}
+                                />
+                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 }}>
+                                    <TouchableOpacity
+                                        onPress={() => { setShowReviewForm(false); setNewComment(''); setNewRating(5); }}
+                                        style={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                                    >
+                                        <Text style={{ color: P.textMuted, fontFamily: 'Lora', fontSize: 14 }}>Cancel·lar</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={handleSubmitReview}
+                                        disabled={submittingReview || newRating === 0}
+                                        style={{
+                                            backgroundColor: P.accent, borderRadius: 10,
+                                            paddingHorizontal: 18, paddingVertical: 8,
+                                            opacity: (submittingReview || newRating === 0) ? 0.5 : 1,
+                                        }}
+                                    >
+                                        <Text style={{ color: P.bg, fontWeight: 'bold', fontFamily: 'Lora', fontSize: 14 }}>
+                                            {submittingReview ? 'Enviant...' : 'Publicar'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Llista de ressenyes */}
+                        {reviews.length > 0 ? (
+                            <View style={{ gap: 12 }}>
+                                {reviews.map(review => (
+                                    <View key={review.id} style={{
+                                        backgroundColor: P.cardBg, borderRadius: 14, padding: 14,
+                                    }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                            {review.userAvatar ? (
+                                                <Image
+                                                    source={{ uri: review.userAvatar }}
+                                                    style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' }}
+                                                />
+                                            ) : (
+                                                <View style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Feather name="user" size={16} color={P.textMuted} />
+                                                </View>
+                                            )}
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: 'Lora' }}>
+                                                    {review.userName}
+                                                </Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                                    {[1, 2, 3, 4, 5].map(s => (
+                                                        <MaterialCommunityIcons key={s} name="star" size={12} color={s <= review.rating ? '#edbb00' : 'rgba(255,255,255,0.2)'} style={{ marginRight: 1 }} />
+                                                    ))}
+                                                    <Text style={{ fontSize: 11, color: P.textMuted, fontFamily: 'Lora', marginLeft: 6 }}>
+                                                        {review.createdAt.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {/* Botó d'eliminar la ressenya pròpia */}
+                                            {user && review.userId === user.id && (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteReview(review.id)}
+                                                    style={{ padding: 6 }}
+                                                >
+                                                    <Feather name="trash-2" size={14} color={P.textMuted} />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                        {review.comment ? (
+                                            <Text style={{ fontSize: 14, color: P.text, fontFamily: 'Lora', lineHeight: 20 }}>
+                                                {review.comment}
+                                            </Text>
+                                        ) : null}
+                                    </View>
+                                ))}
+                            </View>
+                        ) : (
+                            <View style={{ backgroundColor: P.cardBg, borderRadius: 14, padding: 20, alignItems: 'center' }}>
+                                <Feather name="message-circle" size={28} color={P.textMuted} style={{ marginBottom: 8, opacity: 0.5 }} />
+                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: 'Lora', textAlign: 'center', lineHeight: 20 }}>
+                                    Encara no hi ha ressenyes. Sigues el primer a opinar!
                                 </Text>
                             </View>
                         )}

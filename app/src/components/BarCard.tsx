@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { PlaceDetails } from '../services/placesService';
 
@@ -47,8 +47,10 @@ export interface BarCardProps {
     /** Obre el modal de perfil premium a pantalla completa */
     onProfileOpen?: () => void;
 
-    /** Imatges alternatives quan no hi ha fotos de Google */
-    fallbackImages?: any[];
+    /** Mitjana de ressenyes internes */
+    reviewAvgRating?: number;
+    /** Nombre total de ressenyes internes */
+    reviewCount?: number;
 }
 
 // ── Auxiliars ────────────────────────────────────────────
@@ -64,12 +66,11 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         fallbackRating, fallbackIsOpen,
         distanceText, onNavigate,
         onConfirm, onCancel, isSubmitting,
-        fallbackImages, tier, onProfileOpen,
+        tier, onProfileOpen, reviewAvgRating, reviewCount,
     } = props;
 
     const displayName = pd?.displayName || getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
-    const displayRating = pd?.rating ?? fallbackRating ?? 0;
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
 
     const openGoogleMaps = () => {
@@ -116,7 +117,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         activeOpacity={0.7}
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
                     >
-                        <Feather name="star" size={11} color="#edbb00" style={{ marginRight: 4 }} />
+                        <MaterialCommunityIcons name="star" size={13} color="#edbb00" style={{ marginRight: 4 }} />
                         <Text style={{ fontSize: 11, fontWeight: '700', color: '#edbb00', fontFamily: 'Lora', letterSpacing: 0.3 }}>
                             PREMIUM · Veure perfil
                         </Text>
@@ -124,28 +125,33 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     </TouchableOpacity>
                 )}
 
-                {/* Puntuació + Obert/Tancat */}
-                {displayRating > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
+                {/* Puntuació interna + Obert/Tancat */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
+                    {(reviewAvgRating != null && reviewAvgRating > 0) && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Feather name="star" size={14} color="#edbb00" style={{ marginRight: 3 }} />
+                            <MaterialCommunityIcons name="star" size={16} color="#edbb00" style={{ marginRight: 3 }} />
                             <Text style={{ fontWeight: 'bold', fontSize: 14, color: C.text, fontFamily: 'Lora' }}>
-                                {displayRating.toFixed(1)}
+                                {reviewAvgRating.toFixed(1)}
                             </Text>
+                            {(reviewCount != null && reviewCount > 0) && (
+                                <Text style={{ fontSize: 12, color: C.muted, fontFamily: 'Lora', marginLeft: 4 }}>
+                                    ({reviewCount})
+                                </Text>
+                            )}
                         </View>
-                        {openStatus != null && (
-                            <Text style={{
-                                paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
-                                overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,
-                                backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
-                                color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
-                                borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
-                            }}>
-                                {openStatus ? 'Obert' : 'Tancat'}
-                            </Text>
-                        )}
-                    </View>
-                )}
+                    )}
+                    {openStatus != null && (
+                        <Text style={{
+                            paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
+                            overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,
+                            backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
+                            color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
+                            borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
+                        }}>
+                            {openStatus ? 'Obert' : 'Tancat'}
+                        </Text>
+                    )}
+                </View>
 
                 {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -213,7 +219,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
             )}
 
             {/* Fotos */}
-            {renderPhotos(pd, fallbackImages)}
+            {renderPhotos(pd)}
 
             <View style={{ height: 1, backgroundColor: SKETCH_THEME.colors.border, marginVertical: 14 }} />
 
@@ -256,11 +262,9 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
 // ── Sub-renderitzat de fotos ──────────────────────────────────
 
-const renderPhotos = (pd: PlaceDetails | null, fallbackImages?: any[]) => {
+const renderPhotos = (pd: PlaceDetails | null) => {
     const hasGooglePhotos = pd?.photoUrls && pd.photoUrls.length > 0;
-    const hasFallback = fallbackImages && fallbackImages.length > 0;
-
-    if (!hasGooglePhotos && !hasFallback) return null;
+    if (!hasGooglePhotos) return null;
 
     return (
         <ScrollView
@@ -269,24 +273,14 @@ const renderPhotos = (pd: PlaceDetails | null, fallbackImages?: any[]) => {
             style={{ marginBottom: 14, marginTop: 4 }}
             contentContainerStyle={{ gap: 10 }}
         >
-            {hasGooglePhotos
-                ? pd!.photoUrls.map((url, i) => (
-                    <Image
-                        key={i}
-                        source={{ uri: url }}
-                        style={{ width: 150, height: 110, borderRadius: 12, backgroundColor: '#eee' }}
-                        resizeMode="cover"
-                    />
-                ))
-                : fallbackImages!.map((img, i) => (
-                    <Image
-                        key={i}
-                        source={img}
-                        style={{ width: 150, height: 110, borderRadius: 12, backgroundColor: '#eee' }}
-                        resizeMode="cover"
-                    />
-                ))
-            }
+            {pd!.photoUrls.map((url, i) => (
+                <Image
+                    key={i}
+                    source={{ uri: url }}
+                    style={{ width: 150, height: 110, borderRadius: 12, backgroundColor: '#eee' }}
+                    resizeMode="cover"
+                />
+            ))}
         </ScrollView>
     );
 };
