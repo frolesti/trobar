@@ -113,7 +113,7 @@ h1, h2, h3 {
 .panel{background:var(--card);border-radius:12px;padding:18px;border:1px solid var(--border);box-shadow:0 8px 20px rgba(26,26,46,0.06)}
 .features{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin:56px 0}
 .feature{padding:28px;border-radius:16px;background:linear-gradient(180deg, var(--bg-light), var(--bg));border:1px solid var(--border)}
-.footer{padding:48px 0;color:#d7dde6;background:var(--footer-bg);margin-top:64px}
+.footer{padding:48px 0;color:#d7dde6;background:var(--footer-bg);margin-top:0}
 .footer .container{display:flex;justify-content:space-between;align-items:flex-start}
 .footer small{display:block;color:#a8b0c0}
 .contact-grid{display:grid;grid-template-columns:1fr 420px;gap:24px}
@@ -183,5 +183,19 @@ section[id], div[id] {
   from { transform: translateX(0) }
   to { transform: translateX(-50%) }
 }
+/* ═══ ALTERNATING SECTION GRADIENTS ═══ */
+.section-grana {
+  background: linear-gradient(165deg, var(--bg) 0%, var(--bg-light) 60%, #7a002e 100%);
+}
+.section-blau {
+  background: linear-gradient(165deg, #003a75 0%, var(--blue) 40%, #002952 100%);
+}
+.section-grana-radial {
+  background: radial-gradient(ellipse at 20% 0%, #c0004f 0%, var(--bg) 50%, var(--bg-light) 100%);
+}
+.section-blau-radial {
+  background: linear-gradient(165deg, #003a75 0%, var(--blue) 40%, #002952 100%);
+}
+
 /* Small helpers */
 .badgeSmall{display:inline-block;padding:8px 12px;border-radius:999px;background:#f7edd5;color:#5b4b2f;margin-right:8px;font-weight:600}

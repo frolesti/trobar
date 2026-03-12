@@ -44,7 +44,7 @@ export default function Pricing() {
   ]
 
   return (
-    <section id="preus" style={{padding: '0 0 80px'}}>
+    <section id="preus" style={{padding: '0'}}>
       <div style={{textAlign: 'center', marginBottom: 48}}>
         <h2 style={{fontSize: 36, marginBottom: 16, color: '#fff'}}>Plans per a Bars</h2>
         <p style={{color: 'rgba(255,255,255,0.7)', fontSize: 18, maxWidth: 600, margin: '0 auto'}}>Tria el pla que millor s'adapti a les necessitats del teu negoci i comença a atraure més aficionats del Barça.</p>
