@@ -1,12 +1,20 @@
 import Link from 'next/link'
+import { useState } from 'react'
+import Logo from './Logo'
+import LegalModal from './LegalModal'
+
+type LegalType = 'privacy' | 'terms'
 
 export default function Footer() {
+  const [legalOpen, setLegalOpen] = useState<LegalType | null>(null)
+
   return (
+    <>
     <footer className="footer" style={{background: 'var(--footer-bg)', padding: '64px 24px 40px', color: '#fff', borderTop: '1px solid #2a2a4e'}}>
       <div className="container" style={{maxWidth: 1200, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: '60px', justifyContent: 'space-between'}}>
         <div className="footer-brand" style={{flex: '1 1 200px'}}>
           <Link href="/" style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, textDecoration: 'none'}}>
-            <img src="/logo.png" alt="troBar" width={48} height={48} style={{borderRadius: '50%'}} />
+            <Logo size={44} color="#fff" />
             <span style={{fontSize: 28, fontWeight: 800, color: '#fff', fontFamily: 'Lora, serif'}}>troBar</span>
           </Link>
           <div style={{display: 'flex', gap: 16, marginTop: 32}}>
@@ -26,36 +34,30 @@ export default function Footer() {
             <h4 style={{color: '#fff', marginBottom: 20, fontSize: 16, fontWeight: 700}}>Navegació</h4>
             <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
               <li style={{marginBottom: 12}}><Link href="/#com-funciona" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Com funciona</Link></li>
-              <li style={{marginBottom: 12}}><Link href="/registra-bar" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Ets un bar?</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 style={{color: '#fff', marginBottom: 20, fontSize: 16, fontWeight: 700}}>Contacte</h4>
-            <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-              <li style={{marginBottom: 12}}><a href="#" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Centre d'ajuda</a></li>
-              <li style={{marginBottom: 12}}><a href="#" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Suport a bars</a></li>
+              <li style={{marginBottom: 12}}><Link href="/per-a-bars" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Ets un bar?</Link></li>
+              <li style={{marginBottom: 12}}><a href="/contacte" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Contacta&apos;ns</a></li>
             </ul>
           </div>
 
           <div>
             <h4 style={{color: '#fff', marginBottom: 20, fontSize: 16, fontWeight: 700}}>Segueix-nos</h4>
             <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-              <li style={{marginBottom: 12}}><a href="#" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Instagram</a></li>
-              <li style={{marginBottom: 12}}><a href="#" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Twitter</a></li>
-              <li style={{marginBottom: 12}}><a href="#" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>TikTok</a></li>
+              <li style={{marginBottom: 12}}><a href="https://www.instagram.com/trobarapp/" target="_blank" rel="noopener noreferrer" style={{color: '#a8b0c0', textDecoration: 'none', transition: 'color 0.2s'}}>Instagram</a></li>
             </ul>
           </div>
         </div>
-      </div>
       
-      <div style={{maxWidth: 1200, margin: '60px auto 0', padding: '24px 0 0', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', color: '#8888a0', fontSize: 14}}>
-        <div>© {new Date().getFullYear()} troBar. Tots els drets reservats.</div>
-        <div style={{display: 'flex', gap: 24}}>
-          <a href="/termes-condicions" style={{color: '#8888a0', textDecoration: 'none'}}>Termes i condicions</a>
-          <a href="/politica-privacitat" style={{color: '#8888a0', textDecoration: 'none'}}>Política de privacitat</a>
+        <div style={{padding: '24px 0 0', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, color: '#8888a0', fontSize: 14}}>
+          <div>© {new Date().getFullYear()} troBar. Tots els drets reservats.</div>
+          <div style={{display: 'flex', gap: 24}}>
+            <button onClick={() => setLegalOpen('terms')} style={{color: '#8888a0', textDecoration: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', padding: 0}}>Termes i condicions</button>
+            <button onClick={() => setLegalOpen('privacy')} style={{color: '#8888a0', textDecoration: 'none', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontFamily: 'inherit', padding: 0}}>Política de privacitat</button>
+          </div>
         </div>
       </div>
     </footer>
+
+    {legalOpen && <LegalModal type={legalOpen} onClose={() => setLegalOpen(null)} />}
+    </>
   )
 }

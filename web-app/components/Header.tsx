@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import Logo from './Logo'
 
 export default function Header() {
   const [isHidden, setIsHidden] = useState(false)
@@ -32,19 +33,13 @@ export default function Header() {
       <div className="header-pill">
         <div className="header-left">
           <Link href="/" className="brand-link" style={{display: 'flex', alignItems: 'center', gap: 12}}>
-            <img src="/logo.png" alt="troBar" width="40" height="40" style={{borderRadius: '50%', objectFit: 'cover'}} />
+            <Logo size={40} />
             <span style={{fontSize: 24, fontWeight: 800, color: 'var(--text)', fontFamily: 'Lora, serif'}}>troBar</span>
           </Link>
         </div>
 
-        <nav className="nav" style={{display: 'flex', gap: '24px', alignItems: 'center'}}>
-          <Link href="/#intro" className="nav-link" style={{color: 'var(--text)', fontWeight: 600, textDecoration: 'none'}}>Intro</Link>
-          <Link href="/#com-funciona" className="nav-link" style={{color: 'var(--text)', fontWeight: 600, textDecoration: 'none'}}>Com funciona</Link>
-          <Link href="/#preus" className="nav-link" style={{color: 'var(--text)', fontWeight: 600, textDecoration: 'none'}}>Preus</Link>
-        </nav>
-
-        <div className="header-right">
-          <Link href="/registra-bar" className="cta">Registra el teu bar</Link>
+        <div className="header-right" style={{display: 'flex', alignItems: 'center', gap: 16}}>
+          <Link href="/per-a-bars" className="cta">Ets un bar?</Link>
         </div>
       </div>
     </header>
