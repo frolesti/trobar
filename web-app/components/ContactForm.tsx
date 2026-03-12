@@ -44,7 +44,11 @@ const initialState: FormState = {
   acceptTerms: false,
 }
 
-export default function ContactForm() {
+interface ContactFormProps {
+  onOpenLegal?: (type: 'privacy' | 'terms') => void
+}
+
+export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [state, setState] = useState<FormState>(initialState)
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -232,9 +236,9 @@ export default function ContactForm() {
         />
         <span>
           He llegit i accepto les{' '}
-          <a href="/termes-condicions" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Condicions del Servei</a>
+          <button type="button" onClick={() => onOpenLegal?.('terms')} style={{ color: 'var(--accent)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0 }}>Condicions del Servei</button>
           {' '}i la{' '}
-          <a href="/politica-privacitat" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Política de Privacitat</a>.
+          <button type="button" onClick={() => onOpenLegal?.('privacy')} style={{ color: 'var(--accent)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0 }}>Política de Privacitat</button>.
         </span>
       </label>
 

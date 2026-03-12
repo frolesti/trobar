@@ -2,12 +2,18 @@
 import Header from '../components/Header'
 import ContactForm from '../components/ContactForm'
 import Footer from '../components/Footer'
+import LegalModal from '../components/LegalModal'
+import { useState } from 'react'
+
+type LegalType = 'privacy' | 'terms'
 
 export default function RegisterBar() {
+  const [legalOpen, setLegalOpen] = useState<LegalType | null>(null)
+
   return (
     <>
       <Head>
-        <title>troBar — Registra el teu bar</title>
+        <title>troBar — Registra el teu local</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <Header />
@@ -21,24 +27,14 @@ export default function RegisterBar() {
 
         <section id="formulari-registre" style={{marginTop: 60, marginBottom: 80}}>
           <div style={{maxWidth: 600, margin: '0 auto'}}>
-            <ContactForm />
-          </div>
-
-          <div style={{maxWidth: 600, margin: '40px auto 0', padding: '32px', background: 'var(--card)', borderRadius: '16px', fontSize: '14px', color: 'var(--muted)', boxShadow: '0 4px 12px rgba(0,0,0,0.02)'}}>
-            <h3 style={{fontSize: '18px', color: 'var(--text)', marginBottom: '16px', fontWeight: 700}}>Condicions de l&apos;acord</h3>
-            <p style={{marginBottom: '12px', lineHeight: 1.6}}>En enviar aquest formulari i donar d&apos;alta el vostre establiment a troBar, accepteu les següents condicions contractuals:</p>
-            <ul style={{paddingLeft: '20px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: 1.6}}>
-              <li><strong>Veracitat de les dades:</strong> L&apos;establiment es compromet a mantenir la informació actualitzada, especialment els horaris d&apos;obertura i els partits oferts.</li>
-              <li><strong>Preus i subscripció:</strong> El cobrament del vostre pla es farà efectiu de manera mensual. Teniu dret a cancel·lar la subscripció en qualsevol moment amb un preavís de 15 dies.</li>
-              <li><strong>Reserva de dret:</strong> troBar es reserva el dret a donar de baixa automàticament aquells perfils que falsifiquin ofertes, mostrin un comportament fraudulent o tinguin múltiples queixes per part dels usuaris de l&apos;aplicació.</li>
-            </ul>
-            <p style={{fontSize: '13px'}}>Les vostres dades seran processades únicament per a la gestió de la xarxa d&apos;hostaleria. Si us plau, consulteu la nostra <a href="/politica-privacitat" style={{color: 'var(--accent)', textDecoration: 'underline'}}>Política de Privacitat</a> per a més detalls.</p>
+            <ContactForm onOpenLegal={(type) => setLegalOpen(type)} />
           </div>
         </section>
 
       </main>
 
       <Footer />
+      {legalOpen && <LegalModal type={legalOpen} onClose={() => setLegalOpen(null)} />}
     </>
   )
 }
