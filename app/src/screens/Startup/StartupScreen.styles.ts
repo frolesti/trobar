@@ -21,10 +21,6 @@ export default StyleSheet.create({
     ...SKETCH_THEME.typography.display,
     fontSize: 56, 
     letterSpacing: 2,
-    // Posicionar text a baix o al centre? L'usuari volia el GIF sobre el text.
-    // Si el GIF és de fons, el text se superposa. 
-    // Afegim marge superior per separar del centre visual del GIF (assumint que el personatge és centrat)
-    marginTop: 200, 
     color: '#FFFFFF',
     ...Platform.select({
       web: { textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)' },

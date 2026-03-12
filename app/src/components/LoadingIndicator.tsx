@@ -1,29 +1,18 @@
 import React from 'react';
-import { Image, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
 interface LoadingIndicatorProps {
     size?: 'small' | 'large' | number;
     style?: any;
-    color?: string; // Mantingut per compatibilitat però no usat
+    color?: string;
 }
 
-export const LoadingIndicator = ({ size = 'small', style }: LoadingIndicatorProps) => {
-    let width = 30; // Mida petita per defecte, adequada per a inline/botons
-    
-    if (typeof size === 'number') {
-        width = size;
-    } else if (size === 'large') {
-        width = 250; // Augmentat de 100 a 250 tal com es va demanar
-    } else if (size === 'small') {
-        width = 30;
-    }
+export const LoadingIndicator = ({ size = 'small', style, color = '#edbb00' }: LoadingIndicatorProps) => {
+    const activitySize = (typeof size === 'number' && size > 50) || size === 'large' ? 'large' : 'small';
 
     return (
         <View style={[styles.container, style]}>
-            <Image 
-                source={require('../../assets/img/trobar-gif.gif')} 
-                style={{ width: width, height: width, resizeMode: 'contain' }}
-            />
+            <ActivityIndicator size={activitySize} color={color} />
         </View>
     );
 };
