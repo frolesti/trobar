@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator, Alert } from 'react-native';
 
 import * as Location from 'expo-location';
 
@@ -49,6 +49,8 @@ import BarListItem from '../../components/BarListItem';
 import BarProfileModal from '../../components/BarProfileModal';
 
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
+import { getBarReviewStats } from '../../services/reviewService';
+import { BarReviewStats } from '../../models/Review';
 
 
 
@@ -244,6 +246,8 @@ const MapScreen = () => {
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
 
     const [loadingPlaceDetails, setLoadingPlaceDetails] = useState(false);
+
+    const [selectedBarReviewStats, setSelectedBarReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
 
 
 
@@ -884,6 +888,12 @@ const MapScreen = () => {
 
             console.error(e);
 
+            Alert.alert(
+                'Servei temporalment no disponible',
+                'No hem pogut connectar amb el servidor de mapes. Torna-ho a provar d\'aquí uns segons.',
+                [{ text: 'Entesos' }]
+            );
+
         } finally {
 
             setIsScanning(false);
@@ -1175,6 +1185,13 @@ const MapScreen = () => {
              setPlaceDetails(null);
 
              setLoadingPlaceDetails(true);
+
+             setSelectedBarReviewStats({ averageRating: 0, totalReviews: 0 });
+
+             // Carregar ressenyes internes en paral·lel amb placeDetails
+             getBarReviewStats(selectedBar.id)
+                 .then(stats => setSelectedBarReviewStats(stats))
+                 .catch(() => {});
 
              const cleanName = getCleanBarName(selectedBar.name);
 
@@ -1710,6 +1727,10 @@ const MapScreen = () => {
                     tier={selectedBar.tier || 'free'}
 
                     onProfileOpen={() => setShowBarProfile(true)}
+
+                    reviewAvgRating={selectedBarReviewStats.averageRating}
+
+                    reviewCount={selectedBarReviewStats.totalReviews}
 
                 />
 

@@ -11,6 +11,12 @@ const OVERPASS_SERVERS = [
 // Auxiliar de debounce per evitar saturar l'API pública
 let lastController: AbortController | null = null;
 
+/** Timeout per a cada request individual a un servidor Overpass (ms) */
+const PER_REQUEST_TIMEOUT = 10_000;
+
+/** Pausa curta entre servidors per reduir 429s */
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 // Sistema de cache: emmagatzema resultats per cel·la de graella (aprox 1 km)
 const cache: Record<string, { timestamp: number, data: OSMBar[] }> = {};
 const CACHE_TTL = 1000 * 60 * 60; // 1 hora
@@ -76,19 +82,24 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
         out center;
     `;
 
-    for (const server of OVERPASS_SERVERS) {
+    for (let i = 0; i < OVERPASS_SERVERS.length; i++) {
+        const server = OVERPASS_SERVERS[i];
         try {
             if (signal.aborted) return [];
 
+            // Timeout individual per evitar que un servidor lent congeli l'app
+            const timeoutId = setTimeout(() => lastController?.abort(), PER_REQUEST_TIMEOUT);
             const response = await fetch(server, {
                 method: 'POST',
                 body: `data=${encodeURIComponent(query)}`,
                 signal: signal
             });
+            clearTimeout(timeoutId);
 
             if (response.status === 429 || response.status === 504 || !response.ok) {
                 console.warn(`[OSM] Server ${server} failed with ${response.status}. Trying next...`);
-                continue; // Provar el servidor següent
+                if (i < OVERPASS_SERVERS.length - 1) await delay(500);
+                continue;
             }
 
             const data = await response.json();
@@ -116,9 +127,9 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
             return dedupedBars;
 
         } catch (error: any) {
-            if (error.name === 'AbortError') return []; // L'usuari ha cancel·lat
+            if (error.name === 'AbortError') return []; // L'usuari ha cancel·lat o timeout
             console.warn(`[OSM] Error fetching from ${server}:`, error);
-            // Continuar el bucle al servidor següent
+            if (i < OVERPASS_SERVERS.length - 1) await delay(500);
         }
     }
 
@@ -155,18 +166,22 @@ export const fetchBarsFromOSMBounds = async (
         out center;
     `;
 
-    for (const server of OVERPASS_SERVERS) {
+    for (let i = 0; i < OVERPASS_SERVERS.length; i++) {
+        const server = OVERPASS_SERVERS[i];
         try {
             if (signal.aborted) return [];
 
+            const timeoutId = setTimeout(() => lastController?.abort(), PER_REQUEST_TIMEOUT);
             const response = await fetch(server, {
                 method: 'POST',
                 body: `data=${encodeURIComponent(query)}`,
                 signal: signal,
             });
+            clearTimeout(timeoutId);
 
             if (response.status === 429 || response.status === 504 || !response.ok) {
                 console.warn(`[OSM] Server ${server} failed with ${response.status}. Trying next...`);
+                if (i < OVERPASS_SERVERS.length - 1) await delay(500);
                 continue;
             }
 
@@ -191,6 +206,7 @@ export const fetchBarsFromOSMBounds = async (
         } catch (error: any) {
             if (error.name === 'AbortError') return [];
             console.warn(`[OSM] Error fetching from ${server}:`, error);
+            if (i < OVERPASS_SERVERS.length - 1) await delay(500);
         }
     }
 
