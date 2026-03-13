@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
-import { Bar } from '../models/Bar';
-import { PlaceDetails } from '../services/placesService';
+import { Bar, BarAmenity } from '../models/Bar';
+import { PlaceDetails, isOpenNow } from '../services/placesService';
 import { Match } from '../services/matchService';
 import { Review, BarReviewStats } from '../models/Review';
 import { fetchReviews, addReview, deleteReview, getBarReviewStats, getUserReview } from '../services/reviewService';
+import { updateBarAmenities } from '../services/barService';
+import { AMENITY_OPTIONS, AMENITY_MAP, AMENITY_CATEGORIES, AmenityOption } from '../data/amenities';
 import { useAuth } from '../context/AuthContext';
 import MatchCard from './MatchCard';
 
@@ -65,6 +67,11 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     const [newComment, setNewComment] = useState('');
     const [submittingReview, setSubmittingReview] = useState(false);
 
+    // ── Estat d'amenities editables ──
+    const [editingAmenities, setEditingAmenities] = useState(false);
+    const [selectedAmenities, setSelectedAmenities] = useState<Set<BarAmenity>>(new Set());
+    const [savingAmenities, setSavingAmenities] = useState(false);
+
     // Carregar ressenyes quan s'obre el modal
     const loadReviews = useCallback(async () => {
         if (!bar?.id) return;
@@ -90,6 +97,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             setShowReviewForm(false);
             setNewRating(5);
             setNewComment('');
+            setEditingAmenities(false);
+            setSelectedAmenities(new Set(bar.amenities ?? []));
         }
     }, [visible, bar?.id]);
 
@@ -120,6 +129,32 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
         }
     };
 
+    // ── Guardar amenities ──
+    const handleSaveAmenities = async () => {
+        if (!bar) return;
+        setSavingAmenities(true);
+        try {
+            const arr = Array.from(selectedAmenities) as BarAmenity[];
+            await updateBarAmenities(bar.id, arr);
+            bar.amenities = arr;          // actualitzar in-memory
+            setEditingAmenities(false);
+        } catch (e) {
+            console.error('Error saving amenities:', e);
+            Alert.alert('Error', "No s'han pogut desar els serveis.");
+        } finally {
+            setSavingAmenities(false);
+        }
+    };
+
+    const toggleAmenity = (key: BarAmenity) => {
+        setSelectedAmenities(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
     useEffect(() => {
         if (visible) {
             setShowHours(false);
@@ -140,9 +175,9 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
 
     if (!visible && !bar) return null;
 
-    const displayName = pd?.displayName || bar?.name || '';
+    const displayName = bar?.name || pd?.displayName || '';
     const displayAddress = pd?.formattedAddress || bar?.address || 'Barcelona';
-    const openStatus = pd?.currentOpeningHours?.openNow ?? bar?.isOpen;
+    const openStatus = pd?.currentOpeningHours?.openNow ?? isOpenNow(bar?.openingPeriods) ?? bar?.isOpen;
     const photos = pd?.photoUrls ?? [];
     const hours = pd?.currentOpeningHours?.weekdayDescriptions ?? [];
     const social = bar?.socialMedia;
@@ -314,8 +349,154 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         )}
                     </View>
 
+                    {/* ── AMENITIES / SERVEIS ── */}
+                    {(() => {
+                        const isOwner = !!(user && bar?.ownerId && user.id === bar.ownerId);
+                        const amenities = bar?.amenities ?? [];
+                        const hasAmenities = amenities.length > 0;
+
+                        if (!hasAmenities && !isOwner && !editingAmenities) return null;
+
+                        return (
+                            <View style={{ marginTop: 20 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={sectionTitleStyle}>Serveis</Text>
+                                    {isOwner && !editingAmenities && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setSelectedAmenities(new Set(amenities));
+                                                setEditingAmenities(true);
+                                            }}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        >
+                                            <Feather name="edit-2" size={16} color={P.accent} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
+                                {editingAmenities ? (
+                                    /* ── Mode edició: totes les amenities agrupades per categoria ── */
+                                    <View style={{ marginTop: 10 }}>
+                                        {AMENITY_CATEGORIES.map(cat => (
+                                            <View key={cat.key} style={{ marginBottom: 14 }}>
+                                                <Text style={{
+                                                    fontSize: 13, fontFamily: 'Lora', color: P.textMuted,
+                                                    marginBottom: 6, textTransform: 'capitalize',
+                                                }}>
+                                                    {cat.label}
+                                                </Text>
+                                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                                    {AMENITY_OPTIONS.filter(a => a.category === cat.key).map(opt => {
+                                                        const active = selectedAmenities.has(opt.key);
+                                                        const IconComp = opt.iconFamily === 'mci' ? MaterialCommunityIcons : Feather;
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={opt.key}
+                                                                onPress={() => toggleAmenity(opt.key)}
+                                                                style={{
+                                                                    flexDirection: 'row', alignItems: 'center',
+                                                                    backgroundColor: active ? 'rgba(237,187,0,0.25)' : 'rgba(255,255,255,0.08)',
+                                                                    borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
+                                                                    borderWidth: 1,
+                                                                    borderColor: active ? P.accent : 'rgba(255,255,255,0.15)',
+                                                                }}
+                                                                activeOpacity={0.7}
+                                                            >
+                                                                <IconComp name={opt.icon as any} size={14} color={active ? P.accent : P.textMuted} />
+                                                                <Text style={{
+                                                                    marginLeft: 6, fontSize: 13, fontFamily: 'Lora',
+                                                                    color: active ? P.accent : P.textMuted,
+                                                                }}>
+                                                                    {opt.label}
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
+                                                </View>
+                                            </View>
+                                        ))}
+
+                                        {/* Botons desar / cancel·lar */}
+                                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                                            <TouchableOpacity
+                                                onPress={handleSaveAmenities}
+                                                disabled={savingAmenities}
+                                                style={{
+                                                    flex: 1, backgroundColor: P.accent, borderRadius: 10,
+                                                    paddingVertical: 10, alignItems: 'center',
+                                                }}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={{ fontSize: 14, fontFamily: 'Lora', fontWeight: '700', color: '#1A1A2E' }}>
+                                                    {savingAmenities ? 'Desant…' : 'Desar'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => setEditingAmenities(false)}
+                                                style={{
+                                                    flex: 1, borderRadius: 10, paddingVertical: 10,
+                                                    alignItems: 'center', borderWidth: 1, borderColor: P.separator,
+                                                }}
+                                                activeOpacity={0.7}
+                                            >
+                                                <Text style={{ fontSize: 14, fontFamily: 'Lora', color: P.textMuted }}>Cancel·la</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ) : hasAmenities ? (
+                                    /* ── Mode lectura: xips de les amenities actives ── */
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                                        {amenities.map(key => {
+                                            const opt = AMENITY_MAP.get(key);
+                                            if (!opt) return null;
+                                            const IconComp = opt.iconFamily === 'mci' ? MaterialCommunityIcons : Feather;
+                                            return (
+                                                <View
+                                                    key={key}
+                                                    style={{
+                                                        flexDirection: 'row', alignItems: 'center',
+                                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                                        borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
+                                                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                                    }}
+                                                >
+                                                    <IconComp name={opt.icon as any} size={14} color={P.accent} />
+                                                    <Text style={{
+                                                        marginLeft: 6, fontSize: 13, fontFamily: 'Lora', color: P.text,
+                                                    }}>
+                                                        {opt.label}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                ) : isOwner ? (
+                                    /* ── Propietari sense amenities configurades ── */
+                                    <TouchableOpacity
+                                        onPress={() => { setSelectedAmenities(new Set()); setEditingAmenities(true); }}
+                                        style={{
+                                            marginTop: 10, flexDirection: 'row', alignItems: 'center',
+                                            backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 12,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Feather name="plus-circle" size={16} color={P.accent} style={{ marginRight: 8 }} />
+                                        <Text style={{ fontSize: 13, fontFamily: 'Lora', color: P.accent }}>
+                                            Afegeix els serveis del teu bar
+                                        </Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                            </View>
+                        );
+                    })()}
+
                     {/* ── HORARIS (desplegables) ── */}
-                    {hours.length > 0 && (
+                    {hours.length > 0 && (() => {
+                        // Dia actual (Google Places weekdayDescriptions: índex 0 = dilluns … 6 = diumenge)
+                        const jsDay = new Date().getDay(); // 0=dg, 1=dl … 6=ds
+                        const todayIdx = jsDay === 0 ? 6 : jsDay - 1; // 0=dl … 6=dg
+                        const todayLine = hours[todayIdx] ?? hours[0];
+                        return (
                         <View style={{ marginTop: 20 }}>
                             <TouchableOpacity
                                 onPress={() => setShowHours(h => !h)}
@@ -331,18 +512,39 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                             </TouchableOpacity>
                             {showHours && (
                                 <View style={{ marginTop: 8 }}>
-                                    {hours.map((line, i) => (
-                                        <Text key={i} style={{
-                                            fontSize: 14, color: P.textMuted,
-                                            fontFamily: 'Lora', marginBottom: 4, lineHeight: 20,
-                                        }}>
-                                            {line}
-                                        </Text>
-                                    ))}
+                                    {user ? (
+                                        hours.map((line, i) => (
+                                            <Text key={i} style={{
+                                                fontSize: 14, color: P.textMuted,
+                                                fontFamily: 'Lora', marginBottom: 4, lineHeight: 20,
+                                            }}>
+                                                {line}
+                                            </Text>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <Text style={{
+                                                fontSize: 14, color: P.textMuted,
+                                                fontFamily: 'Lora', marginBottom: 4, lineHeight: 20,
+                                            }}>
+                                                {todayLine}
+                                            </Text>
+                                            <View style={{
+                                                flexDirection: 'row', alignItems: 'center', marginTop: 8,
+                                                backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 10,
+                                            }}>
+                                                <Feather name="lock" size={14} color={P.accent} style={{ marginRight: 8 }} />
+                                                <Text style={{ fontSize: 13, color: P.accent, fontFamily: 'Lora', flex: 1 }}>
+                                                    Inicia sessió per veure tots els horaris
+                                                </Text>
+                                            </View>
+                                        </>
+                                    )}
                                 </View>
                             )}
                         </View>
-                    )}
+                        );
+                    })()}
 
                     {/* ── DESCRIPCIÓ DEL BAR ── */}
                     {bar?.description ? (
