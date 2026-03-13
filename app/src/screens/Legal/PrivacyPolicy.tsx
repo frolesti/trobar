@@ -70,7 +70,7 @@ const Section = ({ title, children }: { title: string, children: React.ReactNode
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SKETCH_THEME.colors.bg,
+        backgroundColor: '#FFFFFF',
         paddingTop: Platform.OS === 'android' ? 40 : 60,
     },
     header: {
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: 'rgba(0,0,0,0.08)',
     },
      backButton: {
         padding: 5,
