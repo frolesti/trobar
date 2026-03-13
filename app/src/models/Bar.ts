@@ -1,3 +1,13 @@
+/** Període d'obertura estructurat (dia 0=diumenge, 1=dilluns...) */
+export interface OpeningPeriod {
+    openDay: number;
+    openHour: number;
+    openMinute: number;
+    closeDay: number;
+    closeHour: number;
+    closeMinute: number;
+}
+
 /** Tipus per a les xarxes socials del bar */
 export interface BarSocialMedia {
     instagram?: string;
@@ -56,6 +66,8 @@ export interface Bar {
     gallery?: string[];
     /** Amenitats del bar (claus fixes que es mapegen a icones) */
     amenities?: BarAmenity[];
+    /** Períodes d'obertura cachejats (de Google Places, per calcular obert/tancat localment) */
+    openingPeriods?: OpeningPeriod[];
     /** UID de Firebase Auth del propietari verificat */
     ownerId?: string;
     /** Data de verificació del negoci */

@@ -1,6 +1,64 @@
 import { OSMBar } from '../models/OSMBar';
+import { BarAmenity } from '../models/Bar';
 
 export type { OSMBar };
+
+/**
+ * Mapeja tags d'OpenStreetMap a les amenitats de l'app.
+ * OSM té tags estàndard ben documentats: https://wiki.openstreetmap.org/wiki/Map_Features
+ * Això és GRATUÏT — aprofitem-ho al màxim.
+ */
+export const mapOSMTagsToAmenities = (tags: Record<string, string>): BarAmenity[] => {
+    const amenities: BarAmenity[] = [];
+
+    // Terrassa / seient exterior
+    if (tags.outdoor_seating === 'yes' || tags['outdoor_seating:covered'] === 'yes' || tags.beer_garden === 'yes') {
+        amenities.push('outdoor_seating');
+    }
+
+    // Accessibilitat
+    if (tags.wheelchair === 'yes' || tags.wheelchair === 'limited') {
+        amenities.push('accessible');
+    }
+
+    // Menjar
+    if (tags.food === 'yes' || tags.cuisine || tags.diet) {
+        amenities.push('food_served');
+    }
+
+    // WiFi
+    if (tags.internet_access === 'wlan' || tags.internet_access === 'yes' || tags['internet_access:fee'] === 'no') {
+        amenities.push('wifi');
+    }
+
+    // Aire condicionat
+    if (tags.air_conditioning === 'yes') {
+        amenities.push('air_conditioning');
+    }
+
+    // Reserves
+    if (tags.reservation === 'yes' || tags.reservation === 'recommended' || tags.reservation === 'required') {
+        amenities.push('reservations');
+    }
+
+    // Aparcament
+    if (tags.parking && tags.parking !== 'no') {
+        amenities.push('parking');
+    }
+
+    // Mascotes
+    if (tags.dog === 'yes' || tags.pets === 'yes') {
+        amenities.push('pet_friendly');
+    }
+
+    // Esports (televisió, projector)
+    if (tags.sport === 'yes' || tags['sport:tv'] === 'yes' || tags.amenity === 'pub') {
+        // Els pubs a OSM sovint tenen TV esportiva — no és segur, però és una bona heurística
+        amenities.push('sports_bar');
+    }
+
+    return amenities;
+};
 
 const OVERPASS_SERVERS = [
     'https://overpass-api.de/api/interpreter',
@@ -109,14 +167,18 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
                 .filter((el: any) => {
                     return el.tags && (el.tags.name || el.tags['name:ca'] || el.tags['name:es']);
                 })
-                .map((el: any) => ({
-                    id: `osm_${el.id}`,
-                    name: el.tags.name || el.tags['name:ca'] || el.tags['name:es'] || 'Bar sense nom',
-                    lat: el.lat || el.center?.lat,
-                    lon: el.lon || el.center?.lon,
-                    type: el.tags.amenity,
-                    tags: el.tags || {} 
-                }));
+                .map((el: any) => {
+                    const osmTags = el.tags || {};
+                    return {
+                        id: `osm_${el.id}`,
+                        name: osmTags.name || osmTags['name:ca'] || osmTags['name:es'] || 'Bar sense nom',
+                        lat: el.lat || el.center?.lat,
+                        lon: el.lon || el.center?.lon,
+                        type: osmTags.amenity,
+                        tags: osmTags,
+                        amenities: mapOSMTagsToAmenities(osmTags),
+                    };
+                });
 
             // Deduplicar per proximitat: node+way del mateix bar = duplicat
             // Si dos punts estan a < 40 m i tenen el mateix nom normalitzat, eliminem el segon
@@ -190,14 +252,18 @@ export const fetchBarsFromOSMBounds = async (
 
             const bars: OSMBar[] = elements
                 .filter((el: any) => el.tags && (el.tags.name || el.tags['name:ca'] || el.tags['name:es']))
-                .map((el: any) => ({
-                    id: `osm_${el.id}`,
-                    name: el.tags.name || el.tags['name:ca'] || el.tags['name:es'] || 'Bar sense nom',
-                    lat: el.lat || el.center?.lat,
-                    lon: el.lon || el.center?.lon,
-                    type: el.tags.amenity,
-                    tags: el.tags || {},
-                }));
+                .map((el: any) => {
+                    const osmTags = el.tags || {};
+                    return {
+                        id: `osm_${el.id}`,
+                        name: osmTags.name || osmTags['name:ca'] || osmTags['name:es'] || 'Bar sense nom',
+                        lat: el.lat || el.center?.lat,
+                        lon: el.lon || el.center?.lon,
+                        type: osmTags.amenity,
+                        tags: osmTags,
+                        amenities: mapOSMTagsToAmenities(osmTags),
+                    };
+                });
 
             const dedupedBars = deduplicateByProximity(bars);
             cache[gridKey] = { timestamp: Date.now(), data: dedupedBars };

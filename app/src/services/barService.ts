@@ -1,8 +1,10 @@
-import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Bar } from '../models/Bar';
+import { Bar, BarAmenity } from '../models/Bar';
 import { OSMBar } from './osmService';
 import { executeRequest } from '../api/core';
+import { mapOSMTagsToAmenities } from './osmService';
+import { PlaceDetails, mapGooglePlaceTypesToAmenities, mergeAmenities } from './placesService';
 
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
 const mapDocToBar = (doc: any): Bar => {
@@ -41,6 +43,7 @@ const mapDocToBar = (doc: any): Bar => {
         promotionalText: data.promotionalText || undefined,
         gallery: Array.isArray(data.gallery) ? data.gallery : undefined,
         amenities: Array.isArray(data.amenities) ? data.amenities : undefined,
+        openingPeriods: Array.isArray(data.openingPeriods) ? data.openingPeriods : undefined,
         ownerId: data.ownerId || undefined,
         verifiedAt: data.verifiedAt?.toDate?.() || undefined,
         // Camps opcionals que potser no estan a totes les entrades
@@ -151,9 +154,11 @@ export const addUserReportedBar = async (osmBar: OSMBar, userId: string): Promis
         const barRef = doc(db, 'bars', osmBar.id); // Usar l'ID d'OSM com a ID de document
         await setDoc(barRef, {
             name: osmBar.name,
-            location: { latitude: osmBar.lat, longitude: osmBar.lon }, // Emmagatzemar com a mapa per consistència amb mapDocToBar
-            address: '', // OSM no sempre dona l'adreça
-            amenities: [osmBar.type],
+            location: { latitude: osmBar.lat, longitude: osmBar.lon },
+            address: '',
+            amenities: osmBar.amenities && osmBar.amenities.length > 0
+                ? osmBar.amenities
+                : mapOSMTagsToAmenities(osmBar.tags || {}),
             source: 'user_reported',
             reportedBy: userId,
             createdAt: serverTimestamp(),
@@ -166,4 +171,56 @@ export const addUserReportedBar = async (osmBar: OSMBar, userId: string): Promis
     }, 'addUserReportedBar').then(res => {
         if (!res.success) throw res.error;
     });
+};
+
+/**
+ * Cacheja les dades de Google Places a Firestore després de visualitzar un bar.
+ * MOLT IMPORTANT: Només es crida UN COP després de getPlaceDetails (que ja s'ha fet).
+ * No fa cap crida addicional a Google — només guarda les dades que ja tenim.
+ * 
+ * Guarda:
+ * - googlePlaceId (si no el tenia)
+ * - openingPeriods (per calcular obert/tancat localment en el futur)
+ * - amenities (fusionades amb les de Google types)
+ * - placesEnrichedAt (timestamp per saber que ja s'ha enriquit)
+ */
+export const cacheBarPlaceData = async (bar: Bar, details: PlaceDetails): Promise<void> => {
+    try {
+        const barRef = doc(db, 'bars', bar.id);
+
+        // Mapejar types de Google Places a les nostres amenitats
+        const googleAmenities = mapGooglePlaceTypesToAmenities(details.types, details);
+        const existingAmenities: BarAmenity[] = bar.amenities || [];
+        const merged = mergeAmenities(existingAmenities, googleAmenities);
+
+        const updateData: Record<string, any> = {
+            amenities: merged,
+            placesEnrichedAt: serverTimestamp(),
+        };
+
+        // Guardar googlePlaceId si no el tenia (per estalviar searchText la pròxima vegada)
+        if (!bar.googlePlaceId && details.placeId) {
+            updateData.googlePlaceId = details.placeId;
+        }
+
+        // Guardar períodes d'obertura per calcular obert/tancat localment
+        if (details.openingPeriods && details.openingPeriods.length > 0) {
+            updateData.openingPeriods = details.openingPeriods;
+        }
+
+        await updateDoc(barRef, updateData);
+        console.log(`[Cache] Bar "${bar.name}" → placeId=${details.placeId}, periods=${details.openingPeriods?.length || 0}, amenities=${merged.join(',')}`);
+    } catch (error) {
+        // Error de cache no és crític — no bloquejar l'UX
+        console.warn(`[Cache] Error guardant dades de ${bar.id}:`, error);
+    }
+};
+
+/**
+ * Actualitza les amenitats d'un bar (editable pel propietari).
+ * Només escriu el camp 'amenities' a Firestore.
+ */
+export const updateBarAmenities = async (barId: string, amenities: BarAmenity[]): Promise<void> => {
+    const barRef = doc(db, 'bars', barId);
+    await updateDoc(barRef, { amenities });
 };
