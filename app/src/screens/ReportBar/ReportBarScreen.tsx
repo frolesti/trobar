@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Alert, ScrollView, Platform, useWindowDimensions, Animated, Easing } from 'react-native';
+import { View, TouchableOpacity, Alert, ScrollView, Platform, useWindowDimensions, Animated, Easing, Text } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
-import { ensureLoraOnWeb } from '../../theme/sketchTheme';
+import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 import BarCard from '../../components/BarCard';
+import { Feather } from '@expo/vector-icons';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'ReportBar'>;
@@ -19,6 +20,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
     const { user } = useAuth();
     const { height } = useWindowDimensions();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -100,11 +102,13 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
         try {
             await addUserReportedBar(osmBar, user.id);
             if (Platform.OS === 'web') {
-                navigation.navigate('Map');
+                // Mostrar estat d'èxit dins la targeta
+                setSubmitSuccess(true);
+                setTimeout(() => navigation.navigate('Map'), 2500);
             } else {
                 Alert.alert(
-                    "Gràcies! 🍺",
-                    "Aquest bar s'ha afegit al mapa per a la comunitat.",
+                    "Bar registrat correctament",
+                    "Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.",
                     [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map') }]
                 );
             }
@@ -152,6 +156,19 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                         style={{ maxHeight: Math.round(height * 0.50) }}
                         nestedScrollEnabled
                     >
+                        {submitSuccess ? (
+                            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: SKETCH_THEME.colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                                    <Feather name="check" size={32} color="white" />
+                                </View>
+                                <Text style={{ fontSize: 20, fontWeight: 'bold', color: SKETCH_THEME.colors.text, fontFamily: 'Lora', marginTop: 4, textAlign: 'center' }}>
+                                    Bar registrat correctament
+                                </Text>
+                                <Text style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', marginTop: 6, textAlign: 'center' }}>
+                                    Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.
+                                </Text>
+                            </View>
+                        ) : (
                         <BarCard
                             name={osmBar.name}
                             address={getAddress()}
@@ -164,6 +181,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                             onCancel={closeScreen}
                             isSubmitting={isSubmitting}
                         />
+                        )}
                     </ScrollView>
                 </View>
 
