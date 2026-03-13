@@ -69,7 +69,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         tier, onProfileOpen, reviewAvgRating, reviewCount,
     } = props;
 
-    const displayName = pd?.displayName || getCleanBarName(name);
+    const displayName = getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
 
@@ -153,6 +153,9 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     )}
                 </View>
 
+                {/* Fotos del bar (Google Places) */}
+                {renderPhotos(pd)}
+
                 {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
                     <Feather name="map-pin" size={15} color={C.icon} style={{ marginRight: 8, marginTop: 2 }} />
@@ -164,7 +167,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {/* Distància */}
                 {distanceText && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                        <Feather name="navigation" size={15} color={C.icon} style={{ marginRight: 8 }} />
+                        <Feather name="clock" size={15} color={C.icon} style={{ marginRight: 8 }} />
                         <Text style={{ fontSize: 14, color: C.muted, fontFamily: 'Lora' }}>
                             {distanceText}
                         </Text>
