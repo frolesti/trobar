@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
 import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator, Alert } from 'react-native';
 
@@ -6,15 +6,15 @@ import * as Location from 'expo-location';
 
 import { StatusBar } from 'expo-status-bar';
 
-import { Feather, Ionicons } from '@expo/vector-icons'; // Icones vectorials
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Icones vectorials
 
-import { fetchBars, fetchBarsForMatch } from '../../services/barService';
+import { fetchBars, fetchBarsForMatch, cacheBarPlaceData } from '../../services/barService';
 
 import { useAuth } from '../../context/AuthContext';
 
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 
-import { Bar } from '../../models/Bar';
+import { Bar, BarAmenity } from '../../models/Bar';
 
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -48,9 +48,10 @@ import BarListItem from '../../components/BarListItem';
 
 import BarProfileModal from '../../components/BarProfileModal';
 
-import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
+import { fetchBarPlaceDetails, PlaceDetails, isOpenNow } from '../../services/placesService';
 import { getBarReviewStats } from '../../services/reviewService';
 import { BarReviewStats } from '../../models/Review';
+import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
 
 
 
@@ -258,7 +259,9 @@ const MapScreen = () => {
     // Radi de cerca configurable des de preferències d'usuari (km)
     const [searchRadiusKm, setSearchRadiusKm] = useState(2);
 
-
+    // Filtres actius (multi-filtre)
+    const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+    const [showFiltersPanel, setShowFiltersPanel] = useState(false);
 
     // Dades
 
@@ -273,6 +276,22 @@ const MapScreen = () => {
     const [scannedBars, setScannedBars] = useState<OSMBar[]>([]);
 
     const [isScanning, setIsScanning] = useState(false);
+
+    // Bars escanejats filtrats per amenitats actives (dinàmic)
+    const filteredScannedBars = useMemo(() => {
+        if (activeFilters.size === 0) return scannedBars;
+        // Filtres que no apliquen a bars escanejats
+        const skip = new Set(['open_now', 'broadcasting']);
+        const amenityFilters = Array.from(activeFilters).filter(f => !skip.has(f));
+        if (amenityFilters.length === 0) return scannedBars;
+        return scannedBars.filter(b => {
+            const barAmenities = b.amenities || [];
+            return amenityFilters.every(f => {
+                if (f === 'projector') return barAmenities.includes('projector') || barAmenities.includes('multiple_screens') || barAmenities.includes('sports_bar');
+                return barAmenities.includes(f as any);
+            });
+        });
+    }, [scannedBars, activeFilters]);
 
 
 
@@ -477,6 +496,9 @@ const MapScreen = () => {
         useCallback(() => {
 
             loadBars();
+            // Tancar desplegables en tornar a la pantalla
+            setShowFiltersPanel(false);
+            setGeoSuggestions([]);
 
         }, [loadBars])
 
@@ -596,13 +618,35 @@ const MapScreen = () => {
 
         if (!centerLocation) return; // Esperant ubicació
 
-
+        // Helper: aplicar filtres (open_now usa períodes cachejats, NO el camp estàtic isOpen)
+        const applyFilters = (list: Bar[]) => {
+            if (activeFilters.size === 0) return list;
+            return list.filter(b => {
+                // Filtre obert/tancat: usar períodes cachejats de Google Places
+                if (activeFilters.has('open_now')) {
+                    const openStatus = isOpenNow(b.openingPeriods);
+                    if (openStatus === false) return false;
+                }
+                // Filtre confirmat que emet (només quan venim d'un partit)
+                if (activeFilters.has('broadcasting') && matchIdFromNav) {
+                    if (!b.broadcastingMatches?.includes(matchIdFromNav)) return false;
+                }
+                // Filtre projector: incloure multiple_screens
+                if (activeFilters.has('projector') && !(b.amenities?.some(a => a === 'projector' || a === 'multiple_screens'))) return false;
+                // Tots els altres filtres d'amenities: comprovació dinàmica
+                const amenityKeys = AMENITY_OPTIONS.map(a => a.key).filter(k => k !== 'projector');
+                for (const key of amenityKeys) {
+                    if (activeFilters.has(key) && !(b.amenities?.includes(key))) return false;
+                }
+                return true;
+            });
+        };
 
         if (matchIdFromNav) {
 
             // Si venim d'un partit, mostrem TOTS els bars emissors sense importar la distància
 
-            setFilteredBars(bars);
+            setFilteredBars(applyFilters(bars));
 
 
 
@@ -656,17 +700,16 @@ const MapScreen = () => {
 
              );
 
-             // A poc zoom: amagar bars gratuïts per reduir soroll, però mantenir els premium
-
+             // A poc zoom: amagar bars gratuïts per reduir soroll, EXCEPTE si hi ha filtres actius
              const FREE_HIDE_ZOOM = 11;
 
-             if (currentZoom < FREE_HIDE_ZOOM) {
+             if (currentZoom < FREE_HIDE_ZOOM && activeFilters.size === 0) {
 
-                 setFilteredBars(inView.filter(bar => bar.tier === 'premium'));
+                 setFilteredBars(applyFilters(inView.filter(bar => bar.tier === 'premium')));
 
              } else {
 
-                 setFilteredBars(inView);
+                 setFilteredBars(applyFilters(inView));
 
              }
 
@@ -680,13 +723,13 @@ const MapScreen = () => {
 
              );
 
-             setFilteredBars(nearbyBars);
+             setFilteredBars(applyFilters(nearbyBars));
 
         }
 
 
 
-    }, [centerLocation, visibleBounds, bars, matchIdFromNav, currentZoom]);
+    }, [centerLocation, visibleBounds, bars, matchIdFromNav, currentZoom, activeFilters]);
 
 
 
@@ -1195,9 +1238,17 @@ const MapScreen = () => {
 
              const cleanName = getCleanBarName(selectedBar.name);
 
-             fetchBarPlaceDetails(cleanName, selectedBar.latitude, selectedBar.longitude)
+             // Si ja tenim googlePlaceId → 1 sola crida (getPlaceDetails)
+             // Si no → 2 crides (searchText + getPlaceDetails), però guardem el placeId per la pròxima
+             fetchBarPlaceDetails(cleanName, selectedBar.latitude, selectedBar.longitude, selectedBar.googlePlaceId)
 
-                 .then((details) => setPlaceDetails(details))
+                 .then((details) => {
+                     setPlaceDetails(details);
+                     // Cacheja placeId + períodes + amenitats a Firestore (0 crides API extra)
+                     if (details) {
+                         cacheBarPlaceData(selectedBar, details).catch(() => {});
+                     }
+                 })
 
                  .catch(() => setPlaceDetails(null))
 
@@ -1359,6 +1410,7 @@ const MapScreen = () => {
 
     const handleSearchInput = useCallback((text: string) => {
         setSearchQuery(text);
+        setShowFiltersPanel(false); // Tancar filtres quan es busca
         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
         searchTimerRef.current = setTimeout(() => searchNominatim(text), 350);
     }, [searchNominatim]);
@@ -1604,37 +1656,93 @@ const MapScreen = () => {
 
      const openExternalMaps = (bar: Bar) => {
 
-        // Usar nom del lloc + coordenades per a navegació precisa amb Google Maps
+        const lat = bar.latitude;
 
-        const barName = encodeURIComponent(bar.name);
+        const lng = bar.longitude;
 
-        let url = `https://www.google.com/maps/dir/?api=1&destination=${barName}&destination_place_id=${bar.googlePlaceId || ''}&travelmode=walking`;
 
-        
 
-        // Si no hi ha googlePlaceId, recórrer a lat,lng
+        // Origen (si disponible)
 
-        if (!bar.googlePlaceId) {
+        const originLat = userLocation?.coords.latitude ?? centerLocation?.latitude;
 
-            url = `https://www.google.com/maps/dir/?api=1&destination=${bar.latitude},${bar.longitude}&travelmode=walking`;
+        const originLng = userLocation?.coords.longitude ?? centerLocation?.longitude;
+
+
+
+        // URLs per a cada app
+
+        const googleUrl = (() => {
+
+            let u = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`;
+
+            if (bar.googlePlaceId) u += `&destination_place_id=${bar.googlePlaceId}`;
+
+            if (originLat != null && originLng != null) u += `&origin=${originLat},${originLng}`;
+
+            return u;
+
+        })();
+
+
+
+        const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+
+
+
+        // Apple Maps (només iOS)
+
+        const appleMapsUrl = originLat != null
+
+            ? `http://maps.apple.com/?daddr=${lat},${lng}&saddr=${originLat},${originLng}&dirflg=w`
+
+            : `http://maps.apple.com/?daddr=${lat},${lng}&dirflg=w`;
+
+
+
+        if (Platform.OS === 'ios') {
+
+            Alert.alert(
+
+                'Obrir amb…',
+
+                `Navegar a ${bar.name}`,
+
+                [
+
+                    { text: 'Google Maps', onPress: () => Linking.openURL(googleUrl) },
+
+                    { text: 'Apple Maps', onPress: () => Linking.openURL(appleMapsUrl) },
+
+                    { text: 'Waze', onPress: () => Linking.openURL(wazeUrl) },
+
+                    { text: 'Cancel·la', style: 'cancel' },
+
+                ],
+
+            );
+
+        } else {
+
+            Alert.alert(
+
+                'Obrir amb…',
+
+                `Navegar a ${bar.name}`,
+
+                [
+
+                    { text: 'Google Maps', onPress: () => Linking.openURL(googleUrl) },
+
+                    { text: 'Waze', onPress: () => Linking.openURL(wazeUrl) },
+
+                    { text: 'Cancel·la', style: 'cancel' },
+
+                ],
+
+            );
 
         }
-
-
-
-        if (userLocation) {
-
-            url += `&origin=${userLocation.coords.latitude},${userLocation.coords.longitude}`;
-
-        } else if (centerLocation) {
-
-            url += `&origin=${centerLocation.latitude},${centerLocation.longitude}`;
-
-        }
-
-
-
-        Linking.openURL(url);
 
     };
 
@@ -1675,6 +1783,9 @@ const MapScreen = () => {
             setShowBarProfile(false);
 
         });
+        // Tancar desplegables de cerca/filtres
+        setShowFiltersPanel(false);
+        setGeoSuggestions([]);
 
     };
 
@@ -1716,7 +1827,7 @@ const MapScreen = () => {
 
                     fallbackRating={selectedBar.rating}
 
-                    fallbackIsOpen={selectedBar.isOpen}
+                    fallbackIsOpen={isOpenNow(selectedBar.openingPeriods) ?? selectedBar.isOpen}
 
                     distanceText={distanceText}
 
@@ -1760,7 +1871,7 @@ const MapScreen = () => {
 
                         <Text style={{color: SKETCH_THEME.colors.bg, fontWeight: 'bold', fontSize: 13, fontFamily: 'Lora'}}>
 
-                            {filteredBars.length} bars confirmats {scannedBars.length > 0 ? `(+${scannedBars.length} possibles)` : ''}
+                            {filteredBars.length} bars{activeFilters.size > 0 ? ' filtrats' : ' confirmats'} {scannedBars.length > 0 ? `(+${activeFilters.size > 0 ? filteredScannedBars.length : scannedBars.length} possibles)` : ''}
 
                         </Text>
 
@@ -1818,146 +1929,291 @@ const MapScreen = () => {
 
     };
 
+    // -- Funció per tancar tots els desplegables --
+    const dismissDropdowns = useCallback(() => {
+        setShowFiltersPanel(false);
+        setGeoSuggestions([]);
+    }, []);
 
+    // -- Configuració de filtres (dinàmica des de amenities.ts) --
+    const FILTER_OPTIONS = useMemo(() => {
+        const opts: { key: string; label: string; icon: string; iconFamily?: 'feather' | 'mci'; category?: string }[] = [
+            { key: 'open_now', label: 'Oberts ara', icon: 'clock', iconFamily: 'feather' },
+        ];
+        // Afegir filtre "confirmat que emet" quan venim d'un partit
+        if (matchIdFromNav) {
+            opts.push({ key: 'broadcasting', label: 'Confirmat que emet', icon: 'television', iconFamily: 'mci' });
+        }
+        // Totes les amenities agrupades
+        AMENITY_OPTIONS.forEach(a => {
+            opts.push({ key: a.key, label: a.label, icon: a.icon, iconFamily: a.iconFamily, category: a.category });
+        });
+        return opts;
+    }, [matchIdFromNav]);
+
+    const toggleFilter = useCallback((key: string) => {
+        setActiveFilters(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }, []);
+
+    const renderFiltersPanel = () => {
+        // Separar filtres especials (sense categoria) dels d'amenities
+        const specialFilters = FILTER_OPTIONS.filter(f => !f.category);
+        const amenityFilters = FILTER_OPTIONS.filter(f => !!f.category);
+        // Agrupar per categoria
+        const grouped = AMENITY_CATEGORIES.map(cat => ({
+            ...cat,
+            items: amenityFilters.filter(f => f.category === cat.key),
+        })).filter(g => g.items.length > 0);
+
+        const renderFilterRow = (f: typeof FILTER_OPTIONS[0]) => {
+            const isActive = activeFilters.has(f.key);
+            const IconComp = f.iconFamily === 'mci' ? MaterialCommunityIcons : Feather;
+            return (
+                <TouchableOpacity
+                    key={f.key}
+                    style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        paddingVertical: 10, paddingHorizontal: 14,
+                        backgroundColor: isActive ? 'rgba(0,77,152,0.08)' : 'transparent',
+                    }}
+                    onPress={() => toggleFilter(f.key)}
+                >
+                    <View style={{
+                        width: 28, height: 28, borderRadius: 14,
+                        backgroundColor: isActive ? SKETCH_THEME.colors.primary : 'rgba(0,0,0,0.06)',
+                        justifyContent: 'center', alignItems: 'center', marginRight: 10,
+                    }}>
+                        <IconComp name={f.icon as any} size={14} color={isActive ? 'white' : SKETCH_THEME.colors.textMuted} />
+                    </View>
+                    <Text style={{
+                        flex: 1, fontSize: 14, fontFamily: 'Lora',
+                        color: isActive ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.text,
+                        fontWeight: isActive ? '600' : '400',
+                    }}>{f.label}</Text>
+                    {isActive && <Feather name="check" size={16} color={SKETCH_THEME.colors.primary} />}
+                </TouchableOpacity>
+            );
+        };
+
+        return (
+            <View style={{
+                backgroundColor: SKETCH_THEME.colors.card,
+                borderRadius: 12,
+                borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                overflow: 'hidden',
+                maxHeight: height * 0.55,
+                ...Platform.select({
+                    web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any,
+                    ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
+                    android: { elevation: 10 },
+                    default: {},
+                }),
+            }}>
+                <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Lora', fontWeight: '700', color: SKETCH_THEME.colors.text }}>Filtres</Text>
+                    {activeFilters.size > 0 && (
+                        <TouchableOpacity onPress={() => setActiveFilters(new Set())}>
+                            <Text style={{ fontSize: 12, fontFamily: 'Lora', color: SKETCH_THEME.colors.primary }}>Netejar tot</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+                <ScrollView style={{ maxHeight: height * 0.48 }} bounces={false}>
+                    {/* Filtres especials: obert ara, confirmat que emet */}
+                    {specialFilters.map(renderFilterRow)}
+
+                    {/* Separador */}
+                    <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginVertical: 4, marginHorizontal: 14 }} />
+
+                    {/* Amenities agrupades per categoria */}
+                    {grouped.map(cat => (
+                        <View key={cat.key}>
+                            <Text style={{
+                                fontSize: 11, fontFamily: 'Lora', fontWeight: '700',
+                                color: SKETCH_THEME.colors.textMuted,
+                                textTransform: 'uppercase', letterSpacing: 0.8,
+                                paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2,
+                            }}>
+                                {cat.label}
+                            </Text>
+                            {cat.items.map(renderFilterRow)}
+                        </View>
+                    ))}
+                </ScrollView>
+                <View style={{ height: 8 }} />
+            </View>
+        );
+    };
 
     const renderSearchBarInput = () => {
 
         const placeholderText = "On vols veure el partit?";
+        const hasActiveFilters = activeFilters.size > 0;
 
-
-
-        if (Platform.OS === 'web') {
-
-             return (
-
-                 <View style={{ position: 'relative', zIndex: 1000 }}>
-
-                 <View style={styles.searchBar}>
-
-                    <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
-
-                    {/* @ts-ignore */}
-
-                    <input
-
-                        ref={autocompleteInputRef}
-
-                        type="text"
-
-                        placeholder={placeholderText}
-
-                        style={{
-
-                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: SKETCH_THEME.colors.textInverse, fontFamily: 'Lora'
-
-                        }}
-
-                        value={searchQuery}
-
-                        onChange={(e: any) => handleSearchInput(e.target.value)}
-
-                    />
-
-                     {searchQuery !== '' && (
-
-                        <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 8}}>
-
-                            <Feather name="x" size={16} color="#666" />
-
-                        </TouchableOpacity>
-
-                    )}
-
-                 </View>
-
-                 {/* Dropdown de suggeriments */}
-
-                 {geoSuggestions.length > 0 && (
-
+        const filterIconButton = (
+            <TouchableOpacity
+                onPress={() => {
+                    setShowFiltersPanel(v => !v);
+                    setGeoSuggestions([]); // Tancar suggeriments quan obrim filtres
+                }}
+                style={{
+                    marginLeft: 6,
+                    width: 32, height: 32, borderRadius: 8,
+                    backgroundColor: hasActiveFilters ? SKETCH_THEME.colors.primary : 'transparent',
+                    justifyContent: 'center', alignItems: 'center',
+                }}
+            >
+                <Feather name="sliders" size={18} color={hasActiveFilters ? 'white' : SKETCH_THEME.colors.textInverse} />
+                {hasActiveFilters && (
                     <View style={{
-
-                        position: 'absolute', top: '100%', left: 0, right: 0,
-
-                        backgroundColor: SKETCH_THEME.colors.card,
-
-                        borderRadius: 12, marginTop: 4,
-
-                        borderWidth: 1, borderColor: SKETCH_THEME.colors.border,
-
-                        ...Platform.select({ web: { boxShadow: '0 4px 12px rgba(0,0,0,0.12)' } as any, default: {} }),
-
-                        overflow: 'hidden',
-
+                        position: 'absolute', top: -4, right: -4,
+                        width: 16, height: 16, borderRadius: 8,
+                        backgroundColor: SKETCH_THEME.colors.gold,
+                        justifyContent: 'center', alignItems: 'center',
                     }}>
-
-                        {geoSuggestions.map((s, i) => (
-
-                            <TouchableOpacity
-
-                                key={`${s.lat}-${s.lon}-${i}`}
-
-                                style={{
-
-                                    paddingVertical: 10, paddingHorizontal: 14,
-
-                                    borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
-
-                                    borderBottomColor: SKETCH_THEME.colors.bg,
-
-                                }}
-
-                                onPress={() => selectGeoSuggestion(s)}
-
-                            >
-
-                                <Text numberOfLines={1} style={{ fontSize: 13, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
-
-                                    {s.display_name}
-
-                                </Text>
-
-                            </TouchableOpacity>
-
-                        ))}
-
+                        <Text style={{ fontSize: 9, fontWeight: 'bold', color: SKETCH_THEME.colors.text }}>{activeFilters.size}</Text>
                     </View>
-
-                 )}
-
-                 </View>
-
-             )
-
-        }
-
-        // Input natiu
-
-        return (
-
-             <View style={styles.searchBar}>
-
-                <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
-
-                <TextInput 
-
-                    placeholder={placeholderText} 
-
-                    style={styles.searchInput}
-
-                    placeholderTextColor="#999"
-
-                    value={searchQuery}
-
-                    onChangeText={handleSearchInput}
-
-                    onSubmitEditing={() => searchNominatim(searchQuery)}
-
-                />
-
-            </View>
-
+                )}
+            </TouchableOpacity>
         );
 
+        if (Platform.OS === 'web') {
+             return (
+                 <View style={styles.searchBar}>
+                    <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
+                    {/* @ts-ignore */}
+                    <input
+                        ref={autocompleteInputRef}
+                        type="text"
+                        placeholder={placeholderText}
+                        style={{
+                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: SKETCH_THEME.colors.textInverse, fontFamily: 'Lora'
+                        }}
+                        value={searchQuery}
+                        onChange={(e: any) => handleSearchInput(e.target.value)}
+                    />
+                     {searchQuery !== '' && (
+                        <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 4}}>
+                            <Feather name="x" size={16} color="rgba(255,255,255,0.6)" />
+                        </TouchableOpacity>
+                    )}
+                    {filterIconButton}
+                 </View>
+             )
+        }
+        // Input natiu
+        return (
+             <View style={styles.searchBar}>
+                <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
+                <TextInput 
+                    placeholder={placeholderText} 
+                    style={[styles.searchInput, { flex: 1 }]}
+                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    value={searchQuery}
+                    onChangeText={handleSearchInput}
+                    onSubmitEditing={() => searchNominatim(searchQuery)}
+                />
+                {searchQuery !== '' && (
+                    <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 4}}>
+                        <Feather name="x" size={16} color="rgba(255,255,255,0.6)" />
+                    </TouchableOpacity>
+                )}
+                {filterIconButton}
+            </View>
+        );
+    };
+
+    /** Overlay flotant per suggeriments i filtres — renderitzat al nivell superior de la pantalla */
+    const renderSearchDropdownOverlay = () => {
+        const showSuggestions = geoSuggestions.length > 0 && !showFiltersPanel;
+        if (!showSuggestions && !showFiltersPanel) return null;
+
+        // Desktop: dins del sidebar, no necessita posicionament absolut
+        if (isDesktop) {
+            return (
+                <View style={{ zIndex: 9999 }}>
+                    {showSuggestions && (
+                        <View style={{
+                            backgroundColor: SKETCH_THEME.colors.card,
+                            borderRadius: 12,
+                            borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                            overflow: 'hidden',
+                            ...Platform.select({ web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any, default: {} }),
+                        }}>
+                            {geoSuggestions.map((s, i) => (
+                                <TouchableOpacity
+                                    key={`${s.lat}-${s.lon}-${i}`}
+                                    style={{
+                                        paddingVertical: 10, paddingHorizontal: 14,
+                                        borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
+                                        borderBottomColor: 'rgba(0,0,0,0.06)',
+                                    }}
+                                    onPress={() => selectGeoSuggestion(s)}
+                                >
+                                    <Text numberOfLines={1} style={{ fontSize: 13, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+                                        {s.display_name}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                    {showFiltersPanel && renderFiltersPanel()}
+                </View>
+            );
+        }
+
+        // Mòbil: posicionament absolut sobre el mapa
+        return (
+            <View
+                style={{
+                    position: 'absolute',
+                    left: 12, right: 12,
+                    zIndex: 9999,
+                    ...Platform.select({
+                        ios: { top: 110 },
+                        android: { top: 70 },
+                        web: { top: 60 },
+                        default: { top: 70 },
+                    }),
+                }}
+            >
+                {showSuggestions && (
+                    <View style={{
+                        backgroundColor: SKETCH_THEME.colors.card,
+                        borderRadius: 12,
+                        borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                        overflow: 'hidden',
+                        ...Platform.select({
+                            web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any,
+                            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
+                            android: { elevation: 10 },
+                            default: {},
+                        }),
+                    }}>
+                        {geoSuggestions.map((s, i) => (
+                            <TouchableOpacity
+                                key={`${s.lat}-${s.lon}-${i}`}
+                                style={{
+                                    paddingVertical: 12, paddingHorizontal: 14,
+                                    borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
+                                    borderBottomColor: 'rgba(0,0,0,0.06)',
+                                }}
+                                onPress={() => selectGeoSuggestion(s)}
+                            >
+                                <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+                                    {s.display_name}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+                {showFiltersPanel && renderFiltersPanel()}
+            </View>
+        );
     };
 
 
@@ -2038,9 +2294,11 @@ const MapScreen = () => {
                             return (
                                 <>
 
-                        {/* Acció de bars escanejats/trobats */}
+                        {/* Cerca OSM */}
 
                         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10}}>
+
+                            {/* Acció de bars escanejats/trobats */}
 
                             <TouchableOpacity 
 
@@ -2175,9 +2433,13 @@ const MapScreen = () => {
 
             {isDesktop && (
 
-                <View style={styles.desktopSidebar}>
+                <View style={[styles.desktopSidebar, { position: 'relative' }]}>
 
                     {renderHeader()}
+                    {/* Overlay flotant de suggeriments/filtres — desktop */}
+                    <View style={{ position: 'relative', zIndex: 9999, paddingHorizontal: 16 }}>
+                        {renderSearchDropdownOverlay()}
+                    </View>
 
                     <View style={{flex: 1, paddingHorizontal: 16}}>
 
@@ -2293,7 +2555,7 @@ const MapScreen = () => {
 
                         )}
 
-                        {scannedBars.map(osmBar => (
+                        {filteredScannedBars.map(osmBar => (
 
                              <MapboxMarker key={osmBar.id} longitude={osmBar.lon} latitude={osmBar.lat} anchor="center" onClick={(e: any) => { e.originalEvent.stopPropagation(); navigation.navigate('ReportBar' as any, { osmBar }); }}>
 
@@ -2533,7 +2795,7 @@ const MapScreen = () => {
 
                                                 fallbackRating={selectedBar.rating} 
 
-                                                fallbackIsOpen={selectedBar.isOpen} 
+                                                fallbackIsOpen={isOpenNow(selectedBar.openingPeriods) ?? selectedBar.isOpen} 
 
                                                 distanceText={routeInfo ? `${routeInfo.duration} caminant (${routeInfo.distance})` : undefined} 
 
@@ -2665,7 +2927,7 @@ const MapScreen = () => {
 
                          {/* Bars escanejats d'OSM */}
 
-                         {scannedBars.map(osmBar => (
+                         {filteredScannedBars.map(osmBar => (
 
                             <Marker
 
@@ -2877,7 +3139,8 @@ const MapScreen = () => {
 
                     </View>
 
-
+                    {/* Overlay flotant de suggeriments/filtres — fora del header per evitar clipping */}
+                    {renderSearchDropdownOverlay()}
 
                     <TouchableOpacity 
 
@@ -3084,6 +3347,8 @@ const MapScreen = () => {
                         <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.primary} />
 
                     </TouchableOpacity>
+
+
 
                 </>
 
