@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -47,6 +48,7 @@ const LoginModal = ({ navigation }: Props) => {
     const [isRegistering, setIsRegistering] = useState(false);
     const [verificationSent, setVerificationSent] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [authInProgress, setAuthInProgress] = useState(false);
 
     // Estat del formulari
     const [email, setEmail] = useState('');
@@ -60,21 +62,27 @@ const LoginModal = ({ navigation }: Props) => {
 
     const handleGoogleLogin = async () => {
         setLocalError(null);
+        setAuthInProgress(true);
         try {
             await loginGoogle();
             navigation.goBack();
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
+        } finally {
+            setAuthInProgress(false);
         }
     };
 
     const handleAppleLogin = async () => {
         setLocalError(null);
+        setAuthInProgress(true);
         try {
             await loginApple();
             navigation.goBack();
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
+        } finally {
+            setAuthInProgress(false);
         }
     };
 
@@ -235,7 +243,7 @@ const LoginModal = ({ navigation }: Props) => {
                         }
                     }}
                 >
-                    <Feather name="arrow-left" size={28} color={SKETCH_THEME.colors.text} />
+                    <Feather name="arrow-left" size={28} color={SKETCH_THEME.colors.textInverse} />
                 </TouchableOpacity>
 
                 <View style={styles.panel}>
@@ -303,6 +311,21 @@ const LoginModal = ({ navigation }: Props) => {
                 </View>
             </ScrollView>
             <StatusBar style="dark" />
+
+            {/* Overlay de bloqueig durant autenticació externa */}
+            {authInProgress && (
+                <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(255,255,255,0.85)',
+                    justifyContent: 'center', alignItems: 'center', zIndex: 100,
+                }}>
+                    <ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} />
+                    <Text style={{
+                        marginTop: 16, fontSize: 16, fontFamily: 'Lora',
+                        color: SKETCH_THEME.colors.text, textAlign: 'center',
+                    }}>Iniciant sessió...</Text>
+                </View>
+            )}
         </KeyboardAvoidingView>
     );
 };

@@ -15,11 +15,11 @@ export default StyleSheet.create({
         alignSelf: 'center',
         width: '100%',
         maxWidth: 420,
-        backgroundColor: SKETCH_THEME.colors.uiBg,
+        backgroundColor: SKETCH_THEME.colors.card,
         borderRadius: 22,
         padding: 22,
         borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
+        borderColor: 'rgba(0,0,0,0.08)',
         ...(sketchShadow() as object),
     },
     closeButton: {
@@ -40,7 +40,7 @@ export default StyleSheet.create({
     closeText: {
         fontSize: 18,
         fontWeight: '800',
-        color: SKETCH_THEME.colors.text,
+        color: '#FFFFFF',
         fontFamily: sketchFontFamily(),
     },
     header: {
