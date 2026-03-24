@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Bars collection
+    match /bars/{barId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Bar owners
+    match /barOwners/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Reviews
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

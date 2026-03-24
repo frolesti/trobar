@@ -1,0 +1,224 @@
+═══════════════════════════════════════════════════════════════════════════
+  troBar — Guia pas a pas de la integració de facturació amb Stripe
+═══════════════════════════════════════════════════════════════════════════
+
+Última actualització: 19 de març de 2026
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  1. RESUM DE L'ARQUITECTURA                                          ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  Client (Expo/RN Web)
+    └── subscriptionService.ts  →  httpsCallable  →  Cloud Functions
+                                                          │
+                                                    Stripe API
+                                                          │
+                                                    Stripe Webhook  →  stripeWebhook Cloud Function
+                                                                          │
+                                                                    Firestore (actualitza estat)
+
+  Plans:
+    • Mensual:    39€/mes
+    • Trimestral: 33€/mes (99€/3 mesos, estalvi 72€/any → -15%)
+    • Anual:      29€/mes (348€/any, estalvi 120€/any → -25%)
+    • Trial:      14 dies gratuïts
+
+  Fitxers implicats:
+    • functions/src/index.ts          — Cloud Functions (Stripe backend)
+    • app/src/services/subscriptionService.ts — Client service
+    • app/src/config/firebase.ts      — Firebase + Functions init
+    • app/src/context/AuthContext.tsx  — deleteAccount amb cancel·lació Stripe
+    • app/src/screens/BarDashboard/BarDashboardScreen.tsx — UI modals
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  2. ON OBTENIR ELS SECRETS DE STRIPE                                  ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  A) STRIPE_SECRET_KEY
+     ─────────────────
+     1. Ves a https://dashboard.stripe.com
+     2. Registra't o inicia sessió
+     3. Al dashboard, fes clic a "Developers" (menú lateral esquerre)
+     4. Clica la pestanya "API keys"
+     5. Copia la "Secret key" (comença per sk_test_... en mode test
+        o sk_live_... en producció)
+
+     ⚠️  IMPORTANT: En mode test pots fer proves sense cobrar de veritat.
+         Només passa a sk_live_... quan tot estigui validat.
+
+  B) STRIPE_WEBHOOK_SECRET
+     ──────────────────────
+     1. A Stripe Dashboard → Developers → Webhooks
+     2. Clica "Add endpoint"
+     3. URL del webhook:
+        https://europe-west1-trobar-1123f.cloudfunctions.net/stripeWebhook
+     4. Events a escoltar (selecciona aquests):
+        • checkout.session.completed
+        • customer.subscription.updated
+        • customer.subscription.deleted
+        • invoice.payment_failed
+     5. Clica "Add endpoint"
+     6. Un cop creat, clica a l'endpoint → "Signing secret" → "Reveal"
+     7. Copia el valor (comença per whsec_...)
+
+  C) STRIPE PRICE IDs (preus dels plans)
+     ────────────────────────────────────
+     1. A Stripe Dashboard → Products
+     2. Clica "Add product"
+     3. Crea el producte "troBar Premium"
+     4. Afegeix 3 preus recurrents:
+        • Mensual:    39€/mes    → recurring, monthly
+        • Trimestral: 99€/3 mesos → recurring, every 3 months
+        • Anual:      348€/any   → recurring, yearly
+     5. Copia els Price IDs de cadascun (comencen per price_...)
+     6. Aquests IDs s'han de configurar com a variables d'entorn
+        (veure secció 3)
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  3. CONFIGURAR SECRETS A FIREBASE                                     ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  Pas 1: Configurar els secrets encriptats
+  ─────────────────────────────────────────
+  Obre un terminal a la carpeta del projecte i executa:
+
+    firebase functions:secrets:set STRIPE_SECRET_KEY
+    → Enganxa la sk_test_... o sk_live_...
+
+    firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+    → Enganxa el whsec_...
+
+  Pas 2: Configurar els Price IDs
+  ────────────────────────────────
+  Edita el fitxer functions/src/index.ts i actualitza les constants:
+
+    const STRIPE_PRICE_IDS: Record<string, string> = {
+      monthly: "price_XXXXXXXXXXXXXX",      // ← ID del preu mensual
+      quarterly: "price_XXXXXXXXXXXXXX",     // ← ID del preu trimestral
+      annual: "price_XXXXXXXXXXXXXX",        // ← ID del preu anual
+    };
+
+  Alternativament, configura-les com a variables d'entorn:
+
+    firebase functions:config:set \
+      stripe.price_monthly="price_XXX" \
+      stripe.price_quarterly="price_XXX" \
+      stripe.price_annual="price_XXX"
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  4. DEPLOY DE LES CLOUD FUNCTIONS                                     ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  cd functions
+  npm run build
+  firebase deploy --only functions
+
+  Això desplegarà:
+    • createCheckoutSession  — Crea sessió de Stripe Checkout
+    • changeBillingCycle     — Canvia pla (mensual/trimestral/anual)
+    • cancelSubscription     — Cancel·la subscripció
+    • getSubscriptionStatus  — Retorna estat de la subscripció
+    • stripeWebhook          — Webhook per events de Stripe
+    • registerBar            — (ja existent) Registre de bar
+    • onNewReview            — (ja existent) Notificació push
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  5. FLUX DE PAGAMENT PAS A PAS                                        ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  A) PRIMERA SUBSCRIPCIÓ (Checkout)
+     1. L'usuari es registra via web-app (ja implementat)
+     2. Es crida createCheckoutSession amb el billingCycle triat
+     3. Stripe obre una pàgina de checkout amb targeta de crèdit
+     4. L'usuari paga (o inicia trial de 14 dies)
+     5. Stripe envia event checkout.session.completed al webhook
+     6. El webhook actualitza Firestore:
+        - barOwners/{uid}.stripeSubscriptionId = sub_XXX
+        - barOwners/{uid}.subscriptionStatus = "active"
+        - bars/{barId}.tier = "premium"
+
+  B) CANVI DE PLA
+     1. L'usuari toca un cicle diferent al toggle (Configuració)
+     2. S'obre el modal de confirmació amb detalls (pla actual → nou)
+     3. L'usuari confirma
+     4. Es crida changeBillingCycle(newCycle) → Cloud Function
+     5. La Cloud Function actualitza la subscripció a Stripe amb prorrateig
+     6. Stripe envia customer.subscription.updated al webhook
+     7. Firestore s'actualitza amb el nou cicle
+
+  C) ELIMINACIÓ DE COMPTE
+     1. L'usuari toca "Eliminar el compte"
+     2. S'obre modal pas 1: Advertència amb llista de conseqüències
+     3. L'usuari toca "Sí, continuar"
+     4. Pas 2: Ha d'escriure "ELIMINAR" per confirmar
+     5. Es crida deleteAccount() (AuthContext):
+        a) cancelSubscription() → Cloud Function → Stripe cancel
+        b) deleteUserProfile() → Elimina docs de Firestore
+        c) auth.currentUser.delete() → Elimina compte Firebase Auth
+     6. L'usuari és redirigit automàticament al mapa (onAuthStateChanged)
+
+  D) PAGAMENT FALLAT
+     1. Stripe intenta cobrar però falla (targeta caducada, etc.)
+     2. Stripe envia invoice.payment_failed al webhook
+     3. El webhook marca subscriptionStatus = "payment_failed" a Firestore
+     4. El dashboard mostra el badge "INACTIU" en vermell
+     5. L'usuari ha d'actualitzar les dades de pagament via Stripe
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  6. TESTING EN MODE SANDBOX                                           ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  1. Utilitza claus sk_test_... (no sk_live_...)
+  2. Targetes de test de Stripe:
+     • Èxit:           4242 4242 4242 4242
+     • Requerir auth:  4000 0025 0000 3155
+     • Pagament fallit: 4000 0000 0000 0002
+     Data: qualsevol futura | CVC: qualsevol de 3 dígits
+  3. Webhook local (per testejar):
+     stripe listen --forward-to localhost:5001/trobar-1123f/europe-west1/stripeWebhook
+  4. Emulador Firebase (opcional):
+     firebase emulators:start --only functions
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  7. DOCUMENTS DE FIRESTORE IMPLICATS                                  ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  barOwners/{uid}:
+    ├── stripeCustomerId:     "cus_XXXX"
+    ├── stripeSubscriptionId: "sub_XXXX"
+    ├── subscriptionStatus:   "active" | "trialing" | "cancelled" | "payment_failed"
+    ├── billingCycle:         "monthly" | "quarterly" | "annual"
+    ├── subscribedAt:         Timestamp
+    ├── cancelledAt:          Timestamp (si cancel·lat)
+    └── lastPaymentError:     Timestamp (si pagament fallit)
+
+  bars/{barId}:
+    ├── tier:     "premium" | "free"
+    ├── premium:  true | false
+    └── billing:  "monthly" | "quarterly" | "annual"
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║  8. CHECKLIST PRE-PRODUCCIÓ                                           ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+  [ ] Crear compte Stripe (stripe.com)
+  [ ] Activar mode Live a Stripe
+  [ ] Crear producte "troBar Premium" amb 3 preus
+  [ ] Configurar webhook a Stripe Dashboard
+  [ ] firebase functions:secrets:set STRIPE_SECRET_KEY (sk_live_...)
+  [ ] firebase functions:secrets:set STRIPE_WEBHOOK_SECRET (whsec_...)
+  [ ] Actualitzar STRIPE_PRICE_IDS a functions/src/index.ts
+  [ ] firebase deploy --only functions
+  [ ] Provar amb targeta 4242... en mode test
+  [ ] Verificar webhook rep events correctament
+  [ ] Provar canvi de pla i cancel·lació
+  [ ] Provar eliminació de compte
+  [ ] Canviar a claus Live quan tot funcioni
