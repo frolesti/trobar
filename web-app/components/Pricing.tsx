@@ -9,14 +9,14 @@ const CYCLES: Record<Cycle, { label: string; price: number; months: number; save
 }
 
 const features = [
-  { text: 'Perfil verificat amb insígnia', icon: '✓' },
-  { text: 'Apareix destacat al mapa', icon: '✓' },
-  { text: 'Anuncia partits que emets', icon: '✓' },
-  { text: 'Fins a 10 fotos del local', icon: '✓' },
-  { text: 'Horaris d\'obertura en temps real', icon: '✓' },
-  { text: 'Equipament i amenitats visibles', icon: '✓' },
-  { text: 'Notificacions als culers propers', icon: '✓' },
-  { text: 'Suport prioritari per email', icon: '✓' },
+  'Perfil verificat amb insígnia',
+  'Apareix destacat al mapa',
+  'Anuncia partits que emets',
+  'Fins a 10 fotos del local',
+  'Horaris d\'obertura en temps real',
+  'Equipament i amenitats visibles',
+  'Notificacions als culers propers',
+  'Suport prioritari per email',
 ]
 
 export default function Pricing() {
@@ -29,24 +29,25 @@ export default function Pricing() {
       ? `${sel.price * 3}€ cada 3 mesos`
       : `${sel.price * 12}€/any`
 
-  // Savings vs monthly
   const monthlyCost = CYCLES.monthly.price
   const yearlySaving = (monthlyCost - sel.price) * 12
 
   return (
-    <section id="preus" style={{ padding: '0' }}>
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <h2 style={{ fontSize: 36, marginBottom: 16, color: '#fff' }}>Un sol pla, sense sorpreses</h2>
-        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 18, maxWidth: 520, margin: '0 auto' }}>
+    <section id="preus" style={{ padding: 0 }}>
+      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+        <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'var(--accent)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Preus</span>
+        <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', marginBottom: 14, color: 'var(--text)' }}>Un sol pla, sense sorpreses</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 17, maxWidth: 500, margin: '0 auto' }}>
           Tot inclòs per fer créixer el teu negoci cada dia de partit. Prova 14 dies gratis.
         </p>
       </div>
 
       {/* Billing cycle toggle */}
       <div style={{
-        display: 'flex', justifyContent: 'center', gap: 6,
-        background: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 4,
-        maxWidth: 420, margin: '0 auto 40px',
+        display: 'flex', justifyContent: 'center', gap: 4,
+        background: 'var(--bg-alt)', borderRadius: 14, padding: 4,
+        maxWidth: 400, margin: '0 auto 48px',
+        border: '1px solid var(--border)',
       }}>
         {(Object.keys(CYCLES) as Cycle[]).map(key => {
           const c = CYCLES[key]
@@ -58,19 +59,22 @@ export default function Pricing() {
               style={{
                 flex: 1, padding: '12px 8px', borderRadius: 10,
                 border: 'none', cursor: 'pointer',
-                background: active ? '#fff' : 'transparent',
-                color: active ? 'var(--text)' : 'rgba(255,255,255,0.6)',
+                background: active
+                  ? 'var(--card)'
+                  : 'transparent',
+                color: active ? 'var(--text)' : 'var(--muted)',
                 fontWeight: active ? 700 : 500,
                 fontSize: 14, fontFamily: 'inherit',
-                transition: 'all 0.2s',
+                transition: 'all 0.3s',
                 position: 'relative',
+                boxShadow: active ? 'var(--shadow-sm)' : 'none',
               }}
             >
               {c.label}
               {c.saveYear && (
                 <span style={{
                   display: 'block', fontSize: 10, fontWeight: 600,
-                  color: active ? 'var(--accent)' : 'var(--gold)',
+                  color: active ? 'var(--gold)' : 'rgba(237,187,0,0.5)',
                   marginTop: 2,
                 }}>
                   Estalvia {c.saveYear}€/any
@@ -84,16 +88,21 @@ export default function Pricing() {
       {/* Main pricing card */}
       <div style={{
         maxWidth: 520, margin: '0 auto',
-        background: 'var(--blue)', borderRadius: 28,
-        padding: '48px 40px', color: '#fff',
-        boxShadow: '0 24px 60px rgba(0, 77, 152, 0.3)',
+        background: 'linear-gradient(135deg, #004d98, #003570)',
+        borderRadius: 28,
+        padding: '52px 40px', color: '#fff',
+        boxShadow: '0 12px 40px rgba(0,77,152,0.25)',
         position: 'relative', overflow: 'hidden',
+        border: '1px solid rgba(0,77,152,0.3)',
       }}>
-        {/* Savings badge — only for non-monthly */}
+        {/* Decorative glow */}
+        <div style={{position:'absolute', top:-80, right:-80, width:200, height:200, borderRadius:'50%', background:'radial-gradient(circle, rgba(237,187,0,0.08), transparent 70%)', pointerEvents:'none'}} />
+
         {sel.savePct && (
           <div style={{
             position: 'absolute', top: 0, right: 0,
-            background: 'var(--gold)', color: 'var(--text)',
+            background: 'linear-gradient(135deg, var(--gold), #ffd54f)',
+            color: '#1a1a2e',
             padding: '8px 16px', fontSize: 12, fontWeight: 800,
             borderRadius: '0 0 0 16px',
             letterSpacing: 0.3,
@@ -102,18 +111,18 @@ export default function Pricing() {
           </div>
         )}
 
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, opacity: 0.8 }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, opacity: 0.5 }}>
             troBar per a Bars
           </h3>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
             {sel.price < monthlyCost && (
-              <span style={{ fontSize: 28, opacity: 0.4, textDecoration: 'line-through', marginRight: 8 }}>{monthlyCost}€</span>
+              <span style={{ fontSize: 28, opacity: 0.3, textDecoration: 'line-through', marginRight: 8 }}>{monthlyCost}€</span>
             )}
             <span style={{ fontSize: 64, fontWeight: 800, lineHeight: 1 }}>{sel.price}€</span>
-            <span style={{ fontSize: 20, opacity: 0.6 }}>/mes</span>
+            <span style={{ fontSize: 20, opacity: 0.4 }}>/mes</span>
           </div>
-          <p style={{ fontSize: 13, opacity: 0.5, marginTop: 8 }}>
+          <p style={{ fontSize: 13, opacity: 0.35, marginTop: 8 }}>
             Facturat com {totalLabel}
           </p>
           {yearlySaving > 0 && (
@@ -123,7 +132,7 @@ export default function Pricing() {
           )}
         </div>
 
-        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 36px' }}>
           {features.map((feat, i) => (
             <li key={i} style={{
               display: 'flex', alignItems: 'center', gap: 12,
@@ -131,67 +140,66 @@ export default function Pricing() {
             }}>
               <span style={{
                 width: 22, height: 22, borderRadius: '50%',
-                background: 'rgba(237,187,0,0.15)', color: 'var(--gold)',
+                background: 'rgba(237,187,0,0.18)', color: '#edbb00',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 13, fontWeight: 700, flexShrink: 0,
+                border: '1px solid rgba(237,187,0,0.1)',
               }}>✓</span>
-              {feat.text}
+              <span style={{opacity: 0.85}}>{feat}</span>
             </li>
           ))}
         </ul>
 
         <a href="/registra-bar" style={{
           display: 'block', textAlign: 'center',
-          background: 'var(--gold)', color: 'var(--blue)',
+          background: 'linear-gradient(135deg, var(--gold), #ffd54f)',
+          color: '#1a1a2e',
           padding: 18, borderRadius: 14,
           fontWeight: 800, fontSize: 17,
           textDecoration: 'none',
           transition: 'transform 0.2s',
-          boxShadow: '0 8px 24px rgba(237,187,0,0.25)',
+          boxShadow: '0 0 40px rgba(237,187,0,0.15), 0 8px 24px rgba(0,0,0,0.2)',
+          border: '1px solid rgba(255,255,255,0.05)',
         }}>
           Provar 14 dies gratis
         </a>
 
-        <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.5, marginTop: 14 }}>
+        <p style={{ textAlign: 'center', fontSize: 12, opacity: 0.35, marginTop: 14 }}>
           Cancel·la quan vulguis. Sense compromís.
         </p>
       </div>
 
       {/* ROI comparison */}
-      <div style={{
+      <div className="glow-card" style={{
         maxWidth: 520, margin: '40px auto 0',
-        background: 'rgba(255,255,255,0.06)', borderRadius: 20,
-        padding: '32px 28px', border: '1px solid rgba(255,255,255,0.1)',
+        padding: '36px 28px',
       }}>
-        <h4 style={{ fontSize: 18, color: '#fff', textAlign: 'center', marginBottom: 24, fontFamily: 'Lora, serif' }}>
+        <h4 style={{ fontSize: 18, color: 'var(--text)', textAlign: 'center', marginBottom: 24, fontFamily: 'Lora, serif' }}>
           Compensa des del primer dia de partit
         </h4>
 
         <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-          {/* Cost */}
           <div style={{
             flex: 1, textAlign: 'center', padding: 16, borderRadius: 14,
-            background: 'rgba(165,0,68,0.15)', border: '1px solid rgba(165,0,68,0.2)',
+            background: 'rgba(165,0,68,0.10)', border: '1px solid rgba(165,0,68,0.20)',
           }}>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6, fontWeight: 600 }}>La teva inversió</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#fff' }}>~1€<span style={{ fontSize: 14, fontWeight: 400, opacity: 0.6 }}>/dia</span></div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>amb el pla trimestral</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 }}>La teva inversió</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)' }}>~1€<span style={{ fontSize: 14, fontWeight: 400, opacity: 0.5 }}>/dia</span></div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>amb el pla trimestral</div>
           </div>
-          {/* Gain */}
           <div style={{
             flex: 1, textAlign: 'center', padding: 16, borderRadius: 14,
-            background: 'rgba(237,187,0,0.12)', border: '1px solid rgba(237,187,0,0.2)',
+            background: 'rgba(237,187,0,0.12)', border: '1px solid rgba(237,187,0,0.22)',
           }}>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6, fontWeight: 600 }}>Potencial per partit</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 }}>Potencial per partit</div>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)' }}>+200€</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>amb 20 culers extres</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>amb 20 culers extres</div>
           </div>
         </div>
 
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
-          Un bar factura de mitjana <strong style={{ color: '#fff' }}>10€ per client</strong> en un dia de partit.
-          Amb només <strong style={{ color: '#fff' }}>2 clients nous al mes</strong> ja has cobert la subscripció.
-          Imagina&apos;t amb 4 partits per setmana.
+        <p style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+          Un bar factura de mitjana <strong style={{ color: 'var(--text)' }}>10€ per client</strong> en un dia de partit.
+          Amb només <strong style={{ color: 'var(--text)' }}>2 clients nous al mes</strong> ja has cobert la subscripció.
         </p>
       </div>
     </section>

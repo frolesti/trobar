@@ -10,7 +10,9 @@ export default function Footer() {
 
   return (
     <>
-    <footer className="footer" style={{background: 'var(--footer-bg)', padding: '64px 24px 40px', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.06)'}}>
+    <footer className="footer" style={{background: 'var(--footer-bg)', padding: '64px 24px 40px', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.04)', position:'relative'}}>
+      {/* Subtle glow line at top */}
+      <div style={{position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:'60%', height:1, background:'linear-gradient(90deg, transparent, rgba(165,0,68,0.2), rgba(0,77,152,0.15), transparent)'}} />
       <div style={{maxWidth: 1200, margin: '0 auto'}}>
         <div style={{display: 'flex', flexWrap: 'wrap', gap: '48px', justifyContent: 'space-between', marginBottom: 48}}>
           {/* Brand */}
@@ -67,7 +69,6 @@ export default function Footer() {
         {/* Bottom bar */}
         <div style={{borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12}}>
           <span style={{color: 'rgba(255,255,255,0.35)', fontSize: 13}}>© {new Date().getFullYear()} troBar. Tots els drets reservats.</span>
-          <span style={{color: 'rgba(255,255,255,0.25)', fontSize: 12}}>Fet a Barcelona amb ❤️</span>
         </div>
       </div>
     </footer>

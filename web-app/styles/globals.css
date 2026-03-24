@@ -1,92 +1,94 @@
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root{
-  /* ═══ PALETA CENTRALITZADA ═══ */
-  --bg: #a50044;             /* GRANA PUR — fons principal */
-  --bg-light: #8a003a;       /* grana fosc — seccions alternes */
-  --card: #FFFFFF;
-  --text: #1A1A2E;           /* blau fosc — text dins targetes */
-  --text-inverse: #FFFFFF;   /* text sobre fons grana */
-  --muted: #6B7280;          /* gris — text secundari dins targetes */
-  --muted-inverse: rgba(255,255,255,0.70);
-  --accent: #a50044;         /* granate Barça — CTA, enllaços */
-  --accent-soft: rgba(255,255,255,0.10);
-  --blue: #004d98;           /* blau Barça — primari */
+  /* FC Barcelona official palette */
+  --bg: #f8f9fc;
+  --bg-alt: #eef2f9;
+  --bg-dark: #0d1b2a;
+  --card: #ffffff;
+  --card-border: rgba(0,0,0,0.07);
+  --text: #1a1a2e;
+  --text-light: #ffffff;
+  --muted: #5f6b7a;
+  --accent: #a50044;
+  --accent-light: #db0030;
+  --accent-soft: rgba(165,0,68,0.10);
+  --blue: #004d98;
+  --blue-light: #1a7fdb;
   --blue-soft: rgba(0,77,152,0.10);
-  --gold: #edbb00;           /* or Barça — badge, premium */
+  --gold: #edbb00;
+  --yellow: #ffed02;
+  --gold-soft: rgba(237,187,0,0.12);
   --danger: #db0030;
-  --border: rgba(255,255,255,0.12);
-  --shadow: rgba(0,0,0,0.15);
+  --border: rgba(0,0,0,0.08);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+  --shadow: 0 4px 20px rgba(0,0,0,0.07);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
   --max-width: 1200px;
-  --footer-bg: #1A1A2E;
+  --footer-bg: #0d1b2a;
 }
 
 *{box-sizing:border-box}
-html,body,#__next{height:100%}
-a{color:var(--accent);text-decoration:none}
+html,body,#__next{height:100%;scroll-behavior:smooth;}
+a{color:var(--blue);text-decoration:none;}
+a:hover{color:var(--accent);}
 
-/* Page base */
 body{
   margin:0;
   font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
   min-height:100vh;
-  position:relative;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-#__next {
-  position: relative;
-  z-index: 1;
-}
-
-/* Use Lora for large headings */
 h1, h2, h3 {
   font-family: 'Lora', serif;
   letter-spacing: -0.5px;
 }
 
-/* Layout */
 .container{max-width:var(--max-width);margin:0 auto;padding:24px}
 .page-container{max-width:1200px;margin:0 auto;padding:120px 24px 40px}
 
-/* CTA button */
-.cta{display:inline-block;padding:12px 24px;border-radius:999px;background:var(--accent);color:white;font-weight:600;font-size:16px;box-shadow:0 10px 26px var(--shadow);text-decoration:none;font-family:'Inter',sans-serif;transition:transform .14s ease}
-.cta:hover{transform:translateY(-2px)}
-
-/* Features section */
-.features-section{padding:56px 0}
-.features-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px}
-.feature-card{background:linear-gradient(180deg,var(--bg-light),var(--bg));border-radius:12px;padding:22px;border:1px solid var(--border)}
-.feature-card h3{margin:0 0 8px}
-
-/* Footer */
-.footer{padding:48px 0;color:#d7dde6;background:var(--footer-bg);margin-top:0}
-
-/* Smooth scroll + offset for anchor links */
-html {
-  scroll-behavior: smooth;
+/* Card */
+.glow-card {
+  background: var(--card);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
 }
-section[id], div[id] {
-  scroll-margin-top: 100px;
+.glow-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
-/* ═══ ALTERNATING SECTION GRADIENTS ═══ */
-.section-grana {
-  background: linear-gradient(165deg, var(--bg) 0%, var(--bg-light) 60%, #7a002e 100%);
-}
+/* Section tints — Barça palette visible */
 .section-blau {
-  background: linear-gradient(165deg, #003a75 0%, var(--blue) 40%, #002952 100%);
+  background: linear-gradient(170deg, rgba(0,77,152,0.06) 0%, rgba(0,77,152,0.12) 50%, rgba(0,77,152,0.06) 100%);
+  border-top: 3px solid #004d98;
 }
 .section-grana-radial {
-  background: radial-gradient(ellipse at 20% 0%, #c0004f 0%, var(--bg) 50%, var(--bg-light) 100%);
+  background: linear-gradient(170deg, rgba(165,0,68,0.04) 0%, rgba(165,0,68,0.08) 50%, rgba(165,0,68,0.04) 100%);
+  border-top: 3px solid #a50044;
 }
 .section-blau-radial {
-  background: linear-gradient(165deg, #003a75 0%, var(--blue) 40%, #002952 100%);
+  background: linear-gradient(170deg, rgba(0,77,152,0.05) 0%, rgba(0,77,152,0.10) 50%, rgba(0,77,152,0.05) 100%);
 }
 
-/* Responsive */
-@media(max-width:900px){
-  .features-grid{grid-template-columns:1fr}
+section[id], div[id] { scroll-margin-top: 100px; }
+
+/* Keyframes */
+@keyframes fadeInUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+@keyframes glow-pulse { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.1)} }
+
+.animate-in { animation: fadeInUp 0.7s ease-out both; }
+
+@media(max-width:768px){
+  .step-grid{grid-template-columns:1fr !important}
+  .two-col-grid{grid-template-columns:1fr !important}
 }
