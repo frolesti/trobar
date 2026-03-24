@@ -9,26 +9,26 @@ export default function Home() {
   const steps = [
     {
       num: '1',
-      title: 'Obre l\u2019app',
-      desc: 'Descarrega troBar i obre el mapa. Detecta la teva ubicació automàticament.',
+      title: 'Obre el mapa',
+      desc: 'troBar detecta la teva ubicació i et mostra els bars més propers que emeten partits del Barça.',
       icon: (
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
       )
     },
     {
       num: '2',
-      title: 'Busca al mapa',
-      desc: 'Explora els bars propers que retransmeten el partit d\u2019avui amb un sol toc.',
+      title: 'Tria el teu bar',
+      desc: 'Consulta perfils verificats amb fotos, pantalles, terrassa, horaris i distància. Filtra per equipament.',
       icon: (
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       )
     },
     {
       num: '3',
       title: 'Gaudeix del partit',
-      desc: 'Tria el bar que més t\u2019agradi, consulta horaris i viu el Barça amb la millor ambient.',
+      desc: 'Ves al bar, viu l\'ambient culer i no et perdis cap gol. Així de fàcil.',
       icon: (
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
       )
     }
   ]
@@ -44,20 +44,20 @@ export default function Home() {
 
       <main>
         {/* Com funciona — 3 passos visuals */}
-        <section id="com-funciona" className="section-blau" style={{padding: '80px 24px 64px'}}>
+        <section id="com-funciona" className="section-blau" style={{padding: '80px 24px 72px'}}>
           <div style={{maxWidth: 1200, margin: '0 auto'}}>
           <h2 style={{fontSize: 36, marginBottom: 12, color: '#fff', textAlign: 'center'}}>Com funciona</h2>
-          <p style={{color: 'rgba(255,255,255,0.7)', fontSize: 18, maxWidth: 540, margin: '0 auto 48px', textAlign: 'center'}}>En tres passos tens el teu bar ideal per veure el Barça</p>
+          <p style={{color: 'rgba(255,255,255,0.65)', fontSize: 18, maxWidth: 480, margin: '0 auto 56px', textAlign: 'center'}}>Tres passos i ja tens el teu bar ideal</p>
 
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 32}}>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 28}}>
             {steps.map((s, i) => (
-              <div key={i} style={{background: 'var(--card)', borderRadius: 20, padding: '36px 28px', textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.10)', position: 'relative'}}>
-                <div style={{width: 72, height: 72, borderRadius: '50%', background: 'rgba(0,77,152,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'}}>
+              <div key={i} style={{background: 'var(--card)', borderRadius: 20, padding: '40px 28px 36px', textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', position: 'relative', transition: 'transform 0.2s'}}>
+                <div style={{position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, color: 'var(--text)', boxShadow: '0 4px 12px rgba(237,187,0,0.3)'}}>{s.num}</div>
+                <div style={{width: 64, height: 64, borderRadius: 16, background: 'rgba(0,77,152,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '8px auto 20px'}}>
                   {s.icon}
                 </div>
-                <div style={{position: 'absolute', top: 16, left: 20, width: 28, height: 28, borderRadius: '50%', background: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: 'var(--text)'}}>{s.num}</div>
-                <h3 style={{fontSize: 22, marginBottom: 10, color: 'var(--text)'}}>{s.title}</h3>
-                <p style={{color: 'var(--muted)', lineHeight: 1.6, fontSize: 15}}>{s.desc}</p>
+                <h3 style={{fontSize: 22, marginBottom: 10, color: 'var(--text)', fontWeight: 700}}>{s.title}</h3>
+                <p style={{color: 'var(--muted)', lineHeight: 1.65, fontSize: 15, margin: 0}}>{s.desc}</p>
               </div>
             ))}
           </div>
@@ -65,23 +65,26 @@ export default function Home() {
         </section>
 
         {/* Característiques */}
-        <section id="caracteristiques" className="section-grana-radial" style={{padding: '64px 24px'}}>
+        <section id="caracteristiques" className="section-grana-radial" style={{padding: '72px 24px'}}>
           <div style={{maxWidth: 1200, margin: '0 auto'}}>
-          <h2 style={{fontSize: 36, marginBottom: 12, color: '#fff', textAlign: 'center'}}>Característiques</h2>
-          <p style={{color: 'rgba(255,255,255,0.7)', fontSize: 18, maxWidth: 540, margin: '0 auto 48px', textAlign: 'center'}}>Funcionalitats bàsiques de l'aplicació</p>
+          <h2 style={{fontSize: 36, marginBottom: 12, color: '#fff', textAlign: 'center'}}>Per què troBar?</h2>
+          <p style={{color: 'rgba(255,255,255,0.65)', fontSize: 18, maxWidth: 480, margin: '0 auto 48px', textAlign: 'center'}}>Tot el que necessites per viure el Barça fora de casa</p>
             <Features />
           </div>
         </section>
 
         {/* CTA per a bars */}
-        <section className="section-blau-radial" style={{textAlign: 'center', padding: '64px 24px 80px'}}>
+        <section className="section-blau-radial" style={{textAlign: 'center', padding: '72px 24px 80px'}}>
           <div style={{maxWidth: 1200, margin: '0 auto'}}>
-          <div style={{background: 'var(--card)', borderRadius: 24, padding: '56px 40px', maxWidth: 680, margin: '0 auto', boxShadow: '0 12px 32px rgba(0,0,0,0.10)'}}>
-            <span style={{display: 'inline-block', background: 'var(--gold)', color: 'var(--text)', fontWeight: 700, padding: '6px 16px', borderRadius: 999, fontSize: 14, marginBottom: 20}}>Per a bars i restaurants</span>
+          <div style={{background: 'var(--card)', borderRadius: 24, padding: '56px 40px', maxWidth: 680, margin: '0 auto', boxShadow: '0 16px 48px rgba(0,0,0,0.12)'}}>
+            <span style={{display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--gold)', color: 'var(--text)', fontWeight: 700, padding: '8px 18px', borderRadius: 999, fontSize: 14, marginBottom: 24}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Per a bars i restaurants
+            </span>
             <h2 style={{fontSize: 32, marginBottom: 14, color: 'var(--text)'}}>Tens un bar on es veu el Barça?</h2>
-            <p style={{color: 'var(--muted)', fontSize: 17, maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.6}}>Registra el teu local a troBar i atrau milers d&apos;aficionats cada dia de partit. Consulta els nostres plans i comença a créixer.</p>
-            <Link href="/per-a-bars" style={{display: 'inline-block', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: 17, padding: '14px 36px', borderRadius: 999, textDecoration: 'none', boxShadow: '0 8px 20px rgba(165,0,68,0.15)', transition: 'transform 0.2s'}}>
-              Descobreix com →
+            <p style={{color: 'var(--muted)', fontSize: 17, maxWidth: 480, margin: '0 auto 32px', lineHeight: 1.65}}>Registra el teu local a troBar i converteix cada dia de partit en una oportunitat de negoci. Més visibilitat, més clients.</p>
+            <Link href="/per-a-bars" style={{display: 'inline-block', background: 'var(--accent)', color: '#fff', fontWeight: 700, fontSize: 17, padding: '16px 40px', borderRadius: 999, textDecoration: 'none', boxShadow: '0 8px 24px rgba(165,0,68,0.18)', transition: 'transform 0.2s'}}>
+              Descobreix els plans
             </Link>
           </div>
           </div>

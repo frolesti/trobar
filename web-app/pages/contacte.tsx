@@ -25,40 +25,47 @@ export default function Contacte() {
       </Head>
       <Header />
 
-      <main style={{ maxWidth: 720, margin: '0 auto', padding: '140px 24px 80px' }}>
-        <h1 style={{ fontSize: 'clamp(36px, 5vw, 54px)', fontWeight: 800, color: '#fff', marginBottom: 16, textAlign: 'center' }}>
-          Contacte
+      <main style={{ maxWidth: 640, margin: '0 auto', padding: '140px 24px 80px' }}>
+        <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 800, color: '#fff', marginBottom: 12, textAlign: 'center', fontFamily: 'Lora, serif' }}>
+          Parla amb nosaltres
         </h1>
-        <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginBottom: 48, maxWidth: 540, margin: '0 auto 48px' }}>
-          Tens algun dubte, suggeriment o necessites ajuda? Escriu-nos i et respondrem el més aviat possible.
+        <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.65)', textAlign: 'center', maxWidth: 480, margin: '0 auto 48px', lineHeight: 1.6 }}>
+          Tens algun dubte, suggeriment o vols col·laborar? Escriu-nos i et respondrem el més aviat possible.
         </p>
 
         {sent ? (
           <div style={{
-            background: 'var(--card)',
-            borderRadius: 16,
-            padding: '48px 32px',
+            background: 'rgba(255,255,255,0.06)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 20,
+            padding: '56px 32px',
             textAlign: 'center',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.08)'
+            border: '1px solid rgba(255,255,255,0.1)',
           }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
-            <h2 style={{ fontSize: 24, color: 'var(--text)', marginBottom: 12 }}>Missatge enviat!</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 16 }}>
-              Gràcies per posar-te en contacte amb nosaltres. Et respondrem el més aviat possible.
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: 'rgba(46,204,113,0.15)', margin: '0 auto 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, color: '#2ecc71',
+            }}>✓</div>
+            <h2 style={{ fontSize: 24, color: '#fff', marginBottom: 12, fontFamily: 'Lora, serif' }}>Missatge enviat!</h2>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16, lineHeight: 1.6 }}>
+              Gràcies per contactar-nos. Et respondrem el més aviat possible.
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{
-            background: 'var(--card)',
-            borderRadius: 16,
-            padding: '40px 32px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+            background: 'rgba(255,255,255,0.06)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 20,
+            padding: '36px 32px',
+            border: '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 20
+            gap: 20,
           }}>
             <div>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Nom</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Nom</label>
               <input
                 type="text"
                 required
@@ -67,19 +74,20 @@ export default function Contacte() {
                 placeholder="El teu nom"
                 style={{
                   width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.12)',
                   fontSize: 16,
                   fontFamily: 'inherit',
                   outline: 'none',
-                  background: '#fafafa'
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
                 }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Correu electrònic</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Correu electrònic</label>
               <input
                 type="email"
                 required
@@ -88,19 +96,20 @@ export default function Contacte() {
                 placeholder="nom@exemple.com"
                 style={{
                   width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.12)',
                   fontSize: 16,
                   fontFamily: 'inherit',
                   outline: 'none',
-                  background: '#fafafa'
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
                 }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Missatge</label>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Missatge</label>
               <textarea
                 required
                 rows={5}
@@ -109,14 +118,15 @@ export default function Contacte() {
                 placeholder="Escriu el teu missatge..."
                 style={{
                   width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: 10,
-                  border: '1px solid var(--border)',
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(255,255,255,0.12)',
                   fontSize: 16,
                   fontFamily: 'inherit',
                   outline: 'none',
                   resize: 'vertical',
-                  background: '#fafafa'
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#fff',
                 }}
               />
             </div>
@@ -125,17 +135,18 @@ export default function Contacte() {
               type="submit"
               disabled={sending}
               style={{
-                background: 'var(--accent)',
-                color: '#fff',
+                background: 'var(--gold)',
+                color: '#1A1A2E',
                 border: 'none',
                 padding: '16px',
-                borderRadius: 12,
+                borderRadius: 14,
                 fontSize: 16,
                 fontWeight: 700,
                 cursor: sending ? 'wait' : 'pointer',
                 opacity: sending ? 0.7 : 1,
-                transition: 'transform 0.2s, opacity 0.2s',
-                fontFamily: 'inherit'
+                transition: 'all 0.2s',
+                fontFamily: 'inherit',
+                marginTop: 4,
               }}
             >
               {sending ? 'Enviant...' : 'Enviar missatge'}
@@ -146,13 +157,13 @@ export default function Contacte() {
         <div style={{
           marginTop: 48,
           textAlign: 'center',
-          color: 'rgba(255,255,255,0.6)',
+          color: 'rgba(255,255,255,0.5)',
           fontSize: 15,
-          lineHeight: 1.8
+          lineHeight: 1.8,
         }}>
-          <p>També ens pots escriure directament a:</p>
-          <a href="mailto:contacte@trobar.app" style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 17 }}>
-            contacte@trobar.app
+          <p>O escriu-nos directament a</p>
+          <a href="mailto:hola@trobar.app" style={{ color: 'var(--gold)', fontWeight: 600, fontSize: 17 }}>
+            hola@trobar.app
           </a>
         </div>
       </main>
