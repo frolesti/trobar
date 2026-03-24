@@ -70,14 +70,13 @@ export default function Features() {
         <div key={i} className="glow-card" style={{
           padding: '36px 30px',
           display: 'flex', gap: 20, alignItems: 'flex-start',
-          borderLeft: `4px solid ${it.borderColor}`,
+          borderTop: `4px solid ${it.borderColor}`,
         }}>
           <div style={{
-            width: 60, height: 60, borderRadius: 16, flexShrink: 0,
-            background: it.bg,
+            width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+            background: it.accent,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: it.accent,
-            border: '1px solid var(--border)',
+            boxShadow: `0 4px 12px ${it.accent}40`,
           }}>
             {it.icon}
           </div>

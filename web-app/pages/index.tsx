@@ -68,9 +68,9 @@ export default function Home() {
         <section id="com-funciona" className="section-blau" style={{padding: '100px 24px 90px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto'}}>
             <div style={{textAlign:'center', marginBottom:72}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'var(--blue)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Com funciona</span>
-              <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'var(--text)', marginBottom:16, lineHeight:1.2}}>Tres passos i ja tens el teu bar</h2>
-              <p style={{color:'var(--muted)', fontSize:17, maxWidth:420, margin:'0 auto'}}>Tan fàcil com obrir el mòbil</p>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Com funciona</span>
+              <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'#fff', marginBottom:16, lineHeight:1.2}}>Tres passos i ja tens el teu bar</h2>
+              <p style={{color:'rgba(255,255,255,0.6)', fontSize:17, maxWidth:420, margin:'0 auto'}}>Tan fàcil com obrir el mòbil</p>
             </div>
 
             <div className="step-grid" style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
@@ -78,11 +78,12 @@ export default function Home() {
                 <div key={i} className="glow-card" style={{padding:'40px 32px', textAlign:'center'}}>
                   {/* Step number */}
                   <div style={{
-                    width:32, height:32, borderRadius:'50%',
+                    width:36, height:36, borderRadius:'50%',
                     background: s.color,
                     display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    fontWeight:800, fontSize:13, color:'#fff',
+                    fontWeight:800, fontSize:14, color:'#fff',
                     marginBottom:20,
+                    boxShadow: `0 4px 12px ${s.color}40`,
                   }}>{s.num}</div>
 
                   {/* Icon */}
@@ -91,7 +92,6 @@ export default function Home() {
                     background: s.bg,
                     display:'flex', alignItems:'center', justifyContent:'center',
                     margin:'0 auto 24px',
-                    border:'1px solid var(--border)',
                   }}>
                     {s.icon}
                   </div>
@@ -105,51 +105,59 @@ export default function Home() {
         </section>
 
         {/* ── Característiques ── */}
-        <section id="caracteristiques" className="section-grana-radial" style={{padding:'100px 24px'}}>
+        <section id="caracteristiques" className="section-grana" style={{padding:'100px 24px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto'}}>
             <div style={{textAlign:'center', marginBottom:72}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'var(--accent)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Funcionalitats</span>
-              <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'var(--text)', marginBottom:16, lineHeight:1.2}}>Per què troBar?</h2>
-              <p style={{color:'var(--muted)', fontSize:17, maxWidth:460, margin:'0 auto'}}>Tot el que necessites per viure el Barça fora de casa</p>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Funcionalitats</span>
+              <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'#fff', marginBottom:16, lineHeight:1.2}}>Per què troBar?</h2>
+              <p style={{color:'rgba(255,255,255,0.6)', fontSize:17, maxWidth:460, margin:'0 auto'}}>Tot el que necessites per viure el Barça fora de casa</p>
             </div>
             <Features />
           </div>
         </section>
 
         {/* ── CTA per a bars ── */}
-        <section className="section-blau-radial" style={{padding:'100px 24px 110px'}}>
+        <section className="section-light" style={{padding:'100px 24px 110px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto', textAlign:'center'}}>
             <div style={{
               maxWidth:680, margin:'0 auto',
-              background:'var(--card)',
+              background:'linear-gradient(135deg, #004d98 0%, #0d1b2a 50%, #a50044 100%)',
               borderRadius:28, padding:'64px 48px',
-              border:'1px solid var(--border)',              borderTop:'4px solid #a50044',              boxShadow:'var(--shadow-lg)',
+              color:'#fff',
+              boxShadow:'0 12px 40px rgba(0,77,152,0.25)',
+              position:'relative', overflow:'hidden',
             }}>
-              <span style={{
-                display:'inline-flex', alignItems:'center', gap:8,
-                background:'rgba(237,187,0,0.15)',
-                color:'#9a7700', fontWeight:600, padding:'8px 18px', borderRadius:999, fontSize:13,
-                marginBottom:28, border:'1px solid rgba(237,187,0,0.25)',
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                Per a bars i restaurants
-              </span>
+              {/* Decorative orbs */}
+              <div style={{position:'absolute', top:'-30%', left:'-10%', width:250, height:250, borderRadius:'50%', background:'radial-gradient(circle, rgba(0,77,152,0.3), transparent 70%)', pointerEvents:'none'}} />
+              <div style={{position:'absolute', bottom:'-20%', right:'-10%', width:200, height:200, borderRadius:'50%', background:'radial-gradient(circle, rgba(165,0,68,0.3), transparent 70%)', pointerEvents:'none'}} />
 
-              <h2 style={{fontSize:'clamp(28px, 4vw, 40px)', marginBottom:16, color:'var(--text)', lineHeight:1.2}}>Tens un bar on es veu el Barça?</h2>
-              <p style={{color:'var(--muted)', fontSize:17, maxWidth:460, margin:'0 auto 36px', lineHeight:1.7}}>
-                Registra el teu local a troBar i converteix cada dia de partit en una oportunitat de negoci.
-              </p>
+              <div style={{position:'relative', zIndex:1}}>
+                <span style={{
+                  display:'inline-flex', alignItems:'center', gap:8,
+                  background:'rgba(237,187,0,0.15)',
+                  color:'#edbb00', fontWeight:600, padding:'8px 18px', borderRadius:999, fontSize:13,
+                  marginBottom:28, border:'1px solid rgba(237,187,0,0.2)',
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  Per a bars i restaurants
+                </span>
 
-              <Link href="/per-a-bars" style={{
-                display:'inline-block',
-                background:'linear-gradient(135deg, var(--accent), var(--accent-light))',
-                color:'#fff', fontWeight:700, fontSize:16, padding:'16px 40px', borderRadius:14,
-                textDecoration:'none',
-                boxShadow:'0 4px 24px rgba(165,0,68,0.2)',
-                transition:'all 0.3s',
-              }}>
-                Descobreix com
-              </Link>
+                <h2 style={{fontSize:'clamp(28px, 4vw, 40px)', marginBottom:16, color:'#fff', lineHeight:1.2}}>Tens un bar on es veu el Barça?</h2>
+                <p style={{color:'rgba(255,255,255,0.6)', fontSize:17, maxWidth:460, margin:'0 auto 36px', lineHeight:1.7}}>
+                  Registra el teu local a troBar i converteix cada dia de partit en una oportunitat de negoci.
+                </p>
+
+                <Link href="/per-a-bars" style={{
+                  display:'inline-block',
+                  background:'linear-gradient(135deg, var(--gold), #ffd54f)',
+                  color:'#1a1a2e', fontWeight:700, fontSize:16, padding:'16px 40px', borderRadius:14,
+                  textDecoration:'none',
+                  boxShadow:'0 4px 24px rgba(237,187,0,0.3)',
+                  transition:'all 0.3s',
+                }}>
+                  Descobreix com
+                </Link>
+              </div>
             </div>
           </div>
         </section>

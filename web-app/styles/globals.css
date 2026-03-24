@@ -65,17 +65,24 @@ h1, h2, h3 {
   box-shadow: var(--shadow-lg);
 }
 
-/* Section tints — Barça palette visible */
+/* Section backgrounds — BOLD Barça palette */
 .section-blau {
-  background: linear-gradient(170deg, rgba(0,77,152,0.06) 0%, rgba(0,77,152,0.12) 50%, rgba(0,77,152,0.06) 100%);
-  border-top: 3px solid #004d98;
+  background: #004d98;
+  color: #fff;
 }
-.section-grana-radial {
-  background: linear-gradient(170deg, rgba(165,0,68,0.04) 0%, rgba(165,0,68,0.08) 50%, rgba(165,0,68,0.04) 100%);
-  border-top: 3px solid #a50044;
+.section-grana {
+  background: #a50044;
+  color: #fff;
 }
-.section-blau-radial {
-  background: linear-gradient(170deg, rgba(0,77,152,0.05) 0%, rgba(0,77,152,0.10) 50%, rgba(0,77,152,0.05) 100%);
+.section-light {
+  background: var(--bg);
+}
+
+/* Cards on coloured sections need extra pop */
+.section-blau .glow-card,
+.section-grana .glow-card {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border-color: rgba(255,255,255,0.12);
 }
 
 section[id], div[id] { scroll-margin-top: 100px; }

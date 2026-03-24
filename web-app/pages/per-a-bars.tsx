@@ -162,9 +162,9 @@ export default function PerABars() {
         <section className="section-blau" style={{ padding: '100px 24px 80px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{textAlign:'center', marginBottom:64}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'var(--blue)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Què inclou</span>
-              <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', color: 'var(--text)', marginBottom: 14 }}>Tot per fer créixer el teu negoci</h2>
-              <p style={{ color: 'var(--muted)', fontSize: 17, maxWidth: 460, margin: '0 auto' }}>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Què inclou</span>
+              <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', color: '#fff', marginBottom: 14 }}>Tot per fer créixer el teu negoci</h2>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 17, maxWidth: 460, margin: '0 auto' }}>
                 Eines pensades perquè cada dia de partit sigui una oportunitat.
               </p>
             </div>
@@ -174,13 +174,13 @@ export default function PerABars() {
                 <div key={i} className="glow-card" style={{
                   padding: '36px 30px',
                   display: 'flex', gap: 20, alignItems: 'flex-start',
-                  borderLeft: `4px solid ${b.borderColor}`,
+                  borderTop: `4px solid ${b.borderColor}`,
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-                    background: b.bg,
+                    background: b.borderColor,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    border: '1px solid var(--border)',
+                    boxShadow: `0 4px 12px ${b.borderColor}40`,
                   }}>
                     {b.icon}
                   </div>
@@ -195,17 +195,17 @@ export default function PerABars() {
         </section>
 
         {/* Preus */}
-        <section className="section-grana-radial" style={{ padding: '100px 24px' }}>
+        <section className="section-light" style={{ padding: '100px 24px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <Pricing />
           </div>
         </section>
 
         {/* CTA final */}
-        <section className="section-blau-radial" style={{ textAlign: 'center', padding: '100px 24px 110px', position:'relative' }}>
+        <section className="section-grana" style={{ textAlign: 'center', padding: '100px 24px 110px', position:'relative' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto', position:'relative', zIndex:1 }}>
-            <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: 'var(--text)', marginBottom: 16 }}>Comença avui</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 17, maxWidth: 460, margin: '0 auto 36px', lineHeight: 1.7 }}>
+            <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: '#fff', marginBottom: 16 }}>Comença avui</h2>
+            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 17, maxWidth: 460, margin: '0 auto 36px', lineHeight: 1.7 }}>
               Registra el teu local en 2 minuts. Prova gratuïta de 14 dies.<br/>Sense compromís, cancel·la quan vulguis.
             </p>
             <Link href="/registra-bar" style={{
@@ -217,7 +217,7 @@ export default function PerABars() {
               padding: '16px 40px',
               borderRadius: 14,
               textDecoration: 'none',
-              boxShadow: '0 4px 24px rgba(237,187,0,0.15)',
+              boxShadow: '0 4px 24px rgba(237,187,0,0.3)',
             }}>
               Registra el teu local
             </Link>
