@@ -104,12 +104,12 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
             if (Platform.OS === 'web') {
                 // Mostrar estat d'èxit dins la targeta
                 setSubmitSuccess(true);
-                setTimeout(() => navigation.navigate('Map'), 2500);
+                setTimeout(() => navigation.navigate('Map', { refresh: Date.now() }), 2500);
             } else {
                 Alert.alert(
                     "Bar registrat correctament",
                     "Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.",
-                    [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map') }]
+                    [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map', { refresh: Date.now() }) }]
                 );
             }
         } catch (error) {

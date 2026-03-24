@@ -110,8 +110,11 @@ export const fetchBroadcastMatchIds = async (allMatchIds: string[]): Promise<Set
 
 /**
  * Retorna els bars que emeten un partit concret.
- * Inclou bars amb broadcastingMatches que contingui el matchId
- * i bars amb usuallyShowsBarca: true.
+ * Només bars premium que han confirmat explícitament l'emissió del matchId
+ * a la seva llista `broadcastingMatches`.
+ * 
+ * Nota: `usuallyShowsBarca` ja NO s'usa aquí — els bars han d'anunciar
+ * cada partit individualment per aparèixer en el flux "Trobar bars".
  */
 export const fetchBarsForMatch = async (matchId: string): Promise<Bar[]> => {
     const result = await executeRequest(async () => {
@@ -121,10 +124,13 @@ export const fetchBarsForMatch = async (matchId: string): Promise<Bar[]> => {
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            const broadcasts = data.usuallyShowsBarca === true ||
-                (Array.isArray(data.broadcastingMatches) && data.broadcastingMatches.includes(matchId));
+            // Només bars premium que han confirmat que emeten AQUEST partit
+            const isPremium = data.tier === 'premium';
+            const broadcastsThisMatch =
+                Array.isArray(data.broadcastingMatches) &&
+                data.broadcastingMatches.includes(matchId);
             
-            if (broadcasts) {
+            if (isPremium && broadcastsThisMatch) {
                 const bar = mapDocToBar(doc);
                 if (!seenNames.has(bar.name)) {
                     seenNames.add(bar.name);

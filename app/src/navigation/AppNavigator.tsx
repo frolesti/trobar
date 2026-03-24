@@ -11,14 +11,16 @@ import { OSMBar } from '../services/osmService';
 import { TermsOfService } from '../screens/Legal/TermsOfService';
 import { PrivacyPolicy } from '../screens/Legal/PrivacyPolicy';
 import NotFoundScreen from '../screens/NotFound/NotFoundScreen';
+import BarDashboardScreen from '../screens/BarDashboard/BarDashboardScreen';
 
 // Definir la llista de paràmetres del stack principal
 export type RootStackParamList = {
   Startup: undefined;
-  Map: { matchId?: string } | undefined;
+  Map: { matchId?: string; refresh?: number } | undefined;
   Matches: undefined;
   Login: undefined;
   Profile: undefined;
+  BarDashboard: undefined;
   ReportBar: { osmBar: OSMBar };
   TermsOfService: undefined;
   PrivacyPolicy: undefined;
@@ -36,6 +38,7 @@ const linking = {
       Map: 'map',
       Login: 'login',
       Profile: 'profile',
+      BarDashboard: 'bar-dashboard',
       
       ReportBar: 'report',
 
@@ -77,7 +80,11 @@ export default function AppNavigator() {
           component={ProfileScreen} 
           options={{ title: 'troBar' }}
         />
-        
+        <Stack.Screen 
+          name="BarDashboard" 
+          component={BarDashboardScreen} 
+          options={{ title: 'troBar - Panell del bar' }}
+        />
 
         <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'bar', presentation: 'transparentModal', animationEnabled: false, headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'transparent' } }} />
         

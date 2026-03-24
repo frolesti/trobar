@@ -10,16 +10,23 @@ let cachedFirestoreMatches: Match[] | null = null;
 let lastFirestoreFetchTime = 0;
 const DB_CACHE_DURATION = 1000 * 60 * 60; // 1 hora
 
-export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5): Promise<Match[]> {
+export async function fetchPastMatches(
+    beforeDate: Date, 
+    limitCount: number = 5,
+    category?: 'masculino' | 'femenino'
+): Promise<Match[]> {
     try {
         const matchesRef = collection(db, 'matches');
+        
+        // Si hi ha filtre de categoria, demanar més per compensar el filtratge client-side
+        const fetchLimit = category ? limitCount * 3 : limitCount;
         
         // Consultar la BD per a partits ANTERIORS a "beforeDate", ordenant desc
         const q = query(
             matchesRef, 
             where('timestamp', '<', Timestamp.fromDate(beforeDate)),
             orderBy('timestamp', 'desc'),
-            firestoreLimit(limitCount)
+            firestoreLimit(fetchLimit)
         );
 
         const snapshot = await getDocs(q);
@@ -54,6 +61,10 @@ export async function fetchPastMatches(beforeDate: Date, limitCount: number = 5)
             });
         });
         
+        // Filtre client-side per categoria (evita necessitar índex compost a Firestore)
+        if (category) {
+            return matches.filter(m => m.category === category).slice(0, limitCount);
+        }
         return matches;
     } catch (error) {
         console.error('❌ Error loading past matches:', error);

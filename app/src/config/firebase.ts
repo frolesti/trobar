@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getFunctions, Functions } from "firebase/functions";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -32,11 +33,13 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 let storage: FirebaseStorage;
+let functions: Functions;
 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   storage = getStorage(app);
+  functions = getFunctions(app, 'europe-west1');
   
   // Per a React Native (Mòbil), cal persistència amb AsyncStorage
   if (Platform.OS !== 'web') {
@@ -53,6 +56,7 @@ if (!getApps().length) {
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);
+  functions = getFunctions(app, 'europe-west1');
 }
 
-export { auth, db, storage };
+export { auth, db, storage, functions };

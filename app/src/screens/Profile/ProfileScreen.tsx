@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    View, Text, Image, TouchableOpacity, SafeAreaView, Platform, 
+    View, Text, Image, TouchableOpacity, Platform, 
     TextInput, Alert, ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -22,9 +23,12 @@ export default function ProfileScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
 
   // Redirigir al login si no autenticat, PERÒ esperar que la comprovació d'auth acabi
+  // Si és bar_owner, redirigir al panell del bar
   useEffect(() => {
     if (!authLoading && !user) {
       navigation.navigate('Login');
+    } else if (!authLoading && user?.role === 'bar_owner') {
+      navigation.replace('BarDashboard');
     }
   }, [user, authLoading, navigation]);
 
@@ -176,7 +180,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Accions inferiors: fixades a baix */}
-        <View style={{ paddingBottom: 10 }}>
+        <View style={{ paddingBottom: 35 }}>
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                 <Text style={styles.logoutText}>Tancar Sessió</Text>
             </TouchableOpacity>

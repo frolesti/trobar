@@ -11,6 +11,16 @@ type MatchCardProps = {
     compact?: boolean; // Per a ús al bàner del mapa
     /** Si true, almenys un bar emet aquest partit → mostra botó 'Trobar bars' */
     hasBroadcast?: boolean;
+    /** Si true, es mostra com a filtre actiu (només canvia el border) */
+    isFilter?: boolean;
+    /** Si true, és el pròxim partit real → mostra "Proper partit" */
+    isNextMatch?: boolean;
+    /** Si true, mostra la X per tancar (ve de la pestanya Partits) */
+    showDismiss?: boolean;
+    /** Callback per tancar el filtre (X) */
+    onDismissFilter?: () => void;
+    /** Callback per activar/toggle filtre de bars (toc sobre targeta compacta) */
+    onToggleFilter?: () => void;
 };
 
 const getTeam = (key: any) => {
@@ -48,7 +58,28 @@ function resolveCompLogo(match: Match): ImageSourcePropType | null {
     return null;
 }
 
-const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: MatchCardProps) => {
+/** Nom de competició amigable per a la UI */
+function displayCompName(name: string): string {
+    const l = name.toLowerCase();
+    if (l.includes('primera') && l.includes('divisi')) return 'La Liga';
+    if (l === 'primera division') return 'La Liga';
+    if (l.includes("women's champions") || l.includes('uwcl')) return 'UWCL';
+    if (l.includes('copa de la reina')) return 'Copa de la Reina';
+    return name;
+}
+
+// Paleta Barça per a les targetes de partits
+const BARCA = {
+    blau: '#004D98',
+    grana: '#A50044',
+    gold: '#EDBB00',
+    granaLight: 'rgba(165, 0, 68, 0.08)',
+    blauLight: 'rgba(0, 77, 152, 0.06)',
+    granaGradientStart: '#A50044',
+    granaGradientEnd: '#7A0033',
+};
+
+const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFilter = false, isNextMatch = false, showDismiss = false, onDismissFilter, onToggleFilter }: MatchCardProps) => {
 
     const homeTeam = getTeam(match.homeTeam);
     const awayTeam = getTeam(match.awayTeam);
@@ -70,12 +101,25 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
         tomorrow.setDate(tomorrow.getDate() + 1);
         const isTomorrow = tomorrow.toDateString() === d.toDateString();
         
-        const timeStr = `${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
+        // Detectar hora no confirmada (midnight UTC = 00:00:00Z)
+        const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+        const isUnconfirmedTime = isMidnightUTC && match.status !== 'finished';
+        const timeStr = isUnconfirmedTime
+            ? 'Hora per confirmar'
+            : `${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
 
         if (compact) {
             if (isToday) return `Avui, ${timeStr}`;
             if (isTomorrow) return `Demà, ${timeStr}`;
             return d.toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short' }) + `, ${timeStr}`;
+        }
+
+        if (isUnconfirmedTime) {
+            return d.toLocaleDateString('ca-ES', { 
+                weekday: 'short', 
+                day: 'numeric', 
+                month: 'short',
+            }) + ' · Hora per confirmar';
         }
 
         return d.toLocaleDateString('ca-ES', { 
@@ -89,13 +133,33 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
 
     const StatusBadge = () => {
         if (match.status === 'finished') {
-             return (
-                 <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 22, fontWeight: 'bold', fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
-                        {match.homeScore ?? '-'} - {match.awayScore ?? '-'}
+            const hasScore = match.homeScore !== null && match.homeScore !== undefined 
+                          && match.awayScore !== null && match.awayScore !== undefined;
+            if (hasScore) {
+                return (
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 22, fontWeight: 'bold', fontFamily: 'Lora', color: BARCA.gold }}>
+                            {match.homeScore} - {match.awayScore}
+                        </Text>
+                    </View>
+                );
+            }
+            // Finalitzat sense resultat disponible — mostrar logo + badge
+            const logoSize = compact ? 28 : 30;
+            return (
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    {compLogoSource && (
+                        <Image 
+                            source={compLogoSource} 
+                            style={{ width: logoSize, height: logoSize, marginBottom: 4 }} 
+                            resizeMode="contain"
+                        />
+                    )}
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 0.3, fontFamily: 'Lora' }}>
+                        FINAL
                     </Text>
-                 </View>
-             );
+                </View>
+            );
         }
         
         // Programat — logo de competició entre escuts
@@ -116,45 +180,69 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
     };
 
     const cardStyle = compact ? {
-        backgroundColor: SKETCH_THEME.colors.card,
+        backgroundColor: BARCA.grana,
         borderRadius: 12,
         paddingVertical: 12,
         paddingHorizontal: 14,
         marginHorizontal: Platform.OS === 'web' ? 0 : 4,
         marginTop: 8,
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
+        borderWidth: isFilter ? 2 : 1.5,
+        borderColor: isFilter ? BARCA.gold : 'rgba(255,255,255,0.15)',
         ...Platform.select({
-            web: { boxShadow: '0 2px 6px rgba(0,0,0,0.04)' },
+            web: { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
             default: sketchShadow()
         })
     } : {
-        backgroundColor: SKETCH_THEME.colors.card,
+        backgroundColor: BARCA.grana,
         borderRadius: 14,
-        padding: 10,
-        marginBottom: 6,
-        borderWidth: 1,
-        borderColor: SKETCH_THEME.colors.border,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.15)',
         ...Platform.select({
-            web: { boxShadow: '0 3px 8px rgba(0,0,0,0.05)' },
+            web: { boxShadow: '0 3px 10px rgba(0,0,0,0.18)' },
             default: sketchShadow()
         })
     };
 
-    const textColor = SKETCH_THEME.colors.text;
-    const subTextColor = SKETCH_THEME.colors.textMuted;
+    // Paleta Barça: text blanc sobre fons grana, or per accents
+    const textColor = '#FFFFFF';
+    const subTextColor = 'rgba(255,255,255,0.75)';
 
     if (compact) {
         return (
-            <View style={cardStyle}>
-                {/* Capçalera: "Pròxim partit · Avui, 21:00" */}
-                <Text style={{ 
-                    fontSize: 10, fontWeight: '600',
-                    color: SKETCH_THEME.colors.primary, fontFamily: 'Lora', 
-                    letterSpacing: 0.3, textAlign: 'center', marginBottom: 10
-                }}>
-                    Proper partit  ·  {formatDate(match)}
-                </Text>
+            <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={onToggleFilter}
+                disabled={!onToggleFilter}
+                style={cardStyle}
+            >
+                {/* X tancar — només quan venim de la pestanya Partits */}
+                {showDismiss && onDismissFilter && (
+                    <TouchableOpacity
+                        onPress={(e) => { e.stopPropagation?.(); onDismissFilter(); }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{
+                            position: 'absolute', top: 6, right: 6, zIndex: 10,
+                            width: 22, height: 22, borderRadius: 11,
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            alignItems: 'center', justifyContent: 'center',
+                        }}
+                    >
+                        <Feather name="x" size={13} color="white" />
+                    </TouchableOpacity>
+                )}
+                {/* Capçalera */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                    <Text style={{ 
+                        fontSize: 10, fontWeight: '600',
+                        color: BARCA.gold,
+                        fontFamily: 'Lora', 
+                        letterSpacing: 0.3, textAlign: 'center',
+                    }}>
+                        {isNextMatch && !isFilter ? `Proper partit  ·  ${formatDate(match)}` : formatDate(match)}
+                    </Text>
+                </View>
 
                 {/* Fila d'equips — compacta */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
@@ -193,7 +281,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                         </Text>
                     </View>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
     }
 
@@ -204,23 +292,21 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
                 flexDirection: 'row', 
                 alignItems: 'center',
                 justifyContent: 'space-between', 
-                marginBottom: 10,
-                paddingBottom: 6,
+                marginBottom: 14,
+                paddingBottom: 8,
                 borderBottomWidth: 1,
-                borderBottomColor: 'rgba(0,0,0,0.05)'
+                borderBottomColor: 'rgba(255,255,255,0.15)'
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     {compLogoSource && (
                         <Image source={compLogoSource} style={{ width: 16, height: 16, marginRight: 6 }} resizeMode="contain" />
                     )}
-                    {match.status !== 'finished' && (
-                        <Text style={{ 
-                            fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', 
-                            color: subTextColor, fontFamily: 'Lora', letterSpacing: 0.5 
-                        }}>
-                            {compName}
-                        </Text>
-                    )}
+                    <Text style={{ 
+                        fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', 
+                        color: BARCA.gold, fontFamily: 'Lora', letterSpacing: 0.5 
+                    }}>
+                        {displayCompName(compName)}
+                    </Text>
                 </View>
                 <Text style={{ fontSize: 11, color: subTextColor, fontFamily: 'Lora' }}>
                     {formatDate(match)}
@@ -270,17 +356,20 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false }: Ma
             {hasBroadcast && match.status !== 'finished' && onPress && (
                  <TouchableOpacity
                     style={{
-                        backgroundColor: isFemenino ? '#a50044' : SKETCH_THEME.colors.primary,
+                        backgroundColor: BARCA.blau,
                         paddingVertical: 10,
                         borderRadius: 10,
                         alignItems: 'center',
-                        marginTop: 10
+                        marginTop: 14,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.2)',
                     }}
                     onPress={onPress}
+                    activeOpacity={0.75}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="map-pin" size={16} color="white" style={{ marginRight: 8 }} />
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 14, fontFamily: 'Lora' }}>
+                        <Feather name="map-pin" size={16} color={BARCA.gold} style={{ marginRight: 8 }} />
+                        <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 14, fontFamily: 'Lora' }}>
                             Trobar bars
                         </Text>
                     </View>

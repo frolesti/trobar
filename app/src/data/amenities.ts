@@ -47,7 +47,7 @@ export const AMENITY_OPTIONS: AmenityOption[] = [
     { key: 'pet_friendly',     label: 'Admeten mascotes',          icon: 'paw',              iconFamily: 'mci',      category: 'ambient' },
 
     // ── Accessibilitat ──
-    { key: 'accessible',       label: 'Accessible',                icon: 'wheelchair',       iconFamily: 'mci',      category: 'accessibilitat' },
+    { key: 'accessible',       label: 'Accessible',                icon: 'wheelchair-accessibility', iconFamily: 'mci', category: 'accessibilitat' },
 ];
 
 /** Mapa ràpid key → AmenityOption per lookup O(1) */

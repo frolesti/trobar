@@ -60,12 +60,27 @@ const LoginModal = ({ navigation }: Props) => {
         ensureLoraOnWeb();
     }, []);
 
+    /** Redirecció post-login: bar_owner → BarDashboard, resta → goBack */
+    const postLoginRedirect = async () => {
+        const { getUserProfile } = require('../../services/userService');
+        const { auth: fbAuth } = require('../../config/firebase');
+        const currentUser = fbAuth.currentUser;
+        if (currentUser) {
+            const profile = await getUserProfile(currentUser.uid);
+            if (profile?.role === 'bar_owner') {
+                navigation.reset({ index: 0, routes: [{ name: 'BarDashboard' }] });
+                return;
+            }
+        }
+        navigation.goBack();
+    };
+
     const handleGoogleLogin = async () => {
         setLocalError(null);
         setAuthInProgress(true);
         try {
             await loginGoogle();
-            navigation.goBack();
+            await postLoginRedirect();
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
         } finally {
@@ -78,7 +93,7 @@ const LoginModal = ({ navigation }: Props) => {
         setAuthInProgress(true);
         try {
             await loginApple();
-            navigation.goBack();
+            await postLoginRedirect();
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
         } finally {
@@ -133,6 +148,19 @@ const LoginModal = ({ navigation }: Props) => {
                 setVerificationSent(true);
             } else {
                 await loginEmail(cleanEmail, password);
+                // Després del login, comprovar si és bar_owner via Firestore
+                // El onAuthStateChanged actualitzarà user, però necessitem esperar-lo
+                // Per tant, fem servir un listener temporal
+                const { getUserProfile } = require('../../services/userService');
+                const { auth: fbAuth } = require('../../config/firebase');
+                const currentUser = fbAuth.currentUser;
+                if (currentUser) {
+                    const profile = await getUserProfile(currentUser.uid);
+                    if (profile?.role === 'bar_owner') {
+                        navigation.reset({ index: 0, routes: [{ name: 'BarDashboard' }] });
+                        return;
+                    }
+                }
                 navigation.goBack();
             }
         } catch (e: any) {

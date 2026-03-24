@@ -1,11 +1,15 @@
 import 'react-native-gesture-handler'; // MUST BE AT THE TOP
 import React, { useEffect } from 'react';
 import { LogBox, Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './app/src/navigation/AppNavigator';
 import { AuthProvider } from './app/src/context/AuthContext';
 import ErrorBoundary from './app/src/components/ErrorBoundary';
 
-LogBox.ignoreLogs(['props.pointerEvents is deprecated']);
+LogBox.ignoreLogs([
+  'props.pointerEvents is deprecated',
+  'InteractionManager has been deprecated',
+]);
 
 export default function App() {
   useEffect(() => {
@@ -31,9 +35,11 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

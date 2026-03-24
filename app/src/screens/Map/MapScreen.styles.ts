@@ -5,8 +5,8 @@ import { SKETCH_THEME } from '../../theme/sketchTheme';
 // Canviem a l'estàndard SKETCH_THEME.colors
 
 export default StyleSheet.create({
-    container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg },
-    mapContainer: { flex: 1, width: '100%', height: '100%' },
+    container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg, ...Platform.select({ web: { overflow: 'hidden' as const, height: '100vh', maxHeight: '100vh' } }) },
+    mapContainer: { flex: 1, width: '100%', height: '100%', ...Platform.select({ web: { overflow: 'hidden' as const } }) },
     map: { width: '100%', height: '100%' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
     

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, RefreshControl, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, RefreshControl, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchService';
@@ -30,8 +31,26 @@ type Props = {
 
 type FilterType = 'ALL' | 'MASCULI' | 'FEMENI';
 
+/** Nom de competició amigable per a la UI */
+function displayCompName(name: string): string {
+    const l = name.toLowerCase();
+    if (l.includes('primera') && l.includes('divisi')) return 'La Liga';
+    if (l === 'primera division') return 'La Liga';
+    if (l.includes("women's champions") || l.includes('uwcl')) return 'UWCL';
+    if (l.includes('copa de la reina')) return 'Copa de la Reina';
+    return name;
+}
+
 const MatchesScreen = ({ navigation }: Props) => {
     const { user } = useAuth();
+
+    // Bar owners no tenen accés a la pantalla de partits
+    useEffect(() => {
+        if (user?.role === 'bar_owner') {
+            navigation.reset({ index: 0, routes: [{ name: 'BarDashboard' }] });
+        }
+    }, [user]);
+
     const [allMatches, setAllMatches] = useState<Match[]>([]);
     const [pastMatches, setPastMatches] = useState<Match[]>([]);
     const [visibleCount, setVisibleCount] = useState(20);
@@ -71,6 +90,8 @@ const MatchesScreen = ({ navigation }: Props) => {
     const previousContentHeightRef = useRef<number>(0);
     const previousScrollOffsetRef = useRef<number>(0);
     const scrollAdjustRef = useRef<{ offset: number; height: number } | null>(null);
+    const pendingPastMatchesRef = useRef<Match[]>([]);
+    const [insertReady, setInsertReady] = useState(false);
 
     // PanResponder per a lliscar a la dreta -> navegació al Mapa
     // DESACTIVAT: Pot generar conflictes amb el scroll vertical de FlatList en alguns dispositius.
@@ -238,37 +259,58 @@ const MatchesScreen = ({ navigation }: Props) => {
         setIsRefreshing(true);
 
         try {
-            // Preferir el partit passat més antic
+            // Determinar la categoria per a la consulta filtrada
+            const categoryForQuery = filter === 'MASCULI' ? 'masculino' as const
+                                    : filter === 'FEMENI' ? 'femenino' as const 
+                                   : undefined;
+
+            // Trobar la data més antiga dels partits carregats (de la categoria activa si hi ha filtre)
             let oldestDate = new Date();
-            if (pastMatches.length > 0) {
-                oldestDate = pastMatches[0].date;
-            } else if (allMatches.length > 0) {
-                oldestDate = allMatches[0].date;
+            if (categoryForQuery) {
+                const filteredPast = pastMatches.filter(m => m.category === categoryForQuery);
+                if (filteredPast.length > 0) {
+                    oldestDate = filteredPast[0].date;
+                } else if (allMatches.length > 0) {
+                    oldestDate = allMatches[0].date;
+                }
+            } else {
+                if (pastMatches.length > 0) {
+                    oldestDate = pastMatches[0].date;
+                } else if (allMatches.length > 0) {
+                    oldestDate = allMatches[0].date;
+                }
             }
                 
-            const history = await fetchPastMatches(oldestDate);
+            const history = await fetchPastMatches(oldestDate, 5, categoryForQuery);
             const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
             
             if (sortedHistory.length > 0) {
+                // Guardar referència per ajust de scroll sense parpelleig
                 scrollAdjustRef.current = { offset: savedOffset, height: savedHeight };
-                setPastMatches(prev => [...sortedHistory, ...prev]);
-                // Cancel·lar ajust després d'1s (vàlvula de seguretat)
-                setTimeout(() => { scrollAdjustRef.current = null; }, 1000);
+                setPastMatches(prev => {
+                    // Deduplicar per id
+                    const existingIds = new Set(prev.map(m => m.id));
+                    const newMatches = sortedHistory.filter(m => !existingIds.has(m.id));
+                    return [...newMatches, ...prev];
+                });
+                // Cancel·lar ajust després d'1.5s (vàlvula de seguretat)
+                setTimeout(() => { scrollAdjustRef.current = null; }, 1500);
             }
         } finally {
             setIsRefreshing(false);
             isRefreshingRef.current = false;
         }
-    }, [pastMatches, allMatches]);
+    }, [pastMatches, allMatches, filter]);
 
     const loadMoreMatches = useCallback(() => {
         if (isLoadingMore || visibleCount >= filteredFutureMatches.length) return;
         setIsLoadingMore(true);
-        // Simplement incrementar el comptador visible
-        setTimeout(() => { // Simular petit retard o simplement actualitzar l'estat
+        // Mostrar spinner breument, després revelar nous partits sense salt
+        setTimeout(() => {
             setVisibleCount(prev => prev + PAGE_SIZE);
-            setIsLoadingMore(false);
-        }, 100);
+            // Petit retard addicional per evitar flash del spinner
+            requestAnimationFrame(() => setIsLoadingMore(false));
+        }, 300);
     }, [isLoadingMore, visibleCount, filteredFutureMatches.length, PAGE_SIZE]);
 
     // Funcions auxiliars de format
@@ -323,21 +365,27 @@ const MatchesScreen = ({ navigation }: Props) => {
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 16, alignItems: 'center' }}
+                    contentContainerStyle={{ paddingHorizontal: 16, alignItems: 'center', gap: 8 }}
+                    style={{ flex: 1 }}
                 >
                     {/* Pestanyes de categoria */}
                     {(['ALL', 'MASCULI', 'FEMENI'] as const).map((tab) => (
                          <TouchableOpacity 
                             key={tab}
-                            onPress={() => { setFilter(tab); setSelectedComp(null); }} 
+                            onPress={() => {
+                                setFilter(tab);
+                                setSelectedComp(null);
+                                setVisibleCount(PAGE_SIZE);
+                                // Scroll al començament per mostrar "proper partit"
+                                flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+                            }} 
                             style={{
                                 paddingVertical: 6,
-                                paddingHorizontal: 12,
+                                paddingHorizontal: 14,
                                 borderRadius: 18,
                                 backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
                                 borderWidth: 1,
                                 borderColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
-                                marginRight: 8,
                             }}
                         >
                             <Text style={{
@@ -353,39 +401,43 @@ const MatchesScreen = ({ navigation }: Props) => {
                     ))}
 
                     {/* Divisor vertical */}
-                    <View style={{ width: 1, height: 20, backgroundColor: SKETCH_THEME.colors.border, marginHorizontal: 8 }} />
+                    {uniqueCompetitions.length > 0 && (
+                        <View style={{ width: 1.5, height: 22, backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: 1 }} />
+                    )}
 
                     {/* Pestanyes de competició */}
-                    {uniqueCompetitions.map(c => (
-                        <TouchableOpacity
-                            key={c}
-                            onPress={() => setSelectedComp(selectedComp === c ? null : c)}
-                            style={{
-                                paddingVertical: 6,
-                                paddingHorizontal: 12,
-                                borderRadius: 18,
-                                backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
-                                borderWidth: 1,
-                                borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
-                                marginRight: 8
-                            }}
-                        >
-                            <Text style={{
-                                color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
-                                fontSize: 12, fontFamily: 'Lora'
-                            }}>{c}</Text>
-                        </TouchableOpacity>
-                    ))}
+                    {uniqueCompetitions.map(c => {
+                        const compDisplayName = displayCompName(c);
+                        return (
+                            <TouchableOpacity
+                                key={c}
+                                onPress={() => setSelectedComp(selectedComp === c ? null : c)}
+                                style={{
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 18,
+                                    backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
+                                    borderWidth: 1,
+                                    borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
+                                }}
+                            >
+                                <Text style={{
+                                    color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
+                                    fontSize: 12, fontFamily: 'Lora'
+                                }}>{compDisplayName}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
 
             <FlatList
                 ref={flatListRef}
                 data={loading ? [] : listItems}
-                style={Platform.select({ web: { flex: 1, minHeight: 0 } as any, default: { flex: 1 } })}
+                style={Platform.select({ web: { flex: 1, minHeight: 0, scrollbarWidth: 'none' } as any, default: { flex: 1 } })}
                 keyExtractor={(item) => (item as any).type === 'season' ? (item as SeasonHeader).id : (item as MatchItem).id}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 0 }}
-                showsVerticalScrollIndicator={true}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}
+                showsVerticalScrollIndicator={false}
                 bounces={true}
                 alwaysBounceVertical={true}
                 overScrollMode="always"
@@ -400,14 +452,10 @@ const MatchesScreen = ({ navigation }: Props) => {
                         const delta = h - height;
                         if (delta > 0) {
                             const newOffset = offset + delta;
-                            if (Platform.OS === 'web') {
-                                requestAnimationFrame(() => {
-                                    flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
-                                });
-                            } else {
-                                flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
-                            }
+                            // Ajust immediat i sincronitzat per evitar salt visual
+                            flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
                             previousScrollOffsetRef.current = newOffset;
+                            scrollAdjustRef.current = null; // Aplicat — no repetir
                         }
                     }
                     previousContentHeightRef.current = h;
@@ -421,7 +469,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                     />
                 }
                 onEndReached={loadMoreMatches}
-                onEndReachedThreshold={0.6}
+                onEndReachedThreshold={0.3}
                 ListEmptyComponent={
                     loading ? (
                         <LoadingState />

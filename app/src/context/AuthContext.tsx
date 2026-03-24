@@ -18,6 +18,13 @@ import { Platform, Alert } from 'react-native';
 import { executeRequest, executeOrThrow } from '../api/core';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
+
+// Configurem Google Sign-In amb el Web Client ID de Firebase
+// (imprescindible per obtenir l'idToken que Firebase necessita)
+GoogleSignin.configure({
+  webClientId: '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com',
+});
 
 // Configurem l'idioma de les notificacions d'auth a Català
 auth.languageCode = 'ca';
@@ -58,7 +65,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Prioritzar avatar de Firestore si existeix; si no, foto de Google; si no, undefined
             avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : (firebaseUser.photoURL || undefined),
             favoriteTeam: firestoreProfile?.favoriteTeam,
-            favoriteSport: firestoreProfile?.favoriteSport
+            favoriteSport: firestoreProfile?.favoriteSport,
+            role: firestoreProfile?.role,
+            ownedBars: firestoreProfile?.ownedBars,
         };
         setUser(combinedUser);
     } catch (error) {
@@ -138,7 +147,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const provider = new GoogleAuthProvider();
                 await signInWithPopup(auth, provider);
             } else {
-                throw new Error("No disponible: Login amb Google natiu requereix configuració addicional");
+                // Flux natiu Android/iOS via Google Play Services
+                // 1. Comprovar si Google Play Services està disponible
+                await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+                // 2. Iniciar sessió amb Google (obre diàleg natiu)
+                const signInResult = await GoogleSignin.signIn();
+
+                // 3. Obtenir l'idToken del resultat
+                const idToken = signInResult?.data?.idToken;
+                if (!idToken) {
+                    throw new Error("No s'ha obtingut el token d'identificació de Google.");
+                }
+
+                // 4. Crear credencial de Firebase i autenticar
+                const credential = GoogleAuthProvider.credential(idToken);
+                await signInWithCredential(auth, credential);
             }
         }, 'loginGoogle');
       } finally {
@@ -222,10 +246,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setIsLoading(true);
     try {
-        // 1. Eliminar dades de Firestore
+        // 1. Cancel·lar subscripció de Stripe
+        try {
+            const { cancelSubscription } = await import('../services/subscriptionService');
+            await cancelSubscription();
+        } catch (stripeErr) {
+            console.warn("No s'ha pogut cancel·lar la subscripció de Stripe (potser no n'hi ha):", stripeErr);
+            // Continuar igualment — pot ser que no tingui subscripció
+        }
+
+        // 2. Eliminar dades de Firestore
         await deleteUserProfile(auth.currentUser.uid);
         
-        // 2. Eliminar compte d'Auth
+        // 3. Eliminar compte d'Auth
         await auth.currentUser.delete();
         
         // La neteja d'estat passa a onAuthStateChanged

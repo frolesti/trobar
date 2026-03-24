@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ensureLoraOnWeb } from '../../theme/sketchTheme';
+import { useAuth } from '../../context/AuthContext';
 import styles from './StartupScreen.styles';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -10,17 +11,24 @@ type Props = {
 };
 
 const StartupScreen = ({ navigation }: Props) => {
+  const { user, isLoading } = useAuth();
+
   useEffect(() => {
     ensureLoraOnWeb();
-    
-    const initApp = async () => {
-      setTimeout(() => {
-          navigation.replace('Map');
-      }, 1500);
-    };
+  }, []);
 
-    initApp();
-  }, [navigation]);
+  // Esperar que auth estigui llest i llavors redirigir
+  useEffect(() => {
+    if (isLoading) return; // Encara carregant auth
+    const timer = setTimeout(() => {
+      if (user?.role === 'bar_owner') {
+        navigation.replace('BarDashboard');
+      } else {
+        navigation.replace('Map');
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [isLoading, user, navigation]);
 
   return (
     <View style={styles.container}>

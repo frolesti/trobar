@@ -16,9 +16,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.trobar",
+      "bundleIdentifier": "com.trobar.app",
       "usesAppleSignIn": true,
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Aquesta app necessita la teva ubicació per trobar bars a prop.",
         "NSPhotoLibraryUsageDescription": "Aquesta app necessita accés a la teva galeria per canviar la foto de perfil.",
@@ -30,12 +29,16 @@
         "foregroundImage": "./app/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.example.trobar",
-      "googleServicesFile": "./google-services.json",
+      "package": "com.trobar.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCJDfdnUcgcc_AUyXPnEdHStmuNsUAZtb0"
+        }
+      }
     },
     "web": {
       "favicon": "./app/assets/favicon.png"
@@ -48,8 +51,15 @@
           "photosPermission": "L'app necessita accés a les teves fotos per actualitzar el perfil."
         }
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth"
-    ]
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "AIzaSyCJDfdnUcgcc_AUyXPnEdHStmuNsUAZtb0"
+        }
+      ],
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
+    ],
+    "scheme": "trobar"
   }
 }

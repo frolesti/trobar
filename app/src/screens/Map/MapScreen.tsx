@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import * as Location from 'expo-location';
 
@@ -186,9 +187,17 @@ const MapScreen = () => {
 
     const navigation = useNavigation<any>();
 
+    // Bar owners no tenen accés al mapa
+    useEffect(() => {
+        if (user?.role === 'bar_owner') {
+            navigation.reset({ index: 0, routes: [{ name: 'BarDashboard' }] });
+        }
+    }, [user]);
+
     const route = useRoute<RouteProp<RootStackParamList, 'Map'>>();
 
     const matchIdFromNav = route.params?.matchId ?? null;
+    const refreshParam = route.params?.refresh;
 
     
 
@@ -238,6 +247,9 @@ const MapScreen = () => {
 
     const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
 
+    // Partit seleccionat des de la pantalla de Partits (diferent de nextMatch)
+    const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
     
 
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
@@ -258,6 +270,8 @@ const MapScreen = () => {
 
     // Radi de cerca configurable des de preferències d'usuari (km)
     const [searchRadiusKm, setSearchRadiusKm] = useState(2);
+    // Categoria preferida: 'all' | 'masculino' | 'femenino'
+    const [defaultCategory, setDefaultCategory] = useState<string>('all');
 
     // Filtres actius (multi-filtre)
     const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
@@ -281,7 +295,7 @@ const MapScreen = () => {
     const filteredScannedBars = useMemo(() => {
         if (activeFilters.size === 0) return scannedBars;
         // Filtres que no apliquen a bars escanejats
-        const skip = new Set(['open_now', 'broadcasting']);
+        const skip = new Set(['open_now']);
         const amenityFilters = Array.from(activeFilters).filter(f => !skip.has(f));
         if (amenityFilters.length === 0) return scannedBars;
         return scannedBars.filter(b => {
@@ -314,6 +328,9 @@ const MapScreen = () => {
     const mapRefNative = useRef<any>(null);
 
     
+
+    // Posició del mapa abans d'obrir ReportBar (per restaurar al tancar)
+    const preReportPositionRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
 
     // Estat de càrrega de Mapbox web
 
@@ -393,7 +410,7 @@ const MapScreen = () => {
 
     // --- EFECTES ---
 
-    // 0. Carregar radi de cerca des de preferències d'usuari
+    // 0. Carregar radi de cerca i categoria des de preferències d'usuari
     useEffect(() => {
         if (!user) return;
         (async () => {
@@ -401,6 +418,9 @@ const MapScreen = () => {
                 const prefs = await getUserPreferences(user.id);
                 // El model guarda en metres (500, 1000, 2000, 5000), OSM necessita km
                 setSearchRadiusKm(prefs.display.searchRadius / 1000);
+                if (prefs.display.defaultCategory) {
+                    setDefaultCategory(prefs.display.defaultCategory);
+                }
             } catch (e) {
                 console.warn('No s\'han pogut carregar les preferències de radi:', e);
             }
@@ -473,21 +493,89 @@ const MapScreen = () => {
 
     const loadBars = useCallback(async () => {
 
-        if (matchIdFromNav) {
+        const firestoreBars = await fetchBars();
+        setBars(firestoreBars);
 
-            const matchBars = await fetchBarsForMatch(matchIdFromNav);
+    }, []);
 
-            setBars(matchBars);
-
-        } else {
-
-            const firestoreBars = await fetchBars();
-
-            setBars(firestoreBars);
-
+    // Recarregar bars quan tornem de ReportBar amb paràmetre refresh
+    // (useFocusEffect no es dispara perquè ReportBar és un transparentModal)
+    useEffect(() => {
+        if (refreshParam) {
+            loadBars();
         }
+    }, [refreshParam]);
 
-    }, [matchIdFromNav]);
+    // Navegar a ReportBar centrant el mapa sobre el bar
+    const navigateToReportBar = useCallback((osmBar: any) => {
+        // Guardar posició actual del mapa
+        if (Platform.OS === 'web') {
+            if (mapboxLoaded && mapRef.current) {
+                const center = mapRef.current.getCenter();
+                const zoom = mapRef.current.getZoom();
+                preReportPositionRef.current = { lat: center.lat, lng: center.lng, zoom };
+                mapRef.current.flyTo({
+                    center: [osmBar.lon, osmBar.lat],
+                    offset: [0, height * 0.25],
+                    zoom: Math.max(zoom, 16),
+                    speed: 1.5,
+                });
+            }
+        } else {
+            if (mapRefNative.current) {
+                // En natiu, guardem la posició via centerLocation i currentZoom
+                preReportPositionRef.current = {
+                    lat: centerLocation?.latitude || osmBar.lat,
+                    lng: centerLocation?.longitude || osmBar.lon,
+                    zoom: currentZoom,
+                };
+                mapRefNative.current.animateToRegion({
+                    latitude: osmBar.lat + CAMERA_LAT_OFFSET,
+                    longitude: osmBar.lon,
+                    latitudeDelta: MAP_REGION_DELTA,
+                    longitudeDelta: MAP_REGION_DELTA,
+                }, 500);
+            }
+        }
+        navigation.navigate('ReportBar' as any, { osmBar });
+    }, [mapboxLoaded, height, centerLocation, currentZoom, navigation]);
+
+    // Restaurar posició del mapa quan ReportBar es tanca (detectat via canvi d'estat de navegació)
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('state', (e: any) => {
+            const state = e.data?.state;
+            if (!state) return;
+            const routes = state.routes || [];
+            const hasReportBar = routes.some((r: any) => r.name === 'ReportBar');
+            if (!hasReportBar && preReportPositionRef.current) {
+                const saved = preReportPositionRef.current;
+                preReportPositionRef.current = null;
+                // Restaurar posició amb un petit retard per permetre l'animació de tancament
+                setTimeout(() => {
+                    if (Platform.OS === 'web') {
+                        if (mapboxLoaded && mapRef.current) {
+                            mapRef.current.flyTo({
+                                center: [saved.lng, saved.lat],
+                                zoom: saved.zoom,
+                                speed: 1.2,
+                            });
+                        }
+                    } else {
+                        if (mapRefNative.current) {
+                            const delta = 360 / (Math.pow(2, saved.zoom) * 256) * height;
+                            mapRefNative.current.animateToRegion({
+                                latitude: saved.lat,
+                                longitude: saved.lng,
+                                latitudeDelta: delta || MAP_REGION_DELTA,
+                                longitudeDelta: delta || MAP_REGION_DELTA,
+                            }, 500);
+                        }
+                    }
+                }, 300);
+            }
+        });
+        return unsubscribe;
+    }, [navigation, mapboxLoaded, height]);
 
 
 
@@ -496,6 +584,15 @@ const MapScreen = () => {
         useCallback(() => {
 
             loadBars();
+            // Recarregar preferències (categoria pot haver canviat a SettingsModal)
+            if (user) {
+                getUserPreferences(user.id).then(prefs => {
+                    setSearchRadiusKm(prefs.display.searchRadius / 1000);
+                    if (prefs.display.defaultCategory) {
+                        setDefaultCategory(prefs.display.defaultCategory);
+                    }
+                }).catch(() => {});
+            }
             // Tancar desplegables en tornar a la pantalla
             setShowFiltersPanel(false);
             setGeoSuggestions([]);
@@ -627,10 +724,7 @@ const MapScreen = () => {
                     const openStatus = isOpenNow(b.openingPeriods);
                     if (openStatus === false) return false;
                 }
-                // Filtre confirmat que emet (només quan venim d'un partit)
-                if (activeFilters.has('broadcasting') && matchIdFromNav) {
-                    if (!b.broadcastingMatches?.includes(matchIdFromNav)) return false;
-                }
+
                 // Filtre projector: incloure multiple_screens
                 if (activeFilters.has('projector') && !(b.amenities?.some(a => a === 'projector' || a === 'multiple_screens'))) return false;
                 // Tots els altres filtres d'amenities: comprovació dinàmica
@@ -642,49 +736,11 @@ const MapScreen = () => {
             });
         };
 
-        if (matchIdFromNav) {
-
-            // Si venim d'un partit, mostrem TOTS els bars emissors sense importar la distància
-
-            setFilteredBars(applyFilters(bars));
-
-
-
-            // Selecció automàtica del bar més proper
-
-            if (bars.length > 0) {
-
-                let nearest = bars[0];
-
-                let nearestDist = Infinity;
-
-                bars.forEach(bar => {
-
-                    const dist = getDistanceFromLatLonInKm(
-
-                        centerLocation.latitude, centerLocation.longitude,
-
-                        bar.latitude, bar.longitude
-
-                    );
-
-                    if (dist < nearestDist) {
-
-                        nearestDist = dist;
-
-                        nearest = bar;
-
-                    }
-
-                });
-
-                setSelectedBar(nearest);
-
-            }
-
-            return;
-
-        }
+        // Si hi ha un partit seleccionat (filtre overlay), pre-filtrar per bars que l'emeten
+        const activeMatchId = selectedMatch?.id ?? null;
+        const barsPool = activeMatchId
+            ? bars.filter(b => b.broadcastingMatches?.includes(activeMatchId))
+            : bars;
 
 
 
@@ -692,7 +748,7 @@ const MapScreen = () => {
 
         if (visibleBounds) {
 
-             const inView = bars.filter(bar => 
+             const inView = barsPool.filter(bar => 
 
                 bar.latitude >= visibleBounds.minLat && bar.latitude <= visibleBounds.maxLat &&
 
@@ -717,7 +773,7 @@ const MapScreen = () => {
 
              // Alternativa: 20 km al voltant del centre si no hi ha bounds
 
-             const nearbyBars = bars.filter(bar => 
+             const nearbyBars = barsPool.filter(bar => 
 
                 getDistanceFromLatLonInKm(centerLocation.latitude, centerLocation.longitude, bar.latitude, bar.longitude) <= 20
 
@@ -729,7 +785,7 @@ const MapScreen = () => {
 
 
 
-    }, [centerLocation, visibleBounds, bars, matchIdFromNav, currentZoom, activeFilters]);
+    }, [centerLocation, visibleBounds, bars, selectedMatch, currentZoom, activeFilters]);
 
 
 
@@ -964,10 +1020,21 @@ const MapScreen = () => {
     };
 
     // 3. Carregar partits per al bàner
-
     useEffect(() => {
 
         let isMounted = true;
+
+        // Helper per detectar si un partit és femení
+        const isFemenino = (match: Match | any): boolean => {
+            const getTeamName = (t: any) => (typeof t === 'string' ? t : (t?.name || t?.shortName || ''));
+            const homeName = getTeamName(match.homeTeam).toLowerCase();
+            const awayName = getTeamName(match.awayTeam).toLowerCase();
+            const leagueName = (match.league || '').toLowerCase();
+            return match.category === 'femenino' ||
+                   homeName.includes('women') || awayName.includes('women') ||
+                   homeName.includes('femeni') || awayName.includes('femeni') ||
+                   leagueName.includes('liga f') || leagueName.includes('femen');
+        };
 
         const loadMatches = async () => {
 
@@ -1005,11 +1072,19 @@ const MapScreen = () => {
 
                         });
 
+                    // Filtrar per categoria preferida
+                    const catFiltered = upcoming.filter(m => {
+                        if (defaultCategory === 'all') return true;
+                        const isFem = isFemenino(m);
+                        return defaultCategory === 'femenino' ? isFem : !isFem;
+                    });
 
+                    // nextMatch respecta la preferència de categoria
+                    const preferredUpcoming = catFiltered.length > 0 ? catFiltered : upcoming;
 
-                    if (upcoming.length > 0) {
+                    if (preferredUpcoming.length > 0) {
 
-                        setNextMatch(upcoming[0]);
+                        setNextMatch(preferredUpcoming[0]);
 
                         setUpcomingMatches(upcoming);
 
@@ -1019,6 +1094,14 @@ const MapScreen = () => {
 
                         setUpcomingMatches([]);
 
+                    }
+
+                    // Si venim d'un partit específic, activar el filtre sempre
+                    if (matchIdFromNav) {
+                        const found = matches.find(m => m.id === matchIdFromNav);
+                        if (found) {
+                            setSelectedMatch(found);
+                        }
                     }
 
                 }
@@ -1035,7 +1118,7 @@ const MapScreen = () => {
 
         return () => { isMounted = false; };
 
-    }, []);
+    }, [matchIdFromNav, defaultCategory]);
 
 
 
@@ -1185,7 +1268,7 @@ const MapScreen = () => {
 
                  setRouteInfo(null);
 
-                 // Mantenir la ruta dibuixada al mapa fins que l'usuari cliqui un altre bar
+                 setRouteGeoJSON(null);
 
                  if (polylineRef.current) polylineRef.current.setMap(null);
 
@@ -1700,6 +1783,12 @@ const MapScreen = () => {
 
 
 
+        // Web: obrir Google Maps directament (Alert.alert no funciona a la web)
+        if (Platform.OS === 'web') {
+            window.open(googleUrl, '_blank');
+            return;
+        }
+
         if (Platform.OS === 'ios') {
 
             Alert.alert(
@@ -1783,6 +1872,9 @@ const MapScreen = () => {
             setShowBarProfile(false);
 
         });
+        // Esborrar ruta del mapa
+        setRouteGeoJSON(null);
+        setRouteInfo(null);
         // Tancar desplegables de cerca/filtres
         setShowFiltersPanel(false);
         setGeoSuggestions([]);
@@ -1827,7 +1919,7 @@ const MapScreen = () => {
 
                     fallbackRating={selectedBar.rating}
 
-                    fallbackIsOpen={isOpenNow(selectedBar.openingPeriods) ?? selectedBar.isOpen}
+                    fallbackIsOpen={isOpenNow(selectedBar.openingPeriods)}
 
                     distanceText={distanceText}
 
@@ -1940,16 +2032,12 @@ const MapScreen = () => {
         const opts: { key: string; label: string; icon: string; iconFamily?: 'feather' | 'mci'; category?: string }[] = [
             { key: 'open_now', label: 'Oberts ara', icon: 'clock', iconFamily: 'feather' },
         ];
-        // Afegir filtre "confirmat que emet" quan venim d'un partit
-        if (matchIdFromNav) {
-            opts.push({ key: 'broadcasting', label: 'Confirmat que emet', icon: 'television', iconFamily: 'mci' });
-        }
         // Totes les amenities agrupades
         AMENITY_OPTIONS.forEach(a => {
             opts.push({ key: a.key, label: a.label, icon: a.icon, iconFamily: a.iconFamily, category: a.category });
         });
         return opts;
-    }, [matchIdFromNav]);
+    }, []);
 
     const toggleFilter = useCallback((key: string) => {
         setActiveFilters(prev => {
@@ -2022,7 +2110,11 @@ const MapScreen = () => {
                         </TouchableOpacity>
                     )}
                 </View>
-                <ScrollView style={{ maxHeight: height * 0.48 }} bounces={false}>
+                <ScrollView
+                    style={Platform.OS === 'web' ? { maxHeight: height * 0.48, overflow: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' } as any : { maxHeight: height * 0.48 }}
+                    bounces={false}
+                    showsVerticalScrollIndicator={false}
+                >
                     {/* Filtres especials: obert ara, confirmat que emet */}
                     {specialFilters.map(renderFilterRow)}
 
@@ -2264,13 +2356,35 @@ const MapScreen = () => {
 
              
 
-             {/* Bàner del pròxim partit — usa MatchCard per coherència visual */}
+             {/* Bàner del partit — seleccionat o pròxim */}
 
-             {nextMatch && (!selectedBar || isDesktop) && (
+             {(selectedMatch || nextMatch) && (
 
                 <View style={{ marginTop: 8, marginHorizontal: Platform.OS === 'web' ? 0 : 4 }}>
 
-                    <MatchCard match={nextMatch} compact={true} onPress={() => {}} />
+                    {selectedMatch ? (
+                        <MatchCard
+                            match={selectedMatch}
+                            compact={true}
+                            isFilter={true}
+                            showDismiss={!!matchIdFromNav}
+                            onToggleFilter={() => {
+                                setSelectedMatch(null);
+                                navigation.setParams({ matchId: undefined });
+                            }}
+                            onDismissFilter={() => {
+                                setSelectedMatch(null);
+                                navigation.setParams({ matchId: undefined });
+                            }}
+                        />
+                    ) : nextMatch ? (
+                        <MatchCard
+                            match={nextMatch}
+                            compact={true}
+                            isNextMatch={true}
+                            onToggleFilter={() => setSelectedMatch(nextMatch)}
+                        />
+                    ) : null}
 
                 </View>
 
@@ -2287,6 +2401,7 @@ const MapScreen = () => {
                         {/* Amagar botó de cerca si l'àrea visible > 5 km */}
 
                         {(() => {
+                            if (matchIdFromNav) return null;
                             const visibleWidthKm = visibleBounds
                                 ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
                                 : 0;
@@ -2557,7 +2672,7 @@ const MapScreen = () => {
 
                         {filteredScannedBars.map(osmBar => (
 
-                             <MapboxMarker key={osmBar.id} longitude={osmBar.lon} latitude={osmBar.lat} anchor="center" onClick={(e: any) => { e.originalEvent.stopPropagation(); navigation.navigate('ReportBar' as any, { osmBar }); }}>
+                             <MapboxMarker key={osmBar.id} longitude={osmBar.lon} latitude={osmBar.lat} anchor="center" onClick={(e: any) => { e.originalEvent.stopPropagation(); navigateToReportBar(osmBar); }}>
 
                                  <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#777', borderWidth: 2, borderColor: 'white', ...Platform.select({ web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' } }) }} />
 
@@ -2795,7 +2910,7 @@ const MapScreen = () => {
 
                                                 fallbackRating={selectedBar.rating} 
 
-                                                fallbackIsOpen={isOpenNow(selectedBar.openingPeriods) ?? selectedBar.isOpen} 
+                                                fallbackIsOpen={isOpenNow(selectedBar.openingPeriods)} 
 
                                                 distanceText={routeInfo ? `${routeInfo.duration} caminant (${routeInfo.distance})` : undefined} 
 
@@ -2935,27 +3050,7 @@ const MapScreen = () => {
 
                                 coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
 
-                                onPress={() => {
-
-                                    if (mapRefNative.current) {
-
-                                        mapRefNative.current.animateToRegion({
-
-                                            latitude: osmBar.lat + CAMERA_LAT_OFFSET,
-
-                                            longitude: osmBar.lon,
-
-                                            latitudeDelta: MAP_REGION_DELTA,
-
-                                            longitudeDelta: MAP_REGION_DELTA,
-
-                                        }, 500);
-
-                                    }
-
-                                    navigation.navigate('ReportBar' as any, { osmBar });
-
-                                }}
+                                onPress={() => navigateToReportBar(osmBar)}
 
                                 zIndex={1}
 

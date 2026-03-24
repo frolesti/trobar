@@ -13,6 +13,7 @@ import { fetchReviews, addReview, deleteReview, getBarReviewStats, getUserReview
 import { updateBarAmenities } from '../services/barService';
 import { AMENITY_OPTIONS, AMENITY_MAP, AMENITY_CATEGORIES, AmenityOption } from '../data/amenities';
 import { useAuth } from '../context/AuthContext';
+import { subscribeToBar, unsubscribeFromBar, isSubscribedToBar } from '../services/barOwnerService';
 import MatchCard from './MatchCard';
 
 // ── Tipus ──────────────────────────────────────────────
@@ -45,8 +46,10 @@ const P = {
 const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; urlPrefix: string }> = {
     instagram: { icon: 'instagram', family: 'feather', urlPrefix: 'https://instagram.com/' },
     facebook:  { icon: 'facebook',  family: 'feather', urlPrefix: 'https://facebook.com/' },
+    twitter:   { icon: 'twitter',   family: 'feather', urlPrefix: 'https://x.com/' },
     whatsapp:  { icon: 'whatsapp',  family: 'mci',     urlPrefix: 'https://wa.me/' },
     telegram:  { icon: 'telegram',  family: 'mci',     urlPrefix: 'https://t.me/' },
+    website:   { icon: 'globe',     family: 'feather', urlPrefix: '' },
 };
 
 // ── Component ──────────────────────────────────────────
@@ -71,6 +74,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     const [editingAmenities, setEditingAmenities] = useState(false);
     const [selectedAmenities, setSelectedAmenities] = useState<Set<BarAmenity>>(new Set());
     const [savingAmenities, setSavingAmenities] = useState(false);
+
+    // ── Estat de subscripció ──
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [togglingSubscription, setTogglingSubscription] = useState(false);
 
     // Carregar ressenyes quan s'obre el modal
     const loadReviews = useCallback(async () => {
@@ -99,8 +106,30 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             setNewComment('');
             setEditingAmenities(false);
             setSelectedAmenities(new Set(bar.amenities ?? []));
+            // Comprovar subscripció
+            if (user && bar.tier === 'premium') {
+                isSubscribedToBar(user.id, bar.id).then(setIsSubscribed).catch(() => {});
+            }
         }
     }, [visible, bar?.id]);
+
+    const handleToggleSubscription = async () => {
+        if (!user || !bar) return;
+        setTogglingSubscription(true);
+        try {
+            if (isSubscribed) {
+                await unsubscribeFromBar(user.id, bar.id);
+                setIsSubscribed(false);
+            } else {
+                await subscribeToBar(user.id, bar.id);
+                setIsSubscribed(true);
+            }
+        } catch (e) {
+            console.error('Error toggling subscription:', e);
+        } finally {
+            setTogglingSubscription(false);
+        }
+    };
 
     const handleSubmitReview = async () => {
         if (!bar || !user) return;
@@ -177,7 +206,9 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
 
     const displayName = bar?.name || pd?.displayName || '';
     const displayAddress = pd?.formattedAddress || bar?.address || 'Barcelona';
-    const openStatus = pd?.currentOpeningHours?.openNow ?? isOpenNow(bar?.openingPeriods) ?? bar?.isOpen;
+    // Prioritat: 1) Google Places real-time, 2) càlcul local amb períodes cachejats
+    // NO usem bar.isOpen (sempre true per defecte a Firestore) → evitem flicker
+    const openStatus = pd?.currentOpeningHours?.openNow ?? isOpenNow(bar?.openingPeriods);
     const photos = pd?.photoUrls ?? [];
     const hours = pd?.currentOpeningHours?.weekdayDescriptions ?? [];
     const social = bar?.socialMedia;
@@ -280,6 +311,36 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     PREMIUM
                                 </Text>
                             </View>
+
+                            {/* Botó de subscripció / notificacions */}
+                            {user && bar?.tier === 'premium' && (
+                                <TouchableOpacity
+                                    onPress={handleToggleSubscription}
+                                    disabled={togglingSubscription}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center',
+                                        backgroundColor: isSubscribed ? 'rgba(237,187,0,0.25)' : 'rgba(255,255,255,0.12)',
+                                        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+                                        marginLeft: 8,
+                                        borderWidth: 1,
+                                        borderColor: isSubscribed ? P.accent : 'rgba(255,255,255,0.2)',
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Feather
+                                        name={isSubscribed ? 'bell' : 'bell'}
+                                        size={13}
+                                        color={isSubscribed ? P.accent : P.textMuted}
+                                        style={{ marginRight: 4 }}
+                                    />
+                                    <Text style={{
+                                        fontSize: 11, fontWeight: '600', fontFamily: 'Lora',
+                                        color: isSubscribed ? P.accent : P.textMuted,
+                                    }}>
+                                        {togglingSubscription ? '…' : isSubscribed ? 'Seguint' : 'Seguir'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 
@@ -582,12 +643,24 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 style={{ marginHorizontal: -20 }}
                                 contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
                             >
-                                {broadcastMatches.map(match => (
+                                {broadcastMatches.map((match, idx) => (
                                     <View key={match.id} style={{ width: Math.min(260, SCREEN_WIDTH * 0.65) }}>
-                                        <MatchCard match={match} compact />
+                                        <MatchCard match={match} compact isNextMatch={idx === 0} />
                                     </View>
                                 ))}
                             </ScrollView>
+                        ) : bar?.broadcastingMatches && bar.broadcastingMatches.length > 0 ? (
+                            <View style={{ backgroundColor: P.cardBg, borderRadius: 14, padding: 16 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                    <Feather name="tv" size={18} color={P.accent} style={{ marginRight: 8 }} />
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: 'Lora' }}>
+                                        {bar.broadcastingMatches.length} {bar.broadcastingMatches.length === 1 ? 'partit configurat' : 'partits configurats'}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', lineHeight: 19 }}>
+                                    Els partits configurats apareixeran aquí quan hi hagi partits propers disponibles.
+                                </Text>
+                            </View>
                         ) : bar?.usuallyShowsBarca ? (
                             <View style={{ backgroundColor: P.cardBg, borderRadius: 14, padding: 16 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
@@ -614,32 +687,28 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitleStyle}>Xarxes socials</Text>
                         {hasSocial ? (
-                            <View style={{ gap: 10 }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                                 {Object.entries(SOCIAL_CONFIG).map(([key, config]) => {
                                     const value = social?.[key as keyof typeof social];
                                     if (!value) return null;
                                     const url = value.startsWith('http') ? value : `${config.urlPrefix}${value}`;
-                                    const displayHandle = value.replace(/^https?:\/\/(www\.)?[^/]+\/?/, '').replace(/\/$/, '') || value;
                                     return (
                                         <TouchableOpacity
                                             key={key}
                                             onPress={() => Linking.openURL(url)}
                                             style={{
-                                                flexDirection: 'row', alignItems: 'center',
+                                                width: 48, height: 48, borderRadius: 24,
                                                 backgroundColor: P.cardBg,
-                                                paddingVertical: 10, paddingHorizontal: 14,
-                                                borderRadius: 14, gap: 10,
+                                                alignItems: 'center', justifyContent: 'center',
+                                                borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
                                             }}
+                                            activeOpacity={0.7}
                                         >
                                             {config.family === 'mci' ? (
-                                                <MaterialCommunityIcons name={config.icon as any} size={22} color={P.text} />
+                                                <MaterialCommunityIcons name={config.icon as any} size={24} color={P.text} />
                                             ) : (
-                                                <Feather name={config.icon as any} size={20} color={P.text} />
+                                                <Feather name={config.icon as any} size={22} color={P.text} />
                                             )}
-                                            <Text style={{ color: P.text, fontSize: 14, fontFamily: 'Lora', fontWeight: '600', flex: 1 }}>
-                                                {displayHandle}
-                                            </Text>
-                                            <Feather name="external-link" size={14} color={P.textMuted} />
                                         </TouchableOpacity>
                                     );
                                 })}
@@ -658,7 +727,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     <View style={{ marginTop: 24 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                             <Text style={sectionTitleStyle}>Ressenyes</Text>
-                            {user && !myReview && !showReviewForm && (
+                            {user && !myReview && !showReviewForm && !(user.id === bar?.ownerId) && (
                                 <TouchableOpacity
                                     onPress={() => setShowReviewForm(true)}
                                     style={{

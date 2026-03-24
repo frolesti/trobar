@@ -71,6 +71,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
     const displayName = getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
+    // Prioritat: 1) Google Places real-time, 2) fallback local (períodes cachejats)
+    // NO usem bar.isOpen de Firestore (sempre true, no fiable) → evitem flicker Obert→Tancat
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
 
     const openGoogleMaps = () => {
@@ -140,7 +142,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                             )}
                         </View>
                     )}
-                    {openStatus != null && (
+                    {openStatus != null && !loadingPlaceDetails && (
                         <Text style={{
                             paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
                             overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,

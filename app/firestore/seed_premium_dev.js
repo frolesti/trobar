@@ -138,23 +138,50 @@ async function main() {
 
     console.log(`\n🌱 Seed premium dev — projecte: ${projectId}\n`);
 
-    // 1. Obtenir IDs de partits reals (els 4 pròxims scheduled)
+    // 1. Obtenir IDs de partits reals (els 10 pròxims scheduled — cobertura àmplia)
     let matchIds = [];
     try {
+        // Intent 1: Query amb filtre de status
         const matchSnap = await getDocs(
             query(
                 collection(db, 'matches'),
                 where('status', '==', 'scheduled'),
                 orderBy('timestamp', 'asc'),
-                limit(4)
+                limit(10)
             )
         );
         matchIds = matchSnap.docs.map(d => d.id);
-        console.log(`📅 Partits scheduled trobats: ${matchIds.length} → [${matchIds.join(', ')}]`);
     } catch (err) {
-        console.warn('⚠️  No s\'han pogut obtenir partits scheduled. S\'assignaran IDs ficticis.');
-        matchIds = ['1', '2', '3', '4'];
+        console.warn('⚠️  Query amb filtre ha fallat. Intent 2: tots els partits ordenats per timestamp...');
     }
+
+    // Intent 2: Si la query filtrada falla (p.ex. falta d'índex), obtenir tots els partits
+    if (matchIds.length === 0) {
+        try {
+            const allMatchSnap = await getDocs(
+                query(
+                    collection(db, 'matches'),
+                    orderBy('timestamp', 'desc'),
+                    limit(20)
+                )
+            );
+            // Filtrar scheduled manualment
+            const scheduled = allMatchSnap.docs.filter(d => {
+                const data = d.data();
+                return data.status === 'scheduled';
+            });
+            if (scheduled.length > 0) {
+                matchIds = scheduled.map(d => d.id);
+            } else {
+                // Si no hi ha scheduled, usar els últims 10 partits (per testing)
+                matchIds = allMatchSnap.docs.slice(0, 10).map(d => d.id);
+            }
+        } catch (err2) {
+            console.warn('⚠️  Tampoc s\'han pogut obtenir partits. Últim recurs: IDs seqüencials.');
+            matchIds = Array.from({ length: 20 }, (_, i) => String(i + 1));
+        }
+    }
+    console.log(`📅 Partits trobats: ${matchIds.length} → [${matchIds.join(', ')}]`);
 
     // 2. Obtenir tots els bars premium
     const barsSnap = await getDocs(collection(db, 'bars'));
@@ -177,10 +204,11 @@ async function main() {
             barName.toLowerCase().includes(s.nameContains.toLowerCase())
         );
 
-        // Dades comunes: assignar partits aleatoris (2-3 per bar)
-        const numMatches = 2 + Math.floor(Math.random() * 2); // 2 o 3
+        // Dades comunes: assignar partits — cada bar emet entre 4 i tots els partits disponibles
+        // Això garanteix que cada match tingui almenys algun bar
+        const numMatches = Math.max(4, Math.ceil(matchIds.length * 0.6 + Math.random() * matchIds.length * 0.4));
         const shuffled = [...matchIds].sort(() => Math.random() - 0.5);
-        const barMatches = shuffled.slice(0, numMatches);
+        const barMatches = shuffled.slice(0, Math.min(numMatches, matchIds.length));
 
         const updates = {
             broadcastingMatches: barMatches,

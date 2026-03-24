@@ -12,8 +12,10 @@ export interface OpeningPeriod {
 export interface BarSocialMedia {
     instagram?: string;
     facebook?: string;
+    twitter?: string;
     whatsapp?: string;
     telegram?: string;
+    website?: string;
 }
 
 /** Amenitats disponibles per un bar */

@@ -10,6 +10,25 @@ export interface NotificationPreferences {
     barPromotions: boolean;
 }
 
+/** Preferències de notificacions per a propietaris de bars */
+export interface BarOwnerNotificationPreferences {
+    /** Notificar noves ressenyes */
+    newReviews: boolean;
+    /** Notificar noves valoracions */
+    newRatings: boolean;
+    /** Recordatori de partits propers que emets */
+    upcomingMatches: boolean;
+    /** Notificar nous seguidors */
+    newFollowers: boolean;
+}
+
+export const DEFAULT_BAR_OWNER_NOTIFICATION_PREFS: BarOwnerNotificationPreferences = {
+    newReviews: true,
+    newRatings: true,
+    upcomingMatches: true,
+    newFollowers: false,
+};
+
 /** Preferències de visualització de l'app */
 export interface DisplayPreferences {
     /** Categoria per defecte al llistat de partits */
@@ -21,6 +40,7 @@ export interface DisplayPreferences {
 /** Totes les preferències d'usuari agrupades */
 export interface UserPreferences {
     notifications: NotificationPreferences;
+    barOwnerNotifications?: BarOwnerNotificationPreferences;
     display: DisplayPreferences;
 }
 

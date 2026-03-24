@@ -8,9 +8,9 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍺</text></svg>">
   <!-- Google Maps API es carregarà dinàmicament des de React utilitzant variables d'entorn (.env) -->
   <style>
-    /* Fix per React Native Web Maps */
-    #root { display: flex; flex: 1; height: 100vh; }
-    html, body { height: 100%; margin: 0; padding: 0; }
+    /* Fix per React Native Web Maps — overflow:hidden evita scroll a la pàgina del mapa */
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    #root { display: flex; flex: 1; height: 100vh; overflow: hidden; }
   </style>
 </head>
 <body>
