@@ -63,41 +63,47 @@ export default function Home() {
       <Header />
       <Hero />
 
-      <main>
+      <main style={{
+        background: 'linear-gradient(180deg, #6d0030 0%, #004d98 18%, #003570 32%, #4a0028 44%, #a50044 58%, #800038 72%, #1a0a20 86%, #0d1b2a 100%)',
+      }}>
         {/* ── Com funciona ── */}
-        <section id="com-funciona" className="section-blau" style={{padding: '100px 24px 90px'}}>
+        <section id="com-funciona" style={{padding: '100px 24px 90px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto'}}>
             <div style={{textAlign:'center', marginBottom:72}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Com funciona</span>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'#edbb00', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Com funciona</span>
               <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'#fff', marginBottom:16, lineHeight:1.2}}>Tres passos i ja tens el teu bar</h2>
               <p style={{color:'rgba(255,255,255,0.6)', fontSize:17, maxWidth:420, margin:'0 auto'}}>Tan fàcil com obrir el mòbil</p>
             </div>
 
             <div className="step-grid" style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24}}>
               {steps.map((s, i) => (
-                <div key={i} className="glow-card" style={{padding:'40px 32px', textAlign:'center'}}>
+                <div key={i} style={{
+                  padding:'40px 32px', textAlign:'center',
+                  background: '#a50044', borderRadius: 20,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                }}>
                   {/* Step number */}
                   <div style={{
                     width:36, height:36, borderRadius:'50%',
-                    background: s.color,
+                    background: '#edbb00',
                     display:'inline-flex', alignItems:'center', justifyContent:'center',
-                    fontWeight:800, fontSize:14, color:'#fff',
+                    fontWeight:800, fontSize:14, color:'#1a1a2e',
                     marginBottom:20,
-                    boxShadow: `0 4px 12px ${s.color}40`,
+                    boxShadow: '0 4px 12px rgba(237,187,0,0.4)',
                   }}>{s.num}</div>
 
                   {/* Icon */}
                   <div style={{
                     width:72, height:72, borderRadius:20,
-                    background: s.bg,
+                    background: 'rgba(255,255,255,0.1)',
                     display:'flex', alignItems:'center', justifyContent:'center',
                     margin:'0 auto 24px',
                   }}>
                     {s.icon}
                   </div>
 
-                  <h3 style={{fontSize:22, marginBottom:12, color:'var(--text)', fontWeight:700}}>{s.title}</h3>
-                  <p style={{color:'var(--muted)', lineHeight:1.7, fontSize:15, margin:0}}>{s.desc}</p>
+                  <h3 style={{fontSize:22, marginBottom:12, color:'#fff', fontWeight:700}}>{s.title}</h3>
+                  <p style={{color:'rgba(255,255,255,0.7)', lineHeight:1.7, fontSize:15, margin:0}}>{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -105,7 +111,7 @@ export default function Home() {
         </section>
 
         {/* ── Característiques ── */}
-        <section id="caracteristiques" className="section-grana" style={{padding:'100px 24px'}}>
+        <section id="caracteristiques" style={{padding:'100px 24px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto'}}>
             <div style={{textAlign:'center', marginBottom:72}}>
               <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Funcionalitats</span>
@@ -117,7 +123,7 @@ export default function Home() {
         </section>
 
         {/* ── CTA per a bars ── */}
-        <section className="section-light" style={{padding:'100px 24px 110px'}}>
+        <section style={{padding:'100px 24px 110px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto', textAlign:'center'}}>
             <div style={{
               maxWidth:680, margin:'0 auto',

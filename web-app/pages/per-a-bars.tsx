@@ -157,12 +157,14 @@ export default function PerABars() {
         </div>
       </section>
 
-      <main>
+      <main style={{
+        background: 'linear-gradient(180deg, #5a0032 0%, #004d98 15%, #003570 30%, #4a0028 45%, #a50044 60%, #800038 78%, #0d1b2a 100%)',
+      }}>
         {/* Beneficis */}
-        <section className="section-blau" style={{ padding: '100px 24px 80px' }}>
+        <section style={{ padding: '100px 24px 80px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{textAlign:'center', marginBottom:64}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Què inclou</span>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'#edbb00', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Què inclou</span>
               <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', color: '#fff', marginBottom: 14 }}>Tot per fer créixer el teu negoci</h2>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 17, maxWidth: 460, margin: '0 auto' }}>
                 Eines pensades perquè cada dia de partit sigui una oportunitat.
@@ -171,22 +173,22 @@ export default function PerABars() {
 
             <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
               {benefits.map((b, i) => (
-                <div key={i} className="glow-card" style={{
+                <div key={i} style={{
                   padding: '36px 30px',
                   display: 'flex', gap: 20, alignItems: 'flex-start',
-                  borderTop: `4px solid ${b.borderColor}`,
+                  background: '#a50044', borderRadius: 20,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-                    background: b.borderColor,
+                    background: 'rgba(255,255,255,0.12)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 4px 12px ${b.borderColor}40`,
                   }}>
                     {b.icon}
                   </div>
                   <div>
-                    <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--text)', fontWeight: 700 }}>{b.title}</h3>
-                    <p style={{ color: 'var(--muted)', lineHeight: 1.65, fontSize: 15, margin: 0 }}>{b.desc}</p>
+                    <h3 style={{ fontSize: 19, marginBottom: 8, color: '#fff', fontWeight: 700 }}>{b.title}</h3>
+                    <p style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.65, fontSize: 15, margin: 0 }}>{b.desc}</p>
                   </div>
                 </div>
               ))}
@@ -195,14 +197,14 @@ export default function PerABars() {
         </section>
 
         {/* Preus */}
-        <section className="section-light" style={{ padding: '100px 24px' }}>
+        <section style={{ padding: '100px 24px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <Pricing />
           </div>
         </section>
 
         {/* CTA final */}
-        <section className="section-grana" style={{ textAlign: 'center', padding: '100px 24px 110px', position:'relative' }}>
+        <section style={{ textAlign: 'center', padding: '100px 24px 110px', position:'relative' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto', position:'relative', zIndex:1 }}>
             <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', color: '#fff', marginBottom: 16 }}>Comença avui</h2>
             <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 17, maxWidth: 460, margin: '0 auto 36px', lineHeight: 1.7 }}>

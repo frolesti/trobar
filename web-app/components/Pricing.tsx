@@ -35,9 +35,9 @@ export default function Pricing() {
   return (
     <section id="preus" style={{ padding: 0 }}>
       <div style={{ textAlign: 'center', marginBottom: 56 }}>
-        <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'var(--accent)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Preus</span>
-        <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', marginBottom: 14, color: 'var(--text)' }}>Un sol pla, sense sorpreses</h2>
-        <p style={{ color: 'var(--muted)', fontSize: 17, maxWidth: 500, margin: '0 auto' }}>
+        <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'#edbb00', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Preus</span>
+        <h2 style={{ fontSize: 'clamp(32px, 4vw, 44px)', marginBottom: 14, color: '#fff' }}>Un sol pla, sense sorpreses</h2>
+        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 17, maxWidth: 500, margin: '0 auto' }}>
           Tot inclòs per fer créixer el teu negoci cada dia de partit. Prova 14 dies gratis.
         </p>
       </div>
@@ -45,9 +45,9 @@ export default function Pricing() {
       {/* Billing cycle toggle */}
       <div style={{
         display: 'flex', justifyContent: 'center', gap: 4,
-        background: 'var(--bg-alt)', borderRadius: 14, padding: 4,
+        background: 'rgba(0,0,0,0.3)', borderRadius: 14, padding: 4,
         maxWidth: 400, margin: '0 auto 48px',
-        border: '1px solid var(--border)',
+        border: '1px solid rgba(255,255,255,0.1)',
       }}>
         {(Object.keys(CYCLES) as Cycle[]).map(key => {
           const c = CYCLES[key]
@@ -60,14 +60,14 @@ export default function Pricing() {
                 flex: 1, padding: '12px 8px', borderRadius: 10,
                 border: 'none', cursor: 'pointer',
                 background: active
-                  ? 'var(--card)'
+                  ? 'rgba(255,255,255,0.15)'
                   : 'transparent',
-                color: active ? 'var(--text)' : 'var(--muted)',
+                color: active ? '#fff' : 'rgba(255,255,255,0.5)',
                 fontWeight: active ? 700 : 500,
                 fontSize: 14, fontFamily: 'inherit',
                 transition: 'all 0.3s',
                 position: 'relative',
-                boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                boxShadow: active ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
               }}
             >
               {c.label}
@@ -170,36 +170,38 @@ export default function Pricing() {
       </div>
 
       {/* ROI comparison */}
-      <div className="glow-card" style={{
+      <div style={{
         maxWidth: 520, margin: '40px auto 0',
         padding: '36px 28px',
+        background: '#004d98', borderRadius: 20,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
       }}>
-        <h4 style={{ fontSize: 18, color: 'var(--text)', textAlign: 'center', marginBottom: 24, fontFamily: 'Lora, serif' }}>
+        <h4 style={{ fontSize: 18, color: '#fff', textAlign: 'center', marginBottom: 24, fontFamily: 'Lora, serif' }}>
           Compensa des del primer dia de partit
         </h4>
 
         <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
           <div style={{
             flex: 1, textAlign: 'center', padding: 16, borderRadius: 14,
-            background: 'rgba(165,0,68,0.10)', border: '1px solid rgba(165,0,68,0.20)',
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)',
           }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 }}>La teva inversió</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)' }}>~1€<span style={{ fontSize: 14, fontWeight: 400, opacity: 0.5 }}>/dia</span></div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>amb el pla trimestral</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6, fontWeight: 600 }}>La teva inversió</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#fff' }}>~1€<span style={{ fontSize: 14, fontWeight: 400, opacity: 0.5 }}>/dia</span></div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>amb el pla trimestral</div>
           </div>
           <div style={{
             flex: 1, textAlign: 'center', padding: 16, borderRadius: 14,
-            background: 'rgba(237,187,0,0.12)', border: '1px solid rgba(237,187,0,0.22)',
+            background: 'rgba(237,187,0,0.15)', border: '1px solid rgba(237,187,0,0.22)',
           }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 }}>Potencial per partit</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)' }}>+200€</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>amb 20 culers extres</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6, fontWeight: 600 }}>Potencial per partit</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#edbb00' }}>+200€</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>amb 20 culers extres</div>
           </div>
         </div>
 
-        <p style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
-          Un bar factura de mitjana <strong style={{ color: 'var(--text)' }}>10€ per client</strong> en un dia de partit.
-          Amb només <strong style={{ color: 'var(--text)' }}>2 clients nous al mes</strong> ja has cobert la subscripció.
+        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+          Un bar factura de mitjana <strong style={{ color: '#fff' }}>10€ per client</strong> en un dia de partit.
+          Amb només <strong style={{ color: '#fff' }}>2 clients nous al mes</strong> ja has cobert la subscripció.
         </p>
       </div>
     </section>

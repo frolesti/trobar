@@ -67,22 +67,22 @@ export default function Features() {
   return (
     <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
       {items.map((it, i) => (
-        <div key={i} className="glow-card" style={{
+        <div key={i} style={{
           padding: '36px 30px',
           display: 'flex', gap: 20, alignItems: 'flex-start',
-          borderTop: `4px solid ${it.borderColor}`,
+          background: '#004d98', borderRadius: 20,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-            background: it.accent,
+            background: 'rgba(255,255,255,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 4px 12px ${it.accent}40`,
           }}>
             {it.icon}
           </div>
           <div>
-            <h3 style={{ fontSize: 19, marginBottom: 8, color: 'var(--text)', fontWeight: 700 }}>{it.title}</h3>
-            <p style={{ color: 'var(--muted)', lineHeight: 1.65, fontSize: 15, margin: 0 }}>{it.desc}</p>
+            <h3 style={{ fontSize: 19, marginBottom: 8, color: '#fff', fontWeight: 700 }}>{it.title}</h3>
+            <p style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.65, fontSize: 15, margin: 0 }}>{it.desc}</p>
           </div>
         </div>
       ))}
