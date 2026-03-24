@@ -64,7 +64,7 @@ export default function Home() {
       <Hero />
 
       <main style={{
-        background: 'linear-gradient(180deg, #6d0030 0%, #004d98 18%, #003570 32%, #4a0028 44%, #a50044 58%, #800038 72%, #1a0a20 86%, #0d1b2a 100%)',
+        background: 'linear-gradient(180deg, #a50044 0%, #6d0030 8%, #004d98 22%, #003570 36%, #4a0028 48%, #a50044 62%, #800038 76%, #1a0a20 88%, #0d1b2a 100%)',
       }}>
         {/* ── Com funciona ── */}
         <section id="com-funciona" style={{padding: '100px 24px 90px'}}>
@@ -114,7 +114,7 @@ export default function Home() {
         <section id="caracteristiques" style={{padding:'100px 24px'}}>
           <div style={{maxWidth: 1100, margin: '0 auto'}}>
             <div style={{textAlign:'center', marginBottom:72}}>
-              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Funcionalitats</span>
+              <span style={{display:'inline-block', fontSize:12, fontWeight:600, color:'rgba(237,187,0,0.85)', letterSpacing:2, textTransform:'uppercase', marginBottom:16}}>Característiques</span>
               <h2 style={{fontSize:'clamp(32px, 4vw, 48px)', color:'#fff', marginBottom:16, lineHeight:1.2}}>Per què troBar?</h2>
               <p style={{color:'rgba(255,255,255,0.6)', fontSize:17, maxWidth:460, margin:'0 auto'}}>Tot el que necessites per viure el Barça fora de casa</p>
             </div>
@@ -144,7 +144,6 @@ export default function Home() {
                   color:'#edbb00', fontWeight:600, padding:'8px 18px', borderRadius:999, fontSize:13,
                   marginBottom:28, border:'1px solid rgba(237,187,0,0.2)',
                 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                   Per a bars i restaurants
                 </span>
 

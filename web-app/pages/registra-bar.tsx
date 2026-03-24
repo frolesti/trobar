@@ -20,20 +20,67 @@ export default function RegisterBar() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <Header />
-      
-      <main className="container" style={{maxWidth: 1200, margin: '0 auto', padding: '120px 24px 40px'}}>
-        
-        <div style={{textAlign: 'center', marginBottom: 40}}>
-          <h1 style={{fontSize: 'clamp(36px, 5vw, 54px)', fontWeight: 800, color: 'var(--text)', marginBottom: 16}}>Fes créixer el teu negoci</h1>
-          <p style={{fontSize: 20, color: 'var(--muted)', maxWidth: 640, margin: '0 auto'}}>Crea el teu compte ara i comença a atraure centenars de culers cada dia de partit.</p>
-        </div>
 
-        <section id="formulari-registre" style={{marginTop: 60, marginBottom: 80}}>
+      {/* Hero — same style as per-a-bars */}
+      <section style={{
+        background: 'linear-gradient(135deg, #004d98 0%, #0d1b2a 50%, #a50044 100%)',
+        padding: 'clamp(120px, 15vw, 160px) 24px clamp(50px, 8vw, 80px)',
+        textAlign: 'center',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {/* Ambient blobs */}
+        <div style={{position:'absolute', top:'10%', left:'15%', width:400, height:400, borderRadius:'50%', background:'radial-gradient(circle, rgba(165,0,68,0.18), transparent 70%)', pointerEvents:'none'}} />
+        <div style={{position:'absolute', bottom:'10%', right:'10%', width:350, height:350, borderRadius:'50%', background:'radial-gradient(circle, rgba(0,77,152,0.15), transparent 70%)', pointerEvents:'none'}} />
+
+        <div style={{ maxWidth: 720, margin: '0 auto', position:'relative', zIndex:1 }}>
+          <span style={{
+            display: 'inline-flex', alignItems:'center', gap:8,
+            background: 'linear-gradient(135deg, rgba(237,187,0,0.15), rgba(237,187,0,0.05))',
+            color: 'var(--gold)',
+            fontWeight: 600,
+            padding: '8px 20px',
+            borderRadius: 999,
+            fontSize: 13,
+            marginBottom: 28,
+            border: '1px solid rgba(237,187,0,0.15)',
+          }}>
+            Per a bars i restaurants
+          </span>
+          <h1 style={{
+            fontSize: 'clamp(36px, 6vw, 60px)',
+            fontWeight: 800,
+            color: '#fff',
+            marginBottom: 20,
+            lineHeight: 1.08,
+          }}>
+            Fes créixer el teu{' '}
+            <span style={{
+              background: 'linear-gradient(90deg, var(--gold), #ffd54f)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>negoci</span>
+          </h1>
+          <p style={{
+            fontSize: 18,
+            color: 'rgba(255,255,255,0.5)',
+            maxWidth: 520,
+            margin: '0 auto',
+            lineHeight: 1.7,
+          }}>
+            Crea el teu compte ara i comença a atraure centenars de culers cada dia de partit.
+          </p>
+        </div>
+      </section>
+
+      {/* Main content — gradient matching per-a-bars */}
+      <main style={{
+        background: 'linear-gradient(180deg, #a50044 0%, #5a0032 15%, #004d98 45%, #003570 70%, #0d1b2a 100%)',
+      }}>
+        <section id="formulari-registre" style={{padding: 'clamp(40px, 6vw, 80px) 16px clamp(60px, 8vw, 100px)'}}>
           <div style={{maxWidth: 600, margin: '0 auto'}}>
             <ContactForm onOpenLegal={(type) => setLegalOpen(type)} />
           </div>
         </section>
-
       </main>
 
       <Footer />

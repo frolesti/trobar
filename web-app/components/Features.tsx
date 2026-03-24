@@ -69,13 +69,12 @@ export default function Features() {
       {items.map((it, i) => (
         <div key={i} style={{
           padding: '36px 30px',
-          display: 'flex', gap: 20, alignItems: 'flex-start',
+          display: 'flex', gap: 20, alignItems: 'center',
           background: '#004d98', borderRadius: 20,
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-            background: 'rgba(255,255,255,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {it.icon}

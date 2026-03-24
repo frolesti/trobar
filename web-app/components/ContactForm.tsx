@@ -80,10 +80,10 @@ interface ContactFormProps {
 
 /* ── Estils constants ─────────────────────────────────────────────────── */
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: 14, marginTop: 6, borderRadius: 12,
+  width: '100%', padding: '12px 14px', marginTop: 6, borderRadius: 12,
   border: '2px solid var(--border)', fontSize: 16, fontFamily: 'inherit',
   transition: 'border-color 0.2s, box-shadow 0.2s',
-  outline: 'none',
+  outline: 'none', boxSizing: 'border-box',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -324,9 +324,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   ═══════════════════════════════════════════════════════════════════════ */
 
   const cardStyle: React.CSSProperties = {
-    background: 'var(--card)', padding: 36, borderRadius: 20,
+    background: 'var(--card)', padding: 'clamp(20px, 4vw, 36px)', borderRadius: 20,
     boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
-    maxWidth: 480, margin: '0 auto',
+    maxWidth: 480, margin: '0 auto', width: '100%',
     position: 'relative',
   }
 

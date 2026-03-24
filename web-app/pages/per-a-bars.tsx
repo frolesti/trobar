@@ -98,7 +98,6 @@ export default function PerABars() {
             marginBottom: 28,
             border: '1px solid rgba(237,187,0,0.15)',
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Per a bars i restaurants
           </span>
           <h1 style={{
@@ -158,7 +157,7 @@ export default function PerABars() {
       </section>
 
       <main style={{
-        background: 'linear-gradient(180deg, #5a0032 0%, #004d98 15%, #003570 30%, #4a0028 45%, #a50044 60%, #800038 78%, #0d1b2a 100%)',
+        background: 'linear-gradient(180deg, #a50044 0%, #5a0032 8%, #004d98 20%, #003570 35%, #4a0028 50%, #a50044 65%, #800038 80%, #0d1b2a 100%)',
       }}>
         {/* Beneficis */}
         <section style={{ padding: '100px 24px 80px' }}>
@@ -175,13 +174,12 @@ export default function PerABars() {
               {benefits.map((b, i) => (
                 <div key={i} style={{
                   padding: '36px 30px',
-                  display: 'flex', gap: 20, alignItems: 'flex-start',
+                  display: 'flex', gap: 20, alignItems: 'center',
                   background: '#a50044', borderRadius: 20,
                   boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-                    background: 'rgba(255,255,255,0.12)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     {b.icon}
