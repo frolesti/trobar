@@ -5,7 +5,7 @@ import { SKETCH_THEME } from '../../theme/sketchTheme';
 // Canviem a l'estàndard SKETCH_THEME.colors
 
 export default StyleSheet.create({
-    container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg, ...Platform.select({ web: { overflow: 'hidden' as const, height: '100vh', maxHeight: '100vh' } }) },
+    container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg, ...Platform.select({ web: { overflow: 'hidden' as const, height: '100vh', maxHeight: '100vh' } as any }) },
     mapContainer: { flex: 1, width: '100%', height: '100%', ...Platform.select({ web: { overflow: 'hidden' as const } }) },
     map: { width: '100%', height: '100%' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
@@ -23,23 +23,33 @@ export default StyleSheet.create({
     },
     desktopSidebarContent: { padding: 16, backgroundColor: SKETCH_THEME.colors.bg, zIndex: 2 },
     
-    scanButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 4 },
+    scanButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
     searchBar: {
-        flexDirection: 'row', backgroundColor: SKETCH_THEME.colors.bg, borderRadius: 10, padding: 10, alignItems: 'center',
-        borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
-        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } }) // Ombra dura
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 4,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(15,27,45,0.14)',
+        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.06)' } })
     },
-    searchIconPlaceholder: { width: 12, height: 12, backgroundColor: SKETCH_THEME.colors.text, marginRight: 10, borderRadius: 6 },
-    searchInput: { flex: 1, fontSize: 16, color: SKETCH_THEME.colors.text, fontFamily: 'Lora' },
+    searchIconPlaceholder: { width: 12, height: 12, backgroundColor: '#0F1B2D', marginRight: 10, borderRadius: 6 },
+    searchInput: { flex: 1, fontSize: 15, color: '#0F1B2D', fontFamily: 'Lora_400Regular' },
     avatarButton: {
-        width: 44, height: 44, borderRadius: 22, marginLeft: 10, backgroundColor: SKETCH_THEME.colors.bg,
-        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
-        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+        width: 44, height: 44, borderRadius: 22, marginLeft: 10,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: 'rgba(15,27,45,0.14)',
+        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.06)', cursor: 'pointer' } })
     },
     headerIconButton: {
-        width: 44, height: 44, borderRadius: 22, marginLeft: 10, backgroundColor: SKETCH_THEME.colors.bg,
-        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: SKETCH_THEME.colors.text,
-        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+        width: 44, height: 44, borderRadius: 22, marginLeft: 10,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: 'rgba(15,27,45,0.14)',
+        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.06)', cursor: 'pointer' } })
     },
 
     // Marcadors de pin 3D del mapa
@@ -73,12 +83,15 @@ export default StyleSheet.create({
         borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: SKETCH_THEME.colors.primary, marginTop: -2
     },
 
-    // Panell inferior
+    // Bottom sheet (paper)
     bottomSheet: {
-        position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: SKETCH_THEME.colors.bg,
-        borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 30,
-        borderWidth: 2, borderColor: '#eee', borderBottomWidth: 0,
-        ...Platform.select({ web: { boxShadow: '0 -4px 10px rgba(0,0,0,0.05)' } }),
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        backgroundColor: '#FAF6EF',
+        borderTopLeftRadius: 16, borderTopRightRadius: 16,
+        padding: 20, paddingBottom: 30,
+        borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
+        borderColor: 'rgba(15,27,45,0.12)',
+        ...Platform.select({ web: { boxShadow: '0 -6px 18px rgba(15,27,45,0.06)' } }),
         zIndex: 20, minHeight: 120, maxWidth: 600, marginHorizontal: 'auto', alignSelf: 'center', width: '100%'
     },
     bottomSheetGrabArea: {
@@ -87,12 +100,12 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: -8,
-        ...Platform.select({ web: { cursor: 'grab' } })
+        ...Platform.select({ web: { cursor: 'grab' } as any })
     },
     bottomSheetHandle: {
-        width: 54, height: 6, backgroundColor: '#ccc', borderRadius: 3, alignSelf: 'center',
+        width: 48, height: 4, backgroundColor: 'rgba(15,27,45,0.22)', borderRadius: 2, alignSelf: 'center',
     },
-    bottomSheetTitle: { fontSize: 18, fontWeight: '600', color: SKETCH_THEME.colors.text, fontFamily: 'Lora' },
+    bottomSheetTitle: { fontSize: 17, color: '#0F1B2D', fontFamily: 'Lora_700Bold' },
 
     // Botó flotant (Fab)
     fabGps: {
@@ -260,24 +273,24 @@ export default StyleSheet.create({
     teamText: { fontSize: 18, fontWeight: 'bold', width: '40%', textAlign: 'center', fontFamily: 'Lora', color: SKETCH_THEME.colors.text },
     vsText: { color: SKETCH_THEME.colors.primary, marginHorizontal: 10, fontFamily: 'Lora', fontWeight: 'bold' },
 
-    // Bàner del pròxim partit
+    // Bàner del pròxim partit (editorial card)
     nextMatchContainer: {
-        backgroundColor: SKETCH_THEME.colors.bg,
-        borderRadius: 12,
-        padding: 12,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 4,
+        padding: 14,
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: SKETCH_THEME.colors.text,
+        borderWidth: 1,
+        borderColor: 'rgba(15,27,45,0.14)',
         marginVertical: 10,
-        ...Platform.select({ web: { boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' } })
+        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.05)' } })
     },
     nextMatchTitle: {
         fontSize: 10,
-        color: SKETCH_THEME.colors.textMuted,
+        color: '#a50044',
         textTransform: 'uppercase',
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
+        fontFamily: 'Lora_700Bold',
+        letterSpacing: 2,
         marginBottom: 2
     },
     nextMatchTeams: {

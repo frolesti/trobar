@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
+import { EDITORIAL } from '../theme/editorialTheme';
+import { showAlert } from './AlertBanner';
 import { Bar, BarAmenity } from '../models/Bar';
 import { PlaceDetails, isOpenNow } from '../services/placesService';
 import { Match } from '../services/matchService';
@@ -30,16 +32,16 @@ interface BarProfileModalProps {
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Colors del tema premium (igual que la BarCard premium)
+// Paleta editorial unificada — paper crema + ink + grana
 const P = {
-    bg: SKETCH_THEME.colors.accent,                // Grana Barça
-    text: 'white',
-    textMuted: 'rgba(255,255,255,0.75)',
-    accent: '#edbb00',                              // Or Barça
-    separator: 'rgba(255,255,255,0.18)',
-    cardBg: 'rgba(255,255,255,0.12)',
-    badgeOpen: { bg: 'rgba(255,255,255,0.15)', text: '#A5D6A7', border: 'rgba(255,255,255,0.25)' },
-    badgeClosed: { bg: 'rgba(255,255,255,0.1)', text: '#EF9A9A', border: 'rgba(255,255,255,0.2)' },
+    bg: EDITORIAL.paper,
+    text: EDITORIAL.ink,
+    textMuted: EDITORIAL.inkMuted,
+    accent: EDITORIAL.grana,                       // CTAs i highlights
+    separator: EDITORIAL.hairline,
+    cardBg: EDITORIAL.card,
+    badgeOpen:   { bg: 'rgba(31,122,58,0.10)',  text: EDITORIAL.success, border: 'rgba(31,122,58,0.25)' },
+    badgeClosed: { bg: 'rgba(219,0,48,0.10)',   text: EDITORIAL.danger,  border: 'rgba(219,0,48,0.25)' },
 };
 
 // Mapa de xarxes socials a icones i URLs
@@ -48,7 +50,7 @@ const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; u
     facebook:  { icon: 'facebook',  family: 'feather', urlPrefix: 'https://facebook.com/' },
     twitter:   { icon: 'twitter',   family: 'feather', urlPrefix: 'https://x.com/' },
     whatsapp:  { icon: 'whatsapp',  family: 'mci',     urlPrefix: 'https://wa.me/' },
-    telegram:  { icon: 'telegram',  family: 'mci',     urlPrefix: 'https://t.me/' },
+    telegram:  { icon: 'send',      family: 'feather', urlPrefix: 'https://t.me/' },
     website:   { icon: 'globe',     family: 'feather', urlPrefix: '' },
 };
 
@@ -142,7 +144,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             await loadReviews();
         } catch (e) {
             console.error('Error submitting review:', e);
-            Alert.alert('Error', "No s'ha pogut publicar la ressenya.");
+            showAlert({ tone: 'error', message: "No s'ha pogut publicar la ressenya." });
         } finally {
             setSubmittingReview(false);
         }
@@ -169,7 +171,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             setEditingAmenities(false);
         } catch (e) {
             console.error('Error saving amenities:', e);
-            Alert.alert('Error', "No s'han pogut desar els serveis.");
+            showAlert({ tone: 'error', message: "No s'han pogut desar els serveis." });
         } finally {
             setSavingAmenities(false);
         }
@@ -247,7 +249,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             >
                 {/* Indicador d'arrossegament */}
                 <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 6 }}>
-                    <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                    <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: EDITORIAL.hairlineStrong }} />
                 </View>
 
                 {/* Botó de tancar */}
@@ -256,7 +258,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     style={{
                         position: 'absolute', top: 14, right: 16, zIndex: 10,
                         width: 36, height: 36, borderRadius: 18,
-                        backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center',
+                        backgroundColor: EDITORIAL.granaSoft, alignItems: 'center', justifyContent: 'center',
                     }}
                 >
                     <Feather name="x" size={20} color="white" />
@@ -284,7 +286,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                         width: Math.min(300, SCREEN_WIDTH * 0.7),
                                         height: 200,
                                         borderRadius: 16,
-                                        backgroundColor: 'rgba(255,255,255,0.1)',
+                                        backgroundColor: EDITORIAL.paperAlt,
                                     }}
                                     resizeMode="cover"
                                 />
@@ -306,8 +308,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12,
                                 flexDirection: 'row', alignItems: 'center',
                             }}>
-                                <Feather name="star" size={11} color={P.bg} style={{ marginRight: 4 }} />
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: P.bg, fontFamily: 'Lora', letterSpacing: 0.4 }}>
+                                <Feather name="star" size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFFFFF', fontFamily: 'Lora', letterSpacing: 0.4 }}>
                                     PREMIUM
                                 </Text>
                             </View>
@@ -319,11 +321,11 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     disabled={togglingSubscription}
                                     style={{
                                         flexDirection: 'row', alignItems: 'center',
-                                        backgroundColor: isSubscribed ? 'rgba(237,187,0,0.25)' : 'rgba(255,255,255,0.12)',
+                                        backgroundColor: isSubscribed ? EDITORIAL.granaSoft : EDITORIAL.paperAlt,
                                         paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
                                         marginLeft: 8,
                                         borderWidth: 1,
-                                        borderColor: isSubscribed ? P.accent : 'rgba(255,255,255,0.2)',
+                                        borderColor: isSubscribed ? P.accent : EDITORIAL.hairline,
                                     }}
                                     activeOpacity={0.7}
                                 >
@@ -349,7 +351,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         {reviewStats.totalReviews > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 {[1,2,3,4,5].map(s => (
-                                    <MaterialCommunityIcons key={s} name="star" size={16} color={s <= Math.round(reviewStats.averageRating) ? '#edbb00' : 'rgba(255,255,255,0.25)'} style={{ marginRight: 1 }} />
+                                    <MaterialCommunityIcons key={s} name="star" size={16} color={s <= Math.round(reviewStats.averageRating) ? EDITORIAL.grana : EDITORIAL.hairline} style={{ marginRight: 1 }} />
                                 ))}
                                 <Text style={{ fontWeight: 'bold', fontSize: 15, color: P.text, fontFamily: 'Lora', marginLeft: 6 }}>
                                     {reviewStats.averageRating.toFixed(1)}
@@ -456,10 +458,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                                 onPress={() => toggleAmenity(opt.key)}
                                                                 style={{
                                                                     flexDirection: 'row', alignItems: 'center',
-                                                                    backgroundColor: active ? 'rgba(237,187,0,0.25)' : 'rgba(255,255,255,0.08)',
+                                                                    backgroundColor: active ? EDITORIAL.granaSoft : EDITORIAL.paperAlt,
                                                                     borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
                                                                     borderWidth: 1,
-                                                                    borderColor: active ? P.accent : 'rgba(255,255,255,0.15)',
+                                                                    borderColor: active ? P.accent : EDITORIAL.hairline,
                                                                 }}
                                                                 activeOpacity={0.7}
                                                             >
@@ -488,7 +490,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                 }}
                                                 activeOpacity={0.7}
                                             >
-                                                <Text style={{ fontSize: 14, fontFamily: 'Lora', fontWeight: '700', color: '#1A1A2E' }}>
+                                                <Text style={{ fontSize: 14, fontFamily: 'Lora', fontWeight: '700', color: '#FFFFFF' }}>
                                                     {savingAmenities ? 'Desant…' : 'Desar'}
                                                 </Text>
                                             </TouchableOpacity>
@@ -516,9 +518,9 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                     key={key}
                                                     style={{
                                                         flexDirection: 'row', alignItems: 'center',
-                                                        backgroundColor: 'rgba(255,255,255,0.08)',
-                                                        borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
-                                                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                                        backgroundColor: EDITORIAL.paperAlt,
+                                                        borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+                                                        borderWidth: 1, borderColor: EDITORIAL.hairline,
                                                     }}
                                                 >
                                                     <IconComp name={opt.icon as any} size={14} color={P.accent} />
@@ -537,7 +539,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                         onPress={() => { setSelectedAmenities(new Set()); setEditingAmenities(true); }}
                                         style={{
                                             marginTop: 10, flexDirection: 'row', alignItems: 'center',
-                                            backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 12,
+                                            backgroundColor: EDITORIAL.paperAlt, borderRadius: 10, padding: 12,
                                         }}
                                         activeOpacity={0.7}
                                     >
@@ -592,7 +594,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             </Text>
                                             <View style={{
                                                 flexDirection: 'row', alignItems: 'center', marginTop: 8,
-                                                backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: 10,
+                                                backgroundColor: EDITORIAL.paperAlt, borderRadius: 10, padding: 10,
                                             }}>
                                                 <Feather name="lock" size={14} color={P.accent} style={{ marginRight: 8 }} />
                                                 <Text style={{ fontSize: 13, color: P.accent, fontFamily: 'Lora', flex: 1 }}>
@@ -620,8 +622,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     {/* ── TEXT PROMOCIONAL ── */}
                     {bar?.promotionalText ? (
                         <View style={{
-                            marginTop: 20, backgroundColor: 'rgba(255,215,0,0.15)',
-                            borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(255,215,0,0.3)',
+                            marginTop: 20, backgroundColor: EDITORIAL.granaSoft,
+                            borderRadius: 14, padding: 16, borderWidth: 1, borderColor: EDITORIAL.grana,
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                                 <Feather name="zap" size={16} color={P.accent} style={{ marginRight: 6 }} />
@@ -700,7 +702,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                 width: 48, height: 48, borderRadius: 24,
                                                 backgroundColor: P.cardBg,
                                                 alignItems: 'center', justifyContent: 'center',
-                                                borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                                borderWidth: 1, borderColor: EDITORIAL.hairline,
                                             }}
                                             activeOpacity={0.7}
                                         >
@@ -736,8 +738,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                         borderRadius: 14,
                                     }}
                                 >
-                                    <Feather name="edit-3" size={13} color={P.bg} style={{ marginRight: 4 }} />
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: P.bg, fontFamily: 'Lora' }}>Escriure</Text>
+                                    <Feather name="edit-3" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF', fontFamily: 'Lora' }}>Escriure</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -745,7 +747,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         {/* Formulari de nova ressenya */}
                         {showReviewForm && (
                             <View style={{
-                                backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14,
+                                backgroundColor: EDITORIAL.paperAlt, borderRadius: 14,
                                 padding: 16, marginBottom: 16,
                             }}>
                                 <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: 'Lora', marginBottom: 10 }}>
@@ -758,7 +760,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             <MaterialCommunityIcons
                                                 name="star"
                                                 size={28}
-                                                color={s <= newRating ? '#edbb00' : 'rgba(255,255,255,0.25)'}
+                                                color={s <= newRating ? EDITORIAL.grana : EDITORIAL.hairline}
                                             />
                                         </TouchableOpacity>
                                     ))}
@@ -767,17 +769,17 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 <Text style={{ fontSize: 13, color: P.textMuted, fontFamily: 'Lora', marginBottom: 8 }}>Comentari (opcional)</Text>
                                 <TextInput
                                     placeholder="Què t'ha semblat aquest bar?"
-                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    placeholderTextColor={EDITORIAL.inkMuted}
                                     value={newComment}
                                     onChangeText={setNewComment}
                                     multiline
                                     numberOfLines={3}
                                     style={{
-                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        backgroundColor: EDITORIAL.card,
                                         borderRadius: 10, padding: 12,
                                         color: P.text, fontFamily: 'Lora', fontSize: 14,
                                         minHeight: 70, textAlignVertical: 'top',
-                                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                        borderWidth: 1, borderColor: EDITORIAL.hairline,
                                     }}
                                 />
                                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 10 }}>
@@ -796,7 +798,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             opacity: (submittingReview || newRating === 0) ? 0.5 : 1,
                                         }}
                                     >
-                                        <Text style={{ color: P.bg, fontWeight: 'bold', fontFamily: 'Lora', fontSize: 14 }}>
+                                        <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontFamily: 'Lora', fontSize: 14 }}>
                                             {submittingReview ? 'Enviant...' : 'Publicar'}
                                         </Text>
                                     </TouchableOpacity>
@@ -815,10 +817,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             {review.userAvatar ? (
                                                 <Image
                                                     source={{ uri: review.userAvatar }}
-                                                    style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' }}
+                                                    style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, borderWidth: 1.5, borderColor: EDITORIAL.hairline }}
                                                 />
                                             ) : (
-                                                <View style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                                <View style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10, backgroundColor: EDITORIAL.granaSoft, alignItems: 'center', justifyContent: 'center' }}>
                                                     <Feather name="user" size={16} color={P.textMuted} />
                                                 </View>
                                             )}
@@ -828,7 +830,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                 </Text>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                                     {[1, 2, 3, 4, 5].map(s => (
-                                                        <MaterialCommunityIcons key={s} name="star" size={12} color={s <= review.rating ? '#edbb00' : 'rgba(255,255,255,0.2)'} style={{ marginRight: 1 }} />
+                                                        <MaterialCommunityIcons key={s} name="star" size={12} color={s <= review.rating ? EDITORIAL.grana : EDITORIAL.hairline} style={{ marginRight: 1 }} />
                                                     ))}
                                                     <Text style={{ fontSize: 11, color: P.textMuted, fontFamily: 'Lora', marginLeft: 6 }}>
                                                         {review.createdAt.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -866,7 +868,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     {/* ── BOTÓ DE NAVEGACIÓ ── */}
                     <TouchableOpacity
                         style={{
-                            backgroundColor: 'white', borderRadius: 14,
+                            backgroundColor: P.accent, borderRadius: 14,
                             paddingVertical: 16, paddingHorizontal: 20, marginTop: 30,
                             alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
                             ...sketchShadow(),
@@ -874,7 +876,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         onPress={onNavigate}
                     >
                         <Feather name="navigation" size={20} color={P.bg} style={{ marginRight: 10 }} />
-                        <Text style={{ color: P.bg, fontWeight: 'bold', fontSize: 17, fontFamily: 'Lora' }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 17, fontFamily: 'Lora' }}>
                             Com arribar-hi
                         </Text>
                     </TouchableOpacity>
@@ -882,22 +884,6 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             </Animated.View>
         </View>
     );
-
-    // Usar Modal natiu per bloquejar completament la interacció amb el mapa
-    if (Platform.OS === 'web') {
-        // Web: Portal absolut (Modal no funciona bé a web amb MapLibre)
-        return (
-            <View
-                pointerEvents={visible ? 'auto' : 'none'}
-                style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    zIndex: 10000,
-                }}
-            >
-                {visible && modalContent}
-            </View>
-        );
-    }
 
     return (
         <Modal

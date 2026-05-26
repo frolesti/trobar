@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity, ScrollView, Switch, Modal,
-    Animated, Dimensions, Platform, Alert,
+    Animated, Dimensions, Alert,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { EDITORIAL } from '../../theme/editorialTheme';
+import { showAlert } from '../../components/AlertBanner';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -26,7 +28,18 @@ interface SettingsModalProps {
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const C = SKETCH_THEME.colors;
+// Mapeig editorial: icones ink, switch tracks grana, borders hairline, textMuted inkMuted.
+const C = {
+    ...SKETCH_THEME.colors,
+    primary: EDITORIAL.ink,        // icones de fila → ink
+    primarySoft: '#FFFFFF',
+    border: EDITORIAL.hairlineStrong,
+    textMuted: EDITORIAL.inkMuted,
+    accent: EDITORIAL.grana,
+    card: EDITORIAL.paper,
+};
+// Switch track 'on' → grana (override puntual)
+const SWITCH_ON = EDITORIAL.grana;
 
 // ── Opcions UI ─────────────────────────────────────────
 
@@ -140,25 +153,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                 await deleteAccount();
             } catch (error) {
                 console.error(error);
-                Alert.alert('Error', "No s'ha pogut eliminar el compte. Torna-ho a provar.");
+                showAlert({ tone: 'error', message: "No s'ha pogut eliminar el compte. Torna-ho a provar." });
                 setIsDeleting(false);
             }
         };
 
-        if (Platform.OS === 'web') {
-            if (window.confirm("Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.")) {
-                confirmDelete();
-            }
-        } else {
-            Alert.alert(
-                "Eliminar Compte",
-                "Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.",
-                [
-                    { text: "Cancel·lar", style: "cancel" },
-                    { text: "Eliminar", style: "destructive", onPress: confirmDelete }
-                ]
-            );
-        }
+        Alert.alert(
+            "Eliminar Compte",
+            "Estàs segur que vols eliminar el teu compte? Aquesta acció és irreversible.",
+            [
+                { text: "Cancel·lar", style: "cancel" },
+                { text: "Eliminar", style: "destructive", onPress: confirmDelete }
+            ]
+        );
     };
 
     if (!visible && !loaded) return null;
@@ -202,15 +209,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                 style={{
                     position: 'absolute', left: 0, right: 0, bottom: 0,
                     height: SCREEN_HEIGHT * 0.85,
-                    backgroundColor: C.card,
-                    borderTopLeftRadius: 24,
-                    borderTopRightRadius: 24,
+                    backgroundColor: EDITORIAL.paper,
+                    borderTopLeftRadius: 18,
+                    borderTopRightRadius: 18,
                     transform: [{ translateY }],
-                    ...Platform.select({
-                        web: { boxShadow: '0px -6px 40px rgba(0,0,0,0.25)' } as any,
-                        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.25, shadowRadius: 20 },
-                        android: { elevation: 24 },
-                    }),
+                    shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.2, shadowRadius: 18,
+                    elevation: 20,
                 }}
             >
                 {/* Indicador d'arrossegament */}
@@ -220,7 +224,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Configuració</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Feather name="x" size={18} color={C.primary} />
+                        <Feather name="x" size={16} color={EDITORIAL.ink} />
                     </TouchableOpacity>
                 </View>
 
@@ -266,8 +270,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                             <Switch
                                 value={prefs.notifications.liveResults}
                                 onValueChange={v => updateNotif('liveResults', v)}
-                                trackColor={{ false: C.border, true: C.primary }}
+                                trackColor={{ false: C.border, true: SWITCH_ON }}
+                                activeTrackColor={SWITCH_ON}
                                 thumbColor="white"
+                                activeThumbColor="white"
+                                ios_backgroundColor={C.border}
                             />
                         </View>
 
@@ -285,8 +292,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                             <Switch
                                 value={prefs.notifications.newBarNearby}
                                 onValueChange={v => updateNotif('newBarNearby', v)}
-                                trackColor={{ false: C.border, true: C.primary }}
+                                trackColor={{ false: C.border, true: SWITCH_ON }}
+                                activeTrackColor={SWITCH_ON}
                                 thumbColor="white"
+                                activeThumbColor="white"
+                                ios_backgroundColor={C.border}
                             />
                         </View>
 
@@ -304,8 +314,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
                             <Switch
                                 value={prefs.notifications.barPromotions}
                                 onValueChange={v => updateNotif('barPromotions', v)}
-                                trackColor={{ false: C.border, true: C.primary }}
+                                trackColor={{ false: C.border, true: SWITCH_ON }}
+                                activeTrackColor={SWITCH_ON}
                                 thumbColor="white"
+                                activeThumbColor="white"
+                                ios_backgroundColor={C.border}
                             />
                         </View>
                     </View>
@@ -396,16 +409,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onClose }) => {
             </Animated.View>
         </View>
     );
-
-    // ── Render diferent per web vs natiu ──
-    if (Platform.OS === 'web') {
-        if (!visible) return null;
-        return (
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}>
-                {modalContent}
-            </View>
-        );
-    }
 
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>

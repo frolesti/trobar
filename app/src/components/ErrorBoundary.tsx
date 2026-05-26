@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo } from 'react';
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { SKETCH_THEME, sketchShadow, ensureLoraOnWeb } from '../theme/sketchTheme';
+import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 
 interface Props {
     children: React.ReactNode;
@@ -35,17 +35,9 @@ class ErrorBoundary extends Component<Props, State> {
         console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
     }
 
-    componentDidMount() {
-        ensureLoraOnWeb();
-    }
-
     handleReload = () => {
-        if (Platform.OS === 'web') {
-            window.location.href = '/';
-        } else {
-            // A natiu, reiniciar l'estat d'error per re-renderitzar l'arbre de l'app
-            this.setState({ hasError: false, error: null });
-        }
+        // Reiniciar l'estat d'error per re-renderitzar l'arbre de l'app
+        this.setState({ hasError: false, error: null });
     };
 
     render() {
@@ -119,7 +111,7 @@ class ErrorBoundary extends Component<Props, State> {
                     }}>
                         <Text style={{
                             fontSize: 11, color: SKETCH_THEME.colors.textMuted,
-                            fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+                            fontFamily: 'Courier',
                         }}>
                             {this.state.error.toString()}
                         </Text>

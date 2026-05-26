@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { ensureLoraOnWeb } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
 import styles from './StartupScreen.styles';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -14,12 +13,7 @@ const StartupScreen = ({ navigation }: Props) => {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    ensureLoraOnWeb();
-  }, []);
-
-  // Esperar que auth estigui llest i llavors redirigir
-  useEffect(() => {
-    if (isLoading) return; // Encara carregant auth
+    if (isLoading) return;
     const timer = setTimeout(() => {
       if (user?.role === 'bar_owner') {
         navigation.replace('BarDashboard');
@@ -33,13 +27,20 @@ const StartupScreen = ({ navigation }: Props) => {
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
-        {/* Placeholder per a logo futur */}
-        <Text style={styles.logoText}>troBar</Text>
-        <ActivityIndicator size="small" color="#edbb00" style={{ marginTop: 24 }} />
+        <Image
+          source={require('../../../assets/img/logo-nav.jpg')}
+          style={styles.logo}
+          resizeMode="cover"
+        />
+        <Text style={styles.eyebrow}>Benvingut</Text>
+        <Text style={styles.wordmark}>
+          tro<Text style={styles.wordmarkItalic}>Bar</Text>
+        </Text>
       </View>
-      <Text style={styles.copyright}>© frolesti</Text>
+      <Text style={styles.copyright}>© FROLESTI</Text>
     </View>
   );
 };
 
 export default StartupScreen;
+

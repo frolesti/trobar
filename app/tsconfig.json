@@ -5,33 +5,13 @@
     "jsx": "react-native",
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "module": "preserve",
     "moduleResolution": "bundler",
     "lib": [
       "dom",
       "esnext"
     ],
     "resolveJsonModule": true,
-    "baseUrl": "./",
-    "paths": {
-      "src/*": [
-        "src/*"
-      ],
-      "src/screens/*": [
-        "src/screens/*"
-      ],
-      "src/navigation/*": [
-        "src/navigation/*"
-      ],
-      "src/services/*": [
-        "src/services/*"
-      ],
-      "src/theme/*": [
-        "src/theme/*"
-      ],
-      "src/context/*": [
-        "src/context/*"
-      ]
-    },
     "typeRoots": [
       "./types",
       "../node_modules/@types",
@@ -45,5 +25,5 @@
     "web-build",
     "dist"
   ],
-  "extends": "expo/tsconfig.base"
+  "extends": "../node_modules/expo/tsconfig.base.json"
 }

@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { httpsCallable } from 'firebase/functions';
+import { Linking } from 'react-native';
 import { functions } from '../config/firebase';
 
 export type BillingCycle = 'monthly' | 'quarterly' | 'annual';
@@ -42,7 +43,7 @@ export async function createCheckoutSession(billingCycle: BillingCycle): Promise
         CheckoutResult
     >(functions, 'createCheckoutSession');
 
-    const currentUrl = typeof window !== 'undefined' ? window.location.origin : 'https://trobar-app.cat';
+    const currentUrl = 'https://trobar-app.cat';
 
     const result = await fn({
         billingCycle,
@@ -91,7 +92,7 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
  */
 export async function openCheckout(billingCycle: BillingCycle): Promise<void> {
     const { url } = await createCheckoutSession(billingCycle);
-    if (url && typeof window !== 'undefined') {
-        window.open(url, '_blank');
+    if (url) {
+        await Linking.openURL(url);
     }
 }

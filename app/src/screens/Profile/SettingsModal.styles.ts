@@ -1,15 +1,17 @@
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
+import { EDITORIAL } from '../../theme/editorialTheme';
 
-const S = SKETCH_THEME;
-
+/**
+ * Settings modal — paper editorial: paper bg, hairline borders, Lora typography,
+ * grana eyebrow section titles, ink body, no blue.
+ */
 export default StyleSheet.create({
     /* ── Indicador d'arrossegament ── */
     dragIndicator: {
-        width: 40,
-        height: 4,
+        width: 36,
+        height: 3,
         borderRadius: 2,
-        backgroundColor: S.colors.border,
+        backgroundColor: EDITORIAL.hairlineStrong,
         alignSelf: 'center',
         marginTop: 10,
         marginBottom: 6,
@@ -20,38 +22,42 @@ export default StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingBottom: 14,
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        paddingBottom: 18,
         borderBottomWidth: 1,
-        borderBottomColor: S.colors.border,
+        borderBottomColor: EDITORIAL.hairline,
     },
     headerTitle: {
-        ...S.typography.h3,
-        fontSize: 20,
+        fontFamily: 'Lora_700Bold',
+        fontSize: 22,
+        color: EDITORIAL.ink,
+        letterSpacing: -0.3,
     },
     closeButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: S.colors.primarySoft,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: EDITORIAL.hairline,
         alignItems: 'center',
         justifyContent: 'center',
     },
 
     /* ── Secció genèrica ── */
     section: {
-        paddingHorizontal: 20,
-        paddingTop: 20,
+        paddingHorizontal: 24,
+        paddingTop: 22,
         paddingBottom: 8,
     },
     sectionTitle: {
-        ...S.typography.caption,
-        color: S.colors.accent,
+        fontFamily: 'Lora_700Bold',
+        color: EDITORIAL.grana,
         textTransform: 'uppercase',
-        letterSpacing: 1.2,
+        letterSpacing: 2.4,
         fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 12,
+        marginBottom: 14,
     },
 
     /* ── Fila de toggle / selector ── */
@@ -61,9 +67,7 @@ export default StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 12,
     },
-    rowLast: {
-        // Reservat per si es necessita diferenciar la última fila
-    },
+    rowLast: {},
     rowLeft: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -71,60 +75,63 @@ export default StyleSheet.create({
         marginRight: 12,
     },
     rowIcon: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        backgroundColor: S.colors.primarySoft,
+        width: 36,
+        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        marginRight: 14,
     },
     rowTextGroup: {
         flex: 1,
     },
     rowTitle: {
-        ...S.typography.bodySmall,
-        fontWeight: '600',
+        fontFamily: 'Lora_700Bold',
+        fontSize: 14,
+        color: EDITORIAL.ink,
     },
     rowSubtitle: {
-        ...S.typography.caption,
-        marginTop: 1,
+        fontFamily: 'Lora_400Regular',
+        fontSize: 12,
+        color: EDITORIAL.inkMuted,
+        marginTop: 2,
     },
 
     /* ── Selector de pastilles (pill) ── */
     pillRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 6,
+        marginTop: 4,
         marginBottom: 4,
         flexWrap: 'wrap',
     },
     pill: {
         paddingHorizontal: 14,
         paddingVertical: 7,
-        borderRadius: S.radius.pill,
+        borderRadius: 4,
         borderWidth: 1,
-        borderColor: S.colors.border,
-        backgroundColor: S.colors.card,
+        borderColor: EDITORIAL.hairline,
+        backgroundColor: '#FFFFFF',
     },
     pillActive: {
-        backgroundColor: S.colors.primary,
-        borderColor: S.colors.primary,
+        backgroundColor: EDITORIAL.grana,
+        borderColor: EDITORIAL.grana,
     },
     pillText: {
-        ...S.typography.caption,
-        fontWeight: '600',
-        color: S.colors.text,
+        fontFamily: 'Lora_400Regular',
+        fontSize: 12,
+        color: EDITORIAL.ink,
+        letterSpacing: 0.4,
     },
     pillTextActive: {
-        color: 'white',
+        color: '#FFFFFF',
+        fontFamily: 'Lora_700Bold',
     },
 
     /* ── Separador ── */
     separator: {
         height: 1,
-        backgroundColor: S.colors.border,
-        marginHorizontal: 20,
+        backgroundColor: EDITORIAL.hairline,
+        marginHorizontal: 24,
     },
 
     /* ── Enllaços legals ── */
@@ -133,19 +140,22 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: 14,
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
     },
     legalText: {
-        ...S.typography.body,
-        fontWeight: '500',
+        fontFamily: 'Lora_400Regular',
+        fontSize: 14,
+        color: EDITORIAL.ink,
     },
 
     /* ── Versió ── */
     versionText: {
-        ...S.typography.caption,
+        fontFamily: 'Lora_400Regular',
         textAlign: 'center',
+        fontSize: 11,
+        color: EDITORIAL.inkMuted,
+        letterSpacing: 0.5,
         marginTop: 20,
         marginBottom: 30,
-        opacity: 0.5,
     },
 });

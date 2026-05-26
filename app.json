@@ -7,9 +7,9 @@
     "icon": "./app/assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./app/assets/splash.png",
+      "image": "./app/assets/img/logo-nav.jpg",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#a50044"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -41,7 +41,8 @@
       }
     },
     "web": {
-      "favicon": "./app/assets/favicon.png"
+      "favicon": "./app/assets/favicon.jpg",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-location",
@@ -57,7 +58,6 @@
           "androidGoogleMapsApiKey": "AIzaSyCJDfdnUcgcc_AUyXPnEdHStmuNsUAZtb0"
         }
       ],
-      "expo-web-browser",
       "@react-native-google-signin/google-signin"
     ],
     "scheme": "trobar"

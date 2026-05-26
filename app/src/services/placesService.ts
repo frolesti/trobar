@@ -120,6 +120,9 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
             },
         });
 
+        // Place ID antic / movent / no v\u00e0lid → no escupim error a la consola
+        if (response.status === 404) return null;
+
         const place = await response.json();
         if (!place.id) return null;
 
@@ -192,7 +195,9 @@ export async function fetchBarPlaceDetails(
 ): Promise<PlaceDetails | null> {
     // Si ja tenim el placeId, directament detalls (1 crida en comptes de 2)
     if (existingPlaceId) {
-        return getPlaceDetails(existingPlaceId);
+        const cached = await getPlaceDetails(existingPlaceId);
+        if (cached) return cached;
+        // placeId obsolet (404 silenci\u00f3s) → continuem amb la cerca per nom
     }
     // Si no, cerca + detalls (2 crides, però guardem el placeId per la pròxima)
     const placeId = await searchPlace(barName, lat, lng);

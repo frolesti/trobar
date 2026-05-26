@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Alert, ScrollView, Platform, useWindowDimensions, Animated, Easing, Text } from 'react-native';
+import { View, TouchableOpacity, Alert, ScrollView, useWindowDimensions, Animated, Easing, Text } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
-import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
+import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 import BarCard from '../../components/BarCard';
+import { showAlert } from '../../components/AlertBanner';
 import { Feather } from '@expo/vector-icons';
 
 type Props = {
@@ -29,7 +30,6 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
     const bubbleOpacity = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        ensureLoraOnWeb();
         fetchDetails();
 
         // Disparar animació al muntar
@@ -101,20 +101,14 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
         setIsSubmitting(true);
         try {
             await addUserReportedBar(osmBar, user.id);
-            if (Platform.OS === 'web') {
-                // Mostrar estat d'èxit dins la targeta
-                setSubmitSuccess(true);
-                setTimeout(() => navigation.navigate('Map', { refresh: Date.now() }), 2500);
-            } else {
-                Alert.alert(
-                    "Bar registrat correctament",
-                    "Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.",
-                    [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map', { refresh: Date.now() }) }]
-                );
-            }
+            Alert.alert(
+                "Bar registrat correctament",
+                "Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.",
+                [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map', { refresh: Date.now() }) }]
+            );
         } catch (error) {
             console.error(error);
-            Alert.alert("Error", "No s'ha pogut guardar. Torna-ho a provar.");
+            showAlert({ tone: 'error', message: "No s'ha pogut guardar. Torna-ho a provar." });
         } finally {
             setIsSubmitting(false);
         }
@@ -145,11 +139,8 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                     backgroundColor: 'white',
                     borderRadius: 16,
                     padding: 14,
-                    ...Platform.select({
-                        web: { boxShadow: '0px 4px 20px rgba(0,0,0,0.15)' },
-                        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10 },
-                        android: { elevation: 12 }
-                    })
+                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10,
+                    elevation: 12,
                 }}>
                     <ScrollView
                         showsVerticalScrollIndicator={false}

@@ -5,16 +5,17 @@ import {
     createUserWithEmailAndPassword, 
     signOut,
     signInWithCredential, 
+    signInWithPopup,
     User as FirebaseUser,
     GoogleAuthProvider,
     OAuthProvider,
-    signInWithPopup,
     updateProfile,
     sendEmailVerification
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { getUserProfile, UserProfile, deleteUserProfile } from '../services/userService';
 import { Platform, Alert } from 'react-native';
+import { showAlert } from '../components/AlertBanner';
 import { executeRequest, executeOrThrow } from '../api/core';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
@@ -143,13 +144,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true);
       try {
         await executeOrThrow(async () => {
+            // Web: utilitzem el popup de Firebase Auth
             if (Platform.OS === 'web') {
                 const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
                 await signInWithPopup(auth, provider);
-            } else {
-                // Flux natiu Android/iOS via Google Play Services
-                // 1. Comprovar si Google Play Services està disponible
-                await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+                return;
+            }
+
+            // Flux natiu Android/iOS via Google Play Services
+            // 1. Comprovar si Google Play Services està disponible
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
                 // 2. Iniciar sessió amb Google (obre diàleg natiu)
                 const signInResult = await GoogleSignin.signIn();
@@ -163,7 +168,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // 4. Crear credencial de Firebase i autenticar
                 const credential = GoogleAuthProvider.credential(idToken);
                 await signInWithCredential(auth, credential);
-            }
         }, 'loginGoogle');
       } finally {
           setIsLoading(false);
@@ -175,11 +179,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await executeOrThrow(async () => {
         if (Platform.OS === 'web') {
+            // Web: popup de Firebase amb proveïdor Apple
             const provider = new OAuthProvider('apple.com');
             provider.addScope('email');
             provider.addScope('name');
             await signInWithPopup(auth, provider);
-        } else if (Platform.OS === 'ios') {
+            return;
+        }
+        if (Platform.OS === 'ios') {
             const isAvailable = await AppleAuthentication.isAvailableAsync();
             if (!isAvailable) {
               throw new Error("Apple Authentication is not available on this device.");
@@ -265,11 +272,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
         console.error("Error deleting account:", error);
         if (error.code === 'auth/requires-recent-login') {
-            Alert.alert(
-                "Seguretat",
-                "Per eliminar el compte, has d'haver iniciat sessió recentment. Si us plau, tanca la sessió i torna a entrar.",
-                [{ text: "D'acord" }]
-            );
+            showAlert({
+                tone: 'error',
+                eyebrow: 'Seguretat',
+                message: "Per eliminar el compte, has d'haver iniciat sessió recentment. Tanca la sessió i torna a entrar.",
+                duration: 7000,
+            });
         } else {
             throw error;
         }

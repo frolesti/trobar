@@ -130,16 +130,16 @@ export default StyleSheet.create({
         gap: 10,
         ...sketchShadow(),
     },
-    toastSuccess: { backgroundColor: '#004d98' },
+    toastSuccess: { backgroundColor: '#1f7a3a' },
     toastError: {
         backgroundColor: '#3a0018',
         borderLeftWidth: 3,
-        borderLeftColor: '#edbb00',
+        borderLeftColor: '#FFFFFF',
         ...Platform.select({
             web: {
-                background: 'linear-gradient(135deg, #3a0018 0%, #1a000d 100%)' as unknown as string,
-                boxShadow: '0px 6px 20px rgba(0,0,0,0.6), inset 0px 1px 0px rgba(237,187,0,0.1)' as unknown as string,
-            },
+                backgroundImage: 'linear-gradient(135deg, #3a0018 0%, #1a000d 100%)',
+                boxShadow: '0px 6px 20px rgba(0,0,0,0.6), inset 0px 1px 0px rgba(237,187,0,0.1)',
+            } as any,
         }),
     },
     toastText:    { color: 'white', fontSize: 14, flex: 1 },
@@ -202,7 +202,7 @@ export default StyleSheet.create({
     },
     sheetFooter: {
         paddingHorizontal: 20,
-        paddingBottom: Platform.OS === 'web' ? 20 : 30,
+        paddingBottom: 30,
         paddingTop: 12,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: 'rgba(255,255,255,0.08)',
@@ -317,8 +317,8 @@ export default StyleSheet.create({
         marginRight: 12,
     },
     matchCheckActive: {
-        backgroundColor: '#edbb00',
-        borderColor: '#edbb00',
+        backgroundColor: '#FFFFFF',
+        borderColor: '#FFFFFF',
     },
     matchTeams: {
         flex: 1,
@@ -351,7 +351,7 @@ export default StyleSheet.create({
         paddingVertical: 4,
     },
     selectAllText: {
-        color: '#edbb00',
+        color: '#FFFFFF',
         fontSize: 13,
         fontWeight: '600',
     },
@@ -481,7 +481,7 @@ export default StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#ffd700',
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
@@ -495,7 +495,7 @@ export default StyleSheet.create({
         borderTopWidth: 8,
         borderLeftColor: 'transparent',
         borderRightColor: 'transparent',
-        borderTopColor: '#ffd700',
+        borderTopColor: '#FFFFFF',
         marginTop: -1,
     },
 
@@ -516,7 +516,7 @@ export default StyleSheet.create({
         borderColor: 'rgba(255,215,0,0.15)',
     },
     planName: {
-        color: '#ffd700',
+        color: '#FFFFFF',
         fontSize: 18,
         fontWeight: '700',
     },
@@ -544,7 +544,7 @@ export default StyleSheet.create({
         paddingVertical: 2,
     },
     planCurrentBadgeText: {
-        color: '#ffd700',
+        color: '#FFFFFF',
         fontSize: 11,
         fontWeight: '600',
     },

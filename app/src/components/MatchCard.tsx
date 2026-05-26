@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, Platform, ImageSourcePropType } from 'react-native';
+import { View, Text, TouchableOpacity, Image, ImageSourcePropType, Platform } from 'react-native';
 import { Match } from '../services/matchService';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -68,13 +68,13 @@ function displayCompName(name: string): string {
     return name;
 }
 
-// Paleta Barça per a les targetes de partits
+// Paleta Barça per a les targetes de partits (sense blau)
 const BARCA = {
-    blau: '#004D98',
+    blau: '#0F1B2D',
     grana: '#A50044',
-    gold: '#EDBB00',
+    gold: '#FFFFFF',
     granaLight: 'rgba(165, 0, 68, 0.08)',
-    blauLight: 'rgba(0, 77, 152, 0.06)',
+    blauLight: 'rgba(15, 27, 45, 0.06)',
     granaGradientStart: '#A50044',
     granaGradientEnd: '#7A0033',
 };
@@ -138,8 +138,11 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
             if (hasScore) {
                 return (
                     <View style={{ alignItems: 'center' }}>
-                        <Text style={{ fontSize: 22, fontWeight: 'bold', fontFamily: 'Lora', color: BARCA.gold }}>
+                        <Text style={{ fontSize: 22, fontFamily: 'Lora_700Bold', color: BARCA.grana }}>
                             {match.homeScore} - {match.awayScore}
+                        </Text>
+                        <Text style={{ fontSize: 9, fontFamily: 'Lora_700Bold', color: 'rgba(15,27,45,0.5)', letterSpacing: 1.2, marginTop: 2, textTransform: 'uppercase' }}>
+                            Final
                         </Text>
                     </View>
                 );
@@ -151,12 +154,12 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
                     {compLogoSource && (
                         <Image 
                             source={compLogoSource} 
-                            style={{ width: logoSize, height: logoSize, marginBottom: 4 }} 
+                            style={{ width: logoSize, height: logoSize, marginBottom: 4, tintColor: '#0F1B2D' }} 
                             resizeMode="contain"
                         />
                     )}
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 0.3, fontFamily: 'Lora' }}>
-                        FINAL
+                    <Text style={{ fontSize: 9, fontFamily: 'Lora_700Bold', color: 'rgba(15,27,45,0.5)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                        Final
                     </Text>
                 </View>
             );
@@ -169,7 +172,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                     <Image 
                         source={compLogoSource} 
-                        style={{ width: logoSize, height: logoSize }} 
+                        style={{ width: logoSize, height: logoSize, tintColor: '#0F1B2D' }} 
                         resizeMode="contain"
                     />
                  </View>
@@ -180,34 +183,31 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
     };
 
     const cardStyle = compact ? {
-        backgroundColor: BARCA.grana,
-        borderRadius: 12,
-        paddingVertical: 12,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 4,
+        paddingVertical: 14,
         paddingHorizontal: 14,
-        marginHorizontal: Platform.OS === 'web' ? 0 : 4,
+        marginHorizontal: 4,
         marginTop: 8,
-        borderWidth: isFilter ? 2 : 1.5,
-        borderColor: isFilter ? BARCA.gold : 'rgba(255,255,255,0.15)',
-        ...Platform.select({
-            web: { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
-            default: sketchShadow()
-        })
+        borderWidth: 1,
+        borderColor: isFilter ? BARCA.grana : 'rgba(15,27,45,0.14)',
+        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.05)' }, default: sketchShadow() })
     } : {
-        backgroundColor: BARCA.grana,
-        borderRadius: 14,
-        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 4,
+        padding: 18,
         marginBottom: 14,
-        borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(15,27,45,0.14)',
         ...Platform.select({
-            web: { boxShadow: '0 3px 10px rgba(0,0,0,0.18)' },
+            web: { boxShadow: '0 2px 12px rgba(15,27,45,0.06)' },
             default: sketchShadow()
         })
     };
 
-    // Paleta Barça: text blanc sobre fons grana, or per accents
-    const textColor = '#FFFFFF';
-    const subTextColor = 'rgba(255,255,255,0.75)';
+    // Paleta editorial: text ink sobre paper, grana per eyebrow
+    const textColor = '#0F1B2D';
+    const subTextColor = 'rgba(15,27,45,0.55)';
 
     if (compact) {
         return (
@@ -225,20 +225,21 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
                         style={{
                             position: 'absolute', top: 6, right: 6, zIndex: 10,
                             width: 22, height: 22, borderRadius: 11,
-                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            backgroundColor: 'rgba(15,27,45,0.08)',
                             alignItems: 'center', justifyContent: 'center',
                         }}
                     >
-                        <Feather name="x" size={13} color="white" />
+                        <Feather name="x" size={13} color={textColor} />
                     </TouchableOpacity>
                 )}
                 {/* Capçalera */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                     <Text style={{ 
-                        fontSize: 10, fontWeight: '600',
-                        color: BARCA.gold,
-                        fontFamily: 'Lora', 
-                        letterSpacing: 0.3, textAlign: 'center',
+                        fontSize: 10, fontWeight: '700',
+                        color: BARCA.grana,
+                        fontFamily: 'Lora_700Bold', 
+                        letterSpacing: 2, textAlign: 'center',
+                        textTransform: 'uppercase',
                     }}>
                         {isNextMatch && !isFilter ? `Proper partit  ·  ${formatDate(match)}` : formatDate(match)}
                     </Text>
@@ -287,29 +288,21 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
 
     return (
         <View style={cardStyle}>
-            {/* Capçalera: Logo/Competició + Data */}
-            <View style={{ 
-                flexDirection: 'row', 
+            {/* Eyebrow editorial: competició · data */}
+            <View style={{
+                flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'space-between', 
+                justifyContent: 'center',
                 marginBottom: 14,
-                paddingBottom: 8,
-                borderBottomWidth: 1,
-                borderBottomColor: 'rgba(255,255,255,0.15)'
             }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {compLogoSource && (
-                        <Image source={compLogoSource} style={{ width: 16, height: 16, marginRight: 6 }} resizeMode="contain" />
-                    )}
-                    <Text style={{ 
-                        fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', 
-                        color: BARCA.gold, fontFamily: 'Lora', letterSpacing: 0.5 
-                    }}>
-                        {displayCompName(compName)}
-                    </Text>
-                </View>
-                <Text style={{ fontSize: 11, color: subTextColor, fontFamily: 'Lora' }}>
-                    {formatDate(match)}
+                {compLogoSource && (
+                    <Image source={compLogoSource} style={{ width: 14, height: 14, marginRight: 8, tintColor: BARCA.grana }} resizeMode="contain" />
+                )}
+                <Text style={{
+                    fontSize: 10, fontFamily: 'Lora_700Bold', textTransform: 'uppercase',
+                    color: BARCA.grana, letterSpacing: 2,
+                }}>
+                    {displayCompName(compName)}  ·  {formatDate(match)}
                 </Text>
             </View>
 
@@ -356,13 +349,13 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
             {hasBroadcast && match.status !== 'finished' && onPress && (
                  <TouchableOpacity
                     style={{
-                        backgroundColor: BARCA.blau,
-                        paddingVertical: 10,
-                        borderRadius: 10,
+                        backgroundColor: BARCA.grana,
+                        paddingVertical: 12,
+                        borderRadius: 4,
                         alignItems: 'center',
                         marginTop: 14,
                         borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.2)',
+                        borderColor: BARCA.grana,
                     }}
                     onPress={onPress}
                     activeOpacity={0.75}

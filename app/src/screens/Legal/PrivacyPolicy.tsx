@@ -1,23 +1,29 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Platform } from 'react-native';
-import { SKETCH_THEME, sketchFontFamily } from '../../theme/sketchTheme';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { EDITORIAL, ED_TYPE } from '../../theme/editorialTheme';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
 
 export const PrivacyPolicy = () => {
     const navigation = useNavigation();
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={[styles.container, webScreenContainer]} edges={['top', 'left', 'right']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Feather name="arrow-left" size={24} color="white" />
+                    <Feather name="arrow-left" size={20} color={EDITORIAL.ink} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Política de Privacitat</Text>
+                <Text style={styles.eyebrow}>Legal</Text>
             </View>
-            <ScrollView contentContainerStyle={styles.content}>
-                <Text style={styles.lastUpdated}>Última actualització: 22 de març de 2026</Text>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                style={webScreenScroll}
+            >
+                <Text style={styles.title}>Política de <Text style={styles.titleItalic}>Privacitat</Text></Text>
+                <Text style={styles.lastUpdated}>Última actualització — 22 de març de 2026</Text>
 
                 <Section title="1. Introducció">
                     A "troBar", valorem la teva privacitat. Aquesta Política explica com recollim, utilitzem i protegim les teves dades personals quan utilitzes la nostra aplicació mòbil i pàgina web.
@@ -90,8 +96,8 @@ export const PrivacyPolicy = () => {
 
                 <View style={{ height: 40 }} />
             </ScrollView>
-             <StatusBar style="light" />
-        </View>
+             <StatusBar style="dark" />
+        </SafeAreaView>
     );
 };
 
@@ -105,49 +111,57 @@ const Section = ({ title, children }: { title: string, children: React.ReactNode
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: SKETCH_THEME.colors.bg,
-        paddingTop: Platform.OS === 'android' ? 40 : 60,
+        backgroundColor: EDITORIAL.paper,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingBottom: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+        borderBottomColor: EDITORIAL.hairline,
+        backgroundColor: EDITORIAL.paper,
     },
      backButton: {
-        padding: 5,
-        marginRight: 15,
+        padding: 6,
+        marginRight: 14,
     },
-    headerTitle: {
-        fontFamily: sketchFontFamily(),
-        fontSize: 20,
-        color: 'white',
+    eyebrow: {
+        ...ED_TYPE.eyebrow,
     },
     content: {
-        padding: 20,
+        paddingHorizontal: 28,
+        paddingTop: 32,
+        paddingBottom: 32,
+        maxWidth: 720,
+        width: '100%',
+        alignSelf: 'center',
     },
-    lastUpdated: {
-        fontFamily: sketchFontFamily(),
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.5)',
-        marginBottom: 20,
-        fontStyle: 'italic',
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontFamily: sketchFontFamily(),
-        fontSize: 16,
-        color: '#ffd700',
+    title: {
+        ...ED_TYPE.display,
+        fontSize: 36,
+        lineHeight: 42,
         marginBottom: 8,
     },
+    titleItalic: {
+        ...ED_TYPE.italic,
+        color: EDITORIAL.grana,
+    },
+    lastUpdated: {
+        ...ED_TYPE.caption,
+        marginBottom: 32,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+    },
+    section: {
+        marginBottom: 28,
+    },
+    sectionTitle: {
+        ...ED_TYPE.h3,
+        marginBottom: 10,
+    },
     sectionText: {
-        fontFamily: sketchFontFamily(),
-        fontSize: 14,
-        color: 'rgba(255,255,255,0.85)',
-        lineHeight: 22,
+        ...ED_TYPE.body,
+        color: EDITORIAL.inkMuted,
     },
 });

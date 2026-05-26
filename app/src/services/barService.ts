@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, query, where, limit as firestoreLimit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Bar, BarAmenity } from '../models/Bar';
 import { OSMBar } from './osmService';
@@ -73,6 +73,49 @@ export const fetchBars = async (): Promise<Bar[]> => {
     // Si falla, retornem array buit (behavior per defecte en aquest servei)
     return result.success && result.data ? result.data : [];
 };
+
+/**
+ * Carrega bars limitats a un bounding box (escalable).
+ *
+ * Firestore no permet rangs `<=`/`>=` sobre dos camps diferents a la mateixa
+ * consulta, així que filtrem només per `latitude` al servidor i acabem el
+ * filtre per `longitude` al client. Combinat amb `limit` ens dona un cost
+ * acotat per consulta, ideal per consultes per zona visible del mapa.
+ *
+ * Cau de la responsabilitat del crida: l'orquestrador hauria de cachejar
+ * resultats per bbox i fer debounce dels canvis de zona.
+ */
+export const fetchBarsInBounds = async (
+    minLat: number,
+    maxLat: number,
+    minLng: number,
+    maxLng: number,
+    max: number = 300,
+): Promise<Bar[]> => {
+    const result = await executeRequest(async () => {
+        // Query principal: bars amb camps `latitude`/`longitude` solts
+        const q1 = query(
+            collection(db, 'bars'),
+            where('latitude', '>=', minLat),
+            where('latitude', '<=', maxLat),
+            firestoreLimit(max),
+        );
+        const snap1 = await getDocs(q1);
+        const out: Bar[] = [];
+        const seen = new Set<string>();
+        snap1.forEach((d) => {
+            const bar = mapDocToBar(d);
+            if (bar.longitude < minLng || bar.longitude > maxLng) return;
+            if (seen.has(bar.id)) return;
+            seen.add(bar.id);
+            out.push(bar);
+        });
+        return out;
+    }, 'fetchBarsInBounds');
+
+    return result.success && result.data ? result.data : [];
+};
+
 
 /**
  * Retorna el set d'IDs de partits que almenys un bar emet.

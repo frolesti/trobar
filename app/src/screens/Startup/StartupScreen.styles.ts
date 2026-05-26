@@ -1,39 +1,51 @@
-import { StyleSheet, Dimensions, Platform } from 'react-native';
-import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { StyleSheet, Dimensions } from 'react-native';
+import { EDITORIAL, ED_TYPE } from '../../theme/editorialTheme';
 
 const { width, height } = Dimensions.get('window');
 
 export default StyleSheet.create({
   container: {
-    ...SKETCH_THEME.layout.centerContent, 
-    width: width,
-    height: height,
-    // Color de fons mantingut com a alternativa
-    backgroundColor: SKETCH_THEME.colors.primary, 
+    flex: 1,
+    width,
+    height,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: EDITORIAL.grana,
+    paddingHorizontal: 32,
   },
   logoContainer: {
+    flex: 1,
     alignItems: 'center',
-    // Empènyer contingut avall si cal, o mantenir centrat
     justifyContent: 'center',
-    flex: 1, 
   },
-  logoText: {
-    ...SKETCH_THEME.typography.display,
-    fontSize: 56, 
-    letterSpacing: 2,
+  logo: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  eyebrow: {
+    ...ED_TYPE.eyebrow,
+    color: 'rgba(255,255,255,0.65)',
+    marginBottom: 14,
+  },
+  wordmark: {
+    ...ED_TYPE.display,
     color: '#FFFFFF',
-    ...Platform.select({
-      web: { textShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)' },
-      default: { textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }
-    }),
+    textAlign: 'center',
   },
-  loader: {
-    marginTop: SKETCH_THEME.spacing.lg,
+  wordmarkItalic: {
+    ...ED_TYPE.italic,
+    color: '#FFFFFF',
   },
   copyright: {
-    ...SKETCH_THEME.typography.caption,
+    ...ED_TYPE.caption,
+    color: 'rgba(255,255,255,0.55)',
     position: 'absolute',
-    bottom: 30,
-    color: 'rgba(255, 255, 255, 0.8)', 
+    bottom: 32,
+    letterSpacing: 1.2,
   },
 });
+

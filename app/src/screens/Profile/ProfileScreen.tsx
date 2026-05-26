@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile, uploadProfileImage } from '../../services/userService';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
+import { showAlert } from '../../components/AlertBanner';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import SettingsModal from './SettingsModal';
 import styles from './ProfileScreen.styles';
@@ -81,7 +82,7 @@ export default function ProfileScreen() {
              await refreshProfile();
           } catch (error) {
              console.error("Error uploading image:", error);
-             Alert.alert("Error", "No s'ha pogut actualitzar la foto.");
+             showAlert({ tone: 'error', message: "No s'ha pogut actualitzar la foto." });
           } finally {
              setIsLoading(false);
           }
@@ -125,11 +126,11 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={SKETCH_THEME.colors.textInverse} />
+          <Ionicons name="arrow-back" size={22} color={'#0F1B2D'} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
         <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.backButton}>
-          <Ionicons name="settings-outline" size={24} color={SKETCH_THEME.colors.textInverse} />
+          <Ionicons name="settings-outline" size={22} color={'#0F1B2D'} />
         </TouchableOpacity> 
       </View>
 

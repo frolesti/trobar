@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -8,12 +7,13 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    PanResponder
+    PanResponder,
+    Image,
 } from 'react-native';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
+import { Feather, AntDesign, Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
@@ -247,10 +247,6 @@ const LoginModal = ({ navigation }: Props) => {
                     {isRegistering ? 'Ja tens compte? Inicia sessió' : "No tens compte? Registra't"}
                 </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setShowEmailForm(false)} style={styles.inlineLink}>
-                <Text style={[styles.inlineLinkText, { color: SKETCH_THEME.colors.primary }]}>Tornar enrere</Text>
-            </TouchableOpacity>
         </View>
     );
 
@@ -261,32 +257,48 @@ const LoginModal = ({ navigation }: Props) => {
             {...panResponder.panHandlers}
         >
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-                <TouchableOpacity 
-                    style={styles.closeButton} 
-                    onPress={() => {
-                        if (navigation.canGoBack()) {
-                            navigation.goBack();
-                        } else {
-                            navigation.replace('Map'); // Usar replace per evitar apilar Login
-                        }
-                    }}
-                >
-                    <Feather name="arrow-left" size={28} color={SKETCH_THEME.colors.textInverse} />
-                </TouchableOpacity>
-
                 <View style={styles.panel}>
+                    <View style={styles.topBar}>
+                        <Image
+                            source={require('../../../assets/img/logo-nav.jpg')}
+                            style={styles.logoImg}
+                            resizeMode="cover"
+                        />
+                        <TouchableOpacity 
+                            style={styles.closeButton} 
+                            onPress={() => {
+                                if (showEmailForm) {
+                                    // Si estem al formulari d'email, tornem al selector de proveedor
+                                    setShowEmailForm(false);
+                                    setLocalError(null);
+                                    return;
+                                }
+                                if (navigation.canGoBack()) {
+                                    navigation.goBack();
+                                } else {
+                                    navigation.replace('Map');
+                                }
+                            }}
+                        >
+                            <Feather name="arrow-left" size={16} color={SKETCH_THEME.colors.textMuted} />
+                            <Text style={styles.closeText}>Tornar</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     {localError && (
                         <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>⚠️ {localError}</Text>
+                            <Text style={styles.errorText}>{localError}</Text>
                         </View>
                     )}
 
                     {!showEmailForm && (
                         <View style={styles.header}>
-                            <Text style={styles.emoji}>👋</Text>
-                            <Text style={styles.title}>Benvingut a troBar</Text>
+                            <Text style={styles.eyebrow}>Benvingut</Text>
+                            <Text style={styles.title}>
+                                Entra a <Text style={styles.titleItalic}>troBar</Text>
+                            </Text>
                             <Text style={styles.subtitle}>
-                                Inicia sessió per guardar els teus bars preferits, rebre alertes de partits i molt més.
+                                Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic.
                             </Text>
                         </View>
                     )}
@@ -299,45 +311,63 @@ const LoginModal = ({ navigation }: Props) => {
                         ) : (
                             <>
                                 <TouchableOpacity
-                                    style={[styles.button, styles.secondaryButton]}
+                                    style={[styles.button, styles.googleButton]}
                                     onPress={handleGoogleLogin}
                                     disabled={isLoading}
+                                    activeOpacity={0.85}
                                 >
+                                    <AntDesign name="google" size={20} color="#EA4335" style={styles.buttonIcon} />
                                     <Text style={[styles.buttonText, { color: SKETCH_THEME.colors.text }]}>
-                                        {isLoading ? 'Carregant...' : 'Continuar amb Google'}
+                                        {isLoading ? 'Carregant…' : 'Continuar amb Google'}
                                     </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.button, styles.darkButton]}
+                                    style={[styles.button, styles.appleButton]}
                                     onPress={handleAppleLogin}
                                     disabled={isLoading}
+                                    activeOpacity={0.85}
                                 >
-                                    <Text style={[styles.buttonText, { color: 'white' }]}>Continuar amb Apple</Text>
+                                    <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+                                    <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>Continuar amb Apple</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity style={styles.emailLink} onPress={() => setShowEmailForm(true)}>
-                                    <Text style={styles.emailText}>Continuar amb Email</Text>
+                                <View style={styles.dividerRow}>
+                                    <View style={styles.dividerLine} />
+                                    <Text style={styles.dividerText}>o</Text>
+                                    <View style={styles.dividerLine} />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.emailLinkRow}
+                                    onPress={() => setShowEmailForm(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.emailLinkText}>
+                                        Continuar amb correu electrònic
+                                    </Text>
                                 </TouchableOpacity>
                             </>
                         )}
                     </View>
-
-                    {!showEmailForm && (
-                        <View style={styles.disclaimerContainer}>
-                            <Text style={styles.disclaimer}>En continuar, acceptes els nostres </Text>
-                            <TouchableOpacity onPress={() => navigation.navigate('TermsOfService' as any)}>
-                                <Text style={styles.linkText}>Termes de Servei</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.disclaimer}> i </Text>
-                            <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy' as any)}>
-                                <Text style={styles.linkText}>Política de Privacitat</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.disclaimer}>.</Text>
-                        </View>
-                    )}
                 </View>
             </ScrollView>
+
+            {!showEmailForm && !verificationSent && (
+                <View style={styles.disclaimerFixed} pointerEvents="box-none">
+                    <View style={styles.disclaimerContainer}>
+                        <Text style={styles.disclaimer}>En continuar, acceptes els nostres </Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('TermsOfService' as any)}>
+                            <Text style={styles.linkText}>Termes de Servei</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.disclaimer}> i </Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy' as any)}>
+                            <Text style={styles.linkText}>Política de Privacitat</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.disclaimer}>.</Text>
+                    </View>
+                </View>
+            )}
             <StatusBar style="dark" />
 
             {/* Overlay de bloqueig durant autenticació externa */}
@@ -347,7 +377,7 @@ const LoginModal = ({ navigation }: Props) => {
                     backgroundColor: 'rgba(255,255,255,0.85)',
                     justifyContent: 'center', alignItems: 'center', zIndex: 100,
                 }}>
-                    <ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} />
+                    <LoadingIndicator size={100} />
                     <Text style={{
                         marginTop: 16, fontSize: 16, fontFamily: 'Lora',
                         color: SKETCH_THEME.colors.text, textAlign: 'center',

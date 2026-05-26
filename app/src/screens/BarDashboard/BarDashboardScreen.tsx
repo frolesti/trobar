@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView, Image,
-    Platform, ActivityIndicator, Animated, Dimensions, StyleSheet,
+    ActivityIndicator, Animated, Dimensions, StyleSheet, Linking, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { Bar, BarAmenity } from '../../models/Bar';
+import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { AMENITY_OPTIONS, AMENITY_MAP } from '../../data/amenities';
 import { getOwnedBar, updateBarProfile } from '../../services/barOwnerService';
 import { fetchAllMatches, Match } from '../../services/matchService';
@@ -29,17 +30,7 @@ import BarCard from '../../components/BarCard';
 import BarProfileModal from '../../components/BarProfileModal';
 import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 import styles from './BarDashboardScreen.styles';
-
-/* ── MapLibre (web) ──────────────────────────────────────────────────────── */
-let MapboxMap: any = null;
-let MapboxMarker: any = null;
-if (Platform.OS === 'web') {
-    try {
-        const rgl = require('react-map-gl/maplibre');
-        MapboxMap = rgl.default;
-        MapboxMarker = rgl.Marker;
-    } catch (_e) { /* no disponible en natiu */ }
-}
+import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 const SOCIAL_NETWORKS = [
@@ -77,7 +68,6 @@ export default function BarDashboardScreen() {
     const [broadcastingIds, setBroadcastingIds] = useState<Set<string>>(new Set());
 
     /* ── Mapa ─────────────────────────────────────────────────────────────── */
-    const [mapLoaded, setMapLoaded] = useState(false);
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
     const [loadingPlaceDetails, setLoadingPlaceDetails] = useState(false);
     const [reviewStats, setReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
@@ -133,34 +123,6 @@ export default function BarDashboardScreen() {
             toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true,
         }).start(() => setActiveSection(null));
     }, [sheetTranslateY]);
-
-    /* ── MapLibre CSS + JS (web) ─────────────────────────────────────────── */
-    useEffect(() => {
-        if (Platform.OS !== 'web') return;
-        // Si ja està carregat globalment (MapScreen ja l'ha carregat)
-        if ((window as any).maplibregl) { setMapLoaded(true); return; }
-        // CSS
-        if (!document.querySelector('link[href*="maplibre-gl"]')) {
-            const link = document.createElement('link');
-            link.href = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
-            link.rel = 'stylesheet';
-            document.head.appendChild(link);
-        }
-        // JS
-        if (!document.querySelector('script[src*="maplibre-gl"]')) {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
-            script.onload = () => setMapLoaded(true);
-            script.onerror = () => console.error('MapLibre failed to load');
-            document.head.appendChild(script);
-        } else {
-            // Script ja existeix, esperem una mica
-            const check = setInterval(() => {
-                if ((window as any).maplibregl) { setMapLoaded(true); clearInterval(check); }
-            }, 100);
-            return () => clearInterval(check);
-        }
-    }, []);
 
     /* ── Càrrega inicial ──────────────────────────────────────────────────── */
     useEffect(() => {
@@ -358,7 +320,7 @@ export default function BarDashboardScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.centered}>
-                    <ActivityIndicator size="large" color="white" />
+                    <LoadingIndicator size={100} />
                     <Text style={styles.loadingText}>Carregant…</Text>
                 </View>
             </SafeAreaView>
@@ -393,98 +355,13 @@ export default function BarDashboardScreen() {
         <View style={{ flex: 1, position: 'relative' }}>
             {/* Mapa a pantalla completa */}
             <View style={styles.mapFullContainer}>
-                {Platform.OS === 'web' && MapboxMap && mapLoaded ? (
-                    <MapboxMap
-                        mapLib={(window as any).maplibregl}
-                        initialViewState={{
-                            longitude: bar.longitude,
-                            latitude: bar.latitude,
-                            zoom: 15,
-                        }}
-                        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-                        style={{ width: '100%', height: '100%' }}
-                        attributionControl={false}
-                    />
-                ) : (
-                    <View style={styles.centered}>
-                        <ActivityIndicator size="large" color="white" />
-                        <Text style={styles.loadingText}>Carregant mapa…</Text>
-                    </View>
-                )}
+                <View style={styles.centered}>
+                    <LoadingIndicator size={100} />
+                    <Text style={styles.loadingText}>Carregant mapa…</Text>
+                </View>
             </View>
 
-            {/* Overlay: targeta + fletxa + pin, centrats sobre el mapa */}
-            {Platform.OS === 'web' && MapboxMap && mapLoaded && (
-                <View style={styles.mapPinOverlay} pointerEvents="box-none">
-                    {/* Columna que creix cap amunt des del centre del viewport */}
-                    <View style={styles.mapPinColumn}>
-                        <View style={styles.mapPopupCard}>
-                            <BarCard
-                                name={bar.name}
-                                address={bar.address}
-                                latitude={bar.latitude}
-                                longitude={bar.longitude}
-                                placeDetails={placeDetails}
-                                loadingPlaceDetails={loadingPlaceDetails}
-                                verified={true}
-                                fallbackRating={bar.rating}
-                                fallbackIsOpen={isOpenNow(bar.openingPeriods)}
-                                tier={bar.tier || 'premium'}
-                                onProfileOpen={() => setShowBarProfile(true)}
-                                onNavigate={() => {
-                                    const q = encodeURIComponent(`${bar.name}, ${bar.address || 'Barcelona'}`);
-                                    if (Platform.OS === 'web') {
-                                        window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
-                                    }
-                                }}
-                                reviewAvgRating={reviewStats.averageRating}
-                                reviewCount={reviewStats.totalReviews}
-                            />
-                        </View>
-                        {/* Fletxa apuntant cap avall */}
-                        <View style={styles.mapPopupArrow} />
-                        {/* Pin 3D */}
-                        <View style={{ alignItems: 'center' }}>
-                            <View style={{ position: 'relative' }}>
-                                <View style={{
-                                    width: 34, height: 34, borderRadius: 17,
-                                    borderBottomRightRadius: 2,
-                                    transform: [{ rotate: '45deg' }],
-                                    justifyContent: 'center', alignItems: 'center',
-                                    backgroundColor: SKETCH_THEME.colors.primary,
-                                    ...Platform.select({
-                                        web: {
-                                            background: `linear-gradient(135deg, ${SKETCH_THEME.colors.primary} 0%, #003270 100%)`,
-                                            boxShadow: '0px 4px 10px rgba(0,0,0,0.35), inset 0px 1px 2px rgba(255,255,255,0.3)',
-                                        },
-                                    }),
-                                }}>
-                                    <View style={{
-                                        width: 16, height: 16, borderRadius: 8,
-                                        backgroundColor: 'white',
-                                        transform: [{ rotate: '-45deg' }],
-                                        ...Platform.select({
-                                            web: { boxShadow: 'inset 0px 1px 3px rgba(0,0,0,0.15), 0px 1px 1px rgba(255,255,255,0.4)' },
-                                        }),
-                                    }} />
-                                </View>
-                                {/* Insígnia premium */}
-                                <View style={{
-                                    position: 'absolute', top: -4, right: -6,
-                                    width: 20, height: 20, borderRadius: 10,
-                                    backgroundColor: '#edbb00', justifyContent: 'center', alignItems: 'center',
-                                    borderWidth: 2, borderColor: 'white',
-                                    ...Platform.select({
-                                        web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' },
-                                    }),
-                                }}>
-                                    <Feather name="star" size={10} color="white" />
-                                </View>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-            )}
+
         </View>
     );
 
@@ -492,7 +369,7 @@ export default function BarDashboardScreen() {
        TAB 2: PERFIL (targetes de secció)
     ═══════════════════════════════════════════════════════════════════════ */
     const renderProfileTab = () => (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={webScreenScroll}>
             <Text style={styles.panelSubtitle}>Gestiona el teu bar</Text>
             {profileSections.map(sec => (
                 <TouchableOpacity
@@ -541,18 +418,18 @@ export default function BarDashboardScreen() {
     };
 
     const renderSettingsTab = () => (
-        <View style={{ flex: 1, justifyContent: 'space-between' }}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={[{ flex: 1, justifyContent: 'space-between' }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={webScreenScroll}>
                 {/* Pla actual */}
                 <Text style={styles.settingSectionTitle}>Subscripció</Text>
                 <View style={styles.planCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Feather name="award" size={20} color="#ffd700" />
+                            <Feather name="award" size={20} color="#FFFFFF" />
                             <Text style={styles.planName}>  {currentTier === 'premium' ? 'Premium' : 'Gratuït'}</Text>
                         </View>
                         <View style={{ backgroundColor: subscriptionActive ? 'rgba(255,215,0,0.2)' : 'rgba(165,0,68,0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                            <Text style={{ color: subscriptionActive ? '#ffd700' : '#a50044', fontSize: 11, fontWeight: '700' }}>
+                            <Text style={{ color: subscriptionActive ? '#FFFFFF' : '#a50044', fontSize: 11, fontWeight: '700' }}>
                                 {subscriptionActive ? 'ACTIU' : 'INACTIU'}
                             </Text>
                         </View>
@@ -570,7 +447,7 @@ export default function BarDashboardScreen() {
                                         key={opt.key}
                                         style={{
                                             flex: 1, paddingVertical: 10, alignItems: 'center',
-                                            backgroundColor: billingCycle === opt.key ? '#edbb00' : 'rgba(255,255,255,0.06)',
+                                            backgroundColor: billingCycle === opt.key ? '#FFFFFF' : 'rgba(255,255,255,0.06)',
                                         }}
                                         onPress={() => {
                                             if (opt.key === billingCycle) return;
@@ -582,7 +459,7 @@ export default function BarDashboardScreen() {
                                         <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>{opt.label}</Text>
                                         <Text style={{ color: billingCycle === opt.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>{opt.price}</Text>
                                         {opt.save && (
-                                            <Text style={{ color: billingCycle === opt.key ? 'white' : '#edbb00', fontSize: 10, fontWeight: '700', marginTop: 1 }}>{opt.save}</Text>
+                                            <Text style={{ color: billingCycle === opt.key ? 'white' : '#FFFFFF', fontSize: 10, fontWeight: '700', marginTop: 1 }}>{opt.save}</Text>
                                         )}
                                     </TouchableOpacity>
                                 ))}
@@ -596,7 +473,7 @@ export default function BarDashboardScreen() {
                                 <TouchableOpacity
                                     style={{
                                         marginTop: 12, paddingVertical: 10, paddingHorizontal: 16,
-                                        borderRadius: 10, backgroundColor: '#edbb00',
+                                        borderRadius: 10, backgroundColor: '#FFFFFF',
                                         alignItems: 'center',
                                     }}
                                     onPress={() => openCheckout(billingCycle).catch(e => showToast('Error obrint el pagament: ' + e.message, 'error'))}
@@ -674,9 +551,7 @@ export default function BarDashboardScreen() {
                     style={styles.settingRow}
                     onPress={() => {
                         const email = 'contacte@trobar.cat';
-                        if (Platform.OS === 'web') {
-                            window.open(`mailto:${email}`, '_blank');
-                        }
+                        Linking.openURL(`mailto:${email}`);
                     }}
                     activeOpacity={0.6}
                 >
@@ -867,7 +742,7 @@ export default function BarDashboardScreen() {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Feather name={allFilteredSelected ? 'x-square' : 'check-square'} size={14} color="#edbb00" />
+                                <Feather name={allFilteredSelected ? 'x-square' : 'check-square'} size={14} color="#FFFFFF" />
                                 <Text style={styles.selectAllText}>
                                     {allFilteredSelected ? 'Deseleccionar tots' : 'Seleccionar tots'}
                                 </Text>
@@ -955,7 +830,7 @@ export default function BarDashboardScreen() {
        RENDER PRINCIPAL
     ═══════════════════════════════════════════════════════════════════════ */
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, webScreenContainer]}>
             {/* ── Capçalera ── (oculta si estem al mapa) ──── */}
             {activeTab !== 'map' && (
                 <View style={styles.header}>
@@ -988,7 +863,7 @@ export default function BarDashboardScreen() {
             )}
 
             {/* ── Contingut de la pestanya activa ─────────────────── */}
-            <View style={{ flex: 1 }}>
+            <View style={[{ flex: 1 }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
                 {activeTab === 'map' && renderMapTab()}
                 {activeTab === 'profile' && renderProfileTab()}
                 {activeTab === 'settings' && renderSettingsTab()}
@@ -1117,9 +992,6 @@ export default function BarDashboardScreen() {
                     backgroundColor: '#3a0018',
                     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
                     zIndex: 200,
-                    ...Platform.select({
-                        web: { boxShadow: '0 8px 32px rgba(0,0,0,0.5)' },
-                    }),
                 }}>
                     <View style={{
                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1188,9 +1060,6 @@ export default function BarDashboardScreen() {
                         width: '90%', maxWidth: 400, borderRadius: 18,
                         backgroundColor: '#3a0018',
                         borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-                        ...Platform.select({
-                            web: { boxShadow: '0 12px 40px rgba(0,0,0,0.6)' },
-                        }),
                     }}>
                         {/* Capçalera modal */}
                         <View style={{
@@ -1199,7 +1068,7 @@ export default function BarDashboardScreen() {
                             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Feather name="bell" size={20} color="#ffd700" />
+                                <Feather name="bell" size={20} color="#FFFFFF" />
                                 <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Preferències</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowNotifPrefs(false)} style={styles.headerBtn}>
@@ -1232,7 +1101,7 @@ export default function BarDashboardScreen() {
                                             alignItems: 'center', justifyContent: 'center',
                                             marginRight: 12,
                                         }}>
-                                            <Feather name={opt.icon as any} size={16} color={isActive ? '#ffd700' : 'rgba(255,255,255,0.35)'} />
+                                            <Feather name={opt.icon as any} size={16} color={isActive ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} />
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>{opt.label}</Text>
@@ -1241,7 +1110,7 @@ export default function BarDashboardScreen() {
                                         {/* Toggle */}
                                         <View style={{
                                             width: 44, height: 26, borderRadius: 13,
-                                            backgroundColor: isActive ? '#edbb00' : 'rgba(255,255,255,0.12)',
+                                            backgroundColor: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
                                             justifyContent: 'center',
                                             paddingHorizontal: 2,
                                         }}>
@@ -1249,9 +1118,6 @@ export default function BarDashboardScreen() {
                                                 width: 22, height: 22, borderRadius: 11,
                                                 backgroundColor: 'white',
                                                 alignSelf: isActive ? 'flex-end' : 'flex-start',
-                                                ...Platform.select({
-                                                    web: { boxShadow: '0 1px 3px rgba(0,0,0,0.3)' },
-                                                }),
                                             }} />
                                         </View>
                                     </TouchableOpacity>
@@ -1284,9 +1150,7 @@ export default function BarDashboardScreen() {
                     onNavigate={() => {
                         if (bar) {
                             const query = encodeURIComponent(`${bar.name}, ${bar.address || 'Barcelona'}`);
-                            if (Platform.OS === 'web') {
-                                window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-                            }
+                            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
                         }
                     }}
                 />
@@ -1309,7 +1173,6 @@ export default function BarDashboardScreen() {
                         width: '90%', maxWidth: 420, borderRadius: 18,
                         backgroundColor: '#3a0018',
                         borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-                        ...Platform.select({ web: { boxShadow: '0 12px 40px rgba(0,0,0,0.6)' } }),
                     }}>
                         {/* Capçalera */}
                         <View style={{
@@ -1318,7 +1181,7 @@ export default function BarDashboardScreen() {
                             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Feather name="credit-card" size={20} color="#edbb00" />
+                                <Feather name="credit-card" size={20} color="#FFFFFF" />
                                 <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Canviar pla</Text>
                             </View>
                             <TouchableOpacity onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }} style={styles.headerBtn}>
@@ -1343,14 +1206,14 @@ export default function BarDashboardScreen() {
                                     <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[billingCycle].label}</Text>
                                     <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 2 }}>{BILLING_PLANS[billingCycle].priceLabel}</Text>
                                 </View>
-                                <Feather name="arrow-right" size={20} color="#edbb00" />
+                                <Feather name="arrow-right" size={20} color="#FFFFFF" />
                                 <View style={{
                                     flex: 1, padding: 12, borderRadius: 12,
                                     backgroundColor: 'rgba(237,187,0,0.1)',
                                     borderWidth: 1, borderColor: 'rgba(237,187,0,0.3)',
                                     alignItems: 'center',
                                 }}>
-                                    <Text style={{ color: '#edbb00', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>NOU PLA</Text>
+                                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>NOU PLA</Text>
                                     <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[pendingBillingCycle].label}</Text>
                                     <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 2 }}>{BILLING_PLANS[pendingBillingCycle].priceLabel}</Text>
                                 </View>
@@ -1398,7 +1261,7 @@ export default function BarDashboardScreen() {
                                 <TouchableOpacity
                                     style={{
                                         flex: 2, paddingVertical: 14, borderRadius: 12,
-                                        backgroundColor: '#edbb00', alignItems: 'center',
+                                        backgroundColor: '#FFFFFF', alignItems: 'center',
                                         opacity: isChangingPlan ? 0.6 : 1,
                                     }}
                                     onPress={async () => {
@@ -1449,7 +1312,6 @@ export default function BarDashboardScreen() {
                         width: '90%', maxWidth: 420, borderRadius: 18,
                         backgroundColor: '#3a0018',
                         borderWidth: 1, borderColor: 'rgba(165,0,68,0.4)',
-                        ...Platform.select({ web: { boxShadow: '0 12px 40px rgba(0,0,0,0.6)' } }),
                     }}>
                         {/* Capçalera */}
                         <View style={{

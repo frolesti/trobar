@@ -134,8 +134,8 @@ export const fetchBarsFromOSM = async (lat: number, lon: number, radiusKm: numbe
     const query = `
         [out:json][timeout:25];
         (
-          node["amenity"~"bar|pub"](around:${queryRadiusMeters},${lat},${lon});
-          way["amenity"~"bar|pub"](around:${queryRadiusMeters},${lat},${lon});
+          node["amenity"~"bar|pub|cafe|restaurant"](around:${queryRadiusMeters},${lat},${lon});
+          way["amenity"~"bar|pub|cafe|restaurant"](around:${queryRadiusMeters},${lat},${lon});
         );
         out center;
     `;
@@ -222,8 +222,8 @@ export const fetchBarsFromOSMBounds = async (
     const query = `
         [out:json][timeout:25];
         (
-          node["amenity"~"bar|pub"](${south},${west},${north},${east});
-          way["amenity"~"bar|pub"](${south},${west},${north},${east});
+          node["amenity"~"bar|pub|cafe|restaurant"](${south},${west},${north},${east});
+          way["amenity"~"bar|pub|cafe|restaurant"](${south},${west},${north},${east});
         );
         out center;
     `;

@@ -9,8 +9,8 @@ import {
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getFunctions, Functions } from "firebase/functions";
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configura les teves claus a .env.development / .env.production
 // Canvia d'entorn amb: npm run env:dev | npm run env:prod
@@ -25,7 +25,7 @@ const firebaseConfig = {
 
 // Log de l'entorn actiu (només en dev)
 if (__DEV__) {
-    console.log(`🔥 Firebase → ${firebaseConfig.projectId} (${process.env.TROBAR_ENV || 'unknown env'})`);
+    console.log(`🔥 Firebase → ${firebaseConfig.projectId} (${process.env.EXPO_PUBLIC_TROBAR_ENV || 'unknown env'})`);
 }
 
 // Inicialitzar Firebase (Singleton)
@@ -41,15 +41,14 @@ if (!getApps().length) {
   storage = getStorage(app);
   functions = getFunctions(app, 'europe-west1');
   
-  // Per a React Native (Mòbil), cal persistència amb AsyncStorage
+  // Persistència amb AsyncStorage per a React Native (no disponible a web)
   if (Platform.OS !== 'web') {
-      auth = initializeAuth(app, {
-          // @ts-ignore
-          persistence: getReactNativePersistence(ReactNativeAsyncStorage)
-      });
+    auth = initializeAuth(app, {
+        // @ts-ignore
+        persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+    });
   } else {
-      // Per a Web, la persistència és automàtica (localStorage/IndexedDB)
-      auth = getAuth(app); 
+    auth = getAuth(app);
   }
 } else {
   app = getApp();

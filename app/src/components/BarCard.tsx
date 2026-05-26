@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
+import { EDITORIAL } from '../theme/editorialTheme';
 import { PlaceDetails } from '../services/placesService';
 
 // ── Tipus ──────────────────────────────────────────────
@@ -84,16 +85,21 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
     const isPremium = tier === 'premium';
 
-    // ── Helpers de color per reutilitzar entre free i premium ──
-    const C = isPremium
-        ? { text: 'white', muted: 'rgba(255,255,255,0.7)', icon: 'rgba(255,255,255,0.6)',
-            badgeOpen: { bg: 'rgba(255,255,255,0.15)', color: '#A5D6A7', border: 'rgba(255,255,255,0.25)' },
-            badgeClosed: { bg: 'rgba(255,255,255,0.1)', color: '#EF9A9A', border: 'rgba(255,255,255,0.2)' },
-            btnBg: 'white', btnText: SKETCH_THEME.colors.accent, btnIcon: SKETCH_THEME.colors.accent }
-        : { text: SKETCH_THEME.colors.text, muted: SKETCH_THEME.colors.textMuted, icon: SKETCH_THEME.colors.textMuted,
-            badgeOpen: { bg: '#E8F5E9', color: '#2E7D32', border: '#C8E6C9' },
-            badgeClosed: { bg: '#FFEBEE', color: '#C62828', border: '#FFCDD2' },
-            btnBg: SKETCH_THEME.colors.primary, btnText: 'white', btnIcon: 'white' };
+    // ── Paleta editorial unificada (paper + ink + grana) per a totes les targetes.
+    //    Premium només afegeix un eyebrow GRANA "PREMIUM" + estrella; el fons es
+    //    manté cremos per coherència editorial i llegibilitat.
+    const C = {
+        text: EDITORIAL.ink,
+        muted: EDITORIAL.inkMuted,
+        icon: EDITORIAL.grana,
+        // Obert = pastilla grana subtil (positiu, en paleta).
+        // Tancat = aspecte "deshabilitat" (ink atenuat sobre paperAlt, sense vermell).
+        badgeOpen:   { bg: EDITORIAL.granaSoft,                          color: EDITORIAL.grana,    border: 'rgba(165,0,68,0.18)' },
+        badgeClosed: { bg: EDITORIAL.paperAlt,                           color: EDITORIAL.inkMuted, border: EDITORIAL.hairline },
+        btnBg: EDITORIAL.grana,
+        btnText: '#FFFFFF',
+        btnIcon: '#FFFFFF',
+    };
 
     // ── BAR VERIFICAT (free o premium) — mateixa estructura, colors diferenciats ──
     if (verified) {
@@ -105,25 +111,26 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     adjustsFontSizeToFit
                     minimumFontScale={0.75}
                     style={{
-                        fontSize: 18, fontWeight: 'bold', color: C.text,
-                        fontFamily: 'Lora', marginBottom: isPremium ? 4 : 8, lineHeight: 24,
+                        fontSize: 20, color: C.text,
+                        fontFamily: EDITORIAL.fontBold, marginBottom: isPremium ? 4 : 8, lineHeight: 26,
+                        letterSpacing: -0.2,
                     }}
                 >
                     {displayName}
                 </Text>
 
-                {/* Insígnia PREMIUM + Veure perfil (només premium) */}
+                {/* Eyebrow PREMIUM + Veure perfil (només premium) */}
                 {isPremium && (
                     <TouchableOpacity
                         onPress={onProfileOpen}
                         activeOpacity={0.7}
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
                     >
-                        <MaterialCommunityIcons name="star" size={13} color="#edbb00" style={{ marginRight: 4 }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#edbb00', fontFamily: 'Lora', letterSpacing: 0.3 }}>
-                            PREMIUM · Veure perfil
+                        <MaterialCommunityIcons name="star" size={12} color={EDITORIAL.grana} style={{ marginRight: 6 }} />
+                        <Text style={{ fontSize: 11, color: EDITORIAL.grana, fontFamily: EDITORIAL.fontBold, letterSpacing: 2.0, textTransform: 'uppercase' }}>
+                            Premium · Veure perfil
                         </Text>
-                        <Feather name="chevron-right" size={13} color="#edbb00" style={{ marginLeft: 2 }} />
+                        <Feather name="chevron-right" size={13} color={EDITORIAL.grana} style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
                 )}
 
@@ -131,12 +138,12 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                     {(reviewAvgRating != null && reviewAvgRating > 0) && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <MaterialCommunityIcons name="star" size={16} color="#edbb00" style={{ marginRight: 3 }} />
-                            <Text style={{ fontWeight: 'bold', fontSize: 14, color: C.text, fontFamily: 'Lora' }}>
+                            <MaterialCommunityIcons name="star" size={16} color={EDITORIAL.grana} style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 14, color: C.text, fontFamily: EDITORIAL.fontBold }}>
                                 {reviewAvgRating.toFixed(1)}
                             </Text>
                             {(reviewCount != null && reviewCount > 0) && (
-                                <Text style={{ fontSize: 12, color: C.muted, fontFamily: 'Lora', marginLeft: 4 }}>
+                                <Text style={{ fontSize: 12, color: C.muted, fontFamily: EDITORIAL.fontRegular, marginLeft: 4 }}>
                                     ({reviewCount})
                                 </Text>
                             )}
@@ -144,8 +151,9 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     )}
                     {openStatus != null && !loadingPlaceDetails && (
                         <Text style={{
-                            paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, fontSize: 12,
-                            overflow: 'hidden', fontFamily: 'Lora', borderWidth: 1,
+                            paddingHorizontal: 10, paddingVertical: 3, borderRadius: 4, fontSize: 11,
+                            overflow: 'hidden', fontFamily: EDITORIAL.fontBold, borderWidth: 1,
+                            letterSpacing: 1.4, textTransform: 'uppercase',
                             backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
                             color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
                             borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
@@ -160,17 +168,17 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
                 {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <Feather name="map-pin" size={15} color={C.icon} style={{ marginRight: 8, marginTop: 2 }} />
-                    <Text numberOfLines={2} style={{ fontSize: 14, color: C.muted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
+                    <Feather name="map-pin" size={14} color={C.icon} style={{ marginRight: 8, marginTop: 3 }} />
+                    <Text numberOfLines={2} style={{ fontSize: 14, color: C.muted, fontFamily: EDITORIAL.fontRegular, flex: 1, lineHeight: 20 }}>
                         {displayAddress}
                     </Text>
                 </View>
 
                 {/* Distància */}
                 {distanceText && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                        <Feather name="clock" size={15} color={C.icon} style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, color: C.muted, fontFamily: 'Lora' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                        <Feather name="clock" size={14} color={C.icon} style={{ marginRight: 8 }} />
+                        <Text style={{ fontSize: 14, color: C.muted, fontFamily: EDITORIAL.fontRegular }}>
                             {distanceText}
                         </Text>
                     </View>
@@ -179,14 +187,13 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 {/* Botó de navegació */}
                 <TouchableOpacity
                     style={{
-                        backgroundColor: C.btnBg, borderRadius: 12,
-                        paddingVertical: 12, paddingHorizontal: 16,
+                        backgroundColor: C.btnBg, borderRadius: 6,
+                        paddingVertical: 13, paddingHorizontal: 16,
                         alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
                     }}
                     onPress={onNavigate}
                 >
-                    <Feather name="navigation" size={16} color={C.btnIcon} style={{ marginRight: 8 }} />
-                    <Text style={{ color: C.btnText, fontWeight: 'bold', fontSize: 15, fontFamily: 'Lora' }}>Com arribar-hi</Text>
+                    <Text style={{ color: C.btnText, fontSize: 13, fontFamily: EDITORIAL.fontBold, letterSpacing: 2.0, textTransform: 'uppercase' }}>Com arribar-hi</Text>
                 </TouchableOpacity>
             </View>
         );

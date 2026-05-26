@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Platform, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -7,11 +7,14 @@ import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchSe
 import { fetchBroadcastMatchIds } from '../../services/barService';
 import { Ionicons } from '@expo/vector-icons';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { EDITORIAL } from '../../theme/editorialTheme';
+import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { useAuth } from '../../context/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserPreferences } from '../../services/userService';
 import MatchCard from '../../components/MatchCard';
+import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
 
 // Temporada futbolística: agost any N → juliol any N+1
 function getSeason(d: Date): string {
@@ -316,36 +319,29 @@ const MatchesScreen = ({ navigation }: Props) => {
     // Funcions auxiliars de format
 
     return (
-        <SafeAreaView style={Platform.select({
-            web: { 
-                height: '100vh', 
-                overflow: 'hidden', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                backgroundColor: SKETCH_THEME.colors.bg 
-            } as any,
-            default: { 
+        <SafeAreaView style={[{ 
                 flex: 1, 
-                backgroundColor: SKETCH_THEME.colors.bg 
-            }
-        })}>
+                backgroundColor: EDITORIAL.paper 
+        }, webScreenContainer]}>
             {/* Capçalera */}
             <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingHorizontal: SKETCH_THEME.spacing.lg,
-                paddingVertical: SKETCH_THEME.spacing.md,
+                paddingHorizontal: 24,
+                paddingVertical: 16,
                 borderBottomWidth: 1,
-                borderBottomColor: SKETCH_THEME.colors.border,
-                backgroundColor: SKETCH_THEME.colors.bg,
+                borderBottomColor: EDITORIAL.hairline,
+                backgroundColor: EDITORIAL.paper,
             }}>
                 <View style={{ width: 32 }} />
 
                 <Text style={{
-                    ...SKETCH_THEME.typography.h3,
-                    fontSize: 20,
-                    color: SKETCH_THEME.colors.textInverse,
+                    fontFamily: EDITORIAL.fontBold,
+                    fontSize: 11,
+                    letterSpacing: 2.4,
+                    textTransform: 'uppercase',
+                    color: EDITORIAL.grana,
                 }}>
                     Partits
                 </Text>
@@ -355,13 +351,13 @@ const MatchesScreen = ({ navigation }: Props) => {
                         if (navigation.canGoBack()) navigation.goBack();
                         else navigation.navigate('Map');
                     }}
-                    style={{ padding: SKETCH_THEME.spacing.xs }}
+                    style={{ padding: 6 }}
                     hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
                 >
-                    <Ionicons name="arrow-forward" size={24} color={SKETCH_THEME.colors.textInverse} />
+                    <Ionicons name="arrow-forward" size={22} color={EDITORIAL.ink} />
                 </TouchableOpacity>
             </View>
-            <View style={{ height: 50, backgroundColor: SKETCH_THEME.colors.bg }}>
+            <View style={{ height: 54, backgroundColor: EDITORIAL.paper, borderBottomWidth: 1, borderBottomColor: EDITORIAL.hairline }}>
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -382,18 +378,17 @@ const MatchesScreen = ({ navigation }: Props) => {
                             style={{
                                 paddingVertical: 6,
                                 paddingHorizontal: 14,
-                                borderRadius: 18,
-                                backgroundColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
+                                borderRadius: 4,
+                                backgroundColor: filter === tab ? EDITORIAL.grana : '#FFFFFF',
                                 borderWidth: 1,
-                                borderColor: filter === tab ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
+                                borderColor: filter === tab ? EDITORIAL.grana : EDITORIAL.hairline,
                             }}
                         >
                             <Text style={{
-                                color: filter === tab ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
-                                fontWeight: filter === tab ? 'bold' : 'normal',
+                                color: filter === tab ? '#FFFFFF' : EDITORIAL.ink,
+                                fontFamily: filter === tab ? EDITORIAL.fontBold : EDITORIAL.fontRegular,
                                 fontSize: 12,
-                                fontFamily: 'Lora',
-                                textTransform: 'capitalize'
+                                letterSpacing: 0.6,
                             }}>
                                 {tab === 'ALL' ? 'Tots' : (tab === 'MASCULI' ? 'Masculí' : 'Femení')}
                             </Text>
@@ -402,7 +397,7 @@ const MatchesScreen = ({ navigation }: Props) => {
 
                     {/* Divisor vertical */}
                     {uniqueCompetitions.length > 0 && (
-                        <View style={{ width: 1.5, height: 22, backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: 1 }} />
+                        <View style={{ width: 1, height: 22, backgroundColor: EDITORIAL.hairlineStrong }} />
                     )}
 
                     {/* Pestanyes de competició */}
@@ -415,15 +410,15 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 style={{
                                     paddingVertical: 6,
                                     paddingHorizontal: 14,
-                                    borderRadius: 18,
-                                    backgroundColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.12)',
+                                    borderRadius: 4,
+                                    backgroundColor: selectedComp === c ? EDITORIAL.ink : '#FFFFFF',
                                     borderWidth: 1,
-                                    borderColor: selectedComp === c ? SKETCH_THEME.colors.primary : 'rgba(255,255,255,0.2)',
+                                    borderColor: selectedComp === c ? EDITORIAL.ink : EDITORIAL.hairline,
                                 }}
                             >
                                 <Text style={{
-                                    color: selectedComp === c ? '#FFF' : SKETCH_THEME.colors.mutedInverse,
-                                    fontSize: 12, fontFamily: 'Lora'
+                                    color: selectedComp === c ? '#FFFFFF' : EDITORIAL.ink,
+                                    fontSize: 12, fontFamily: EDITORIAL.fontRegular,
                                 }}>{compDisplayName}</Text>
                             </TouchableOpacity>
                         );
@@ -434,7 +429,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             <FlatList
                 ref={flatListRef}
                 data={loading ? [] : listItems}
-                style={Platform.select({ web: { flex: 1, minHeight: 0, scrollbarWidth: 'none' } as any, default: { flex: 1 } })}
+                style={[{ flex: 1 }, webScreenScroll]}
                 keyExtractor={(item) => (item as any).type === 'season' ? (item as SeasonHeader).id : (item as MatchItem).id}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}
                 showsVerticalScrollIndicator={false}
@@ -478,33 +473,30 @@ const MatchesScreen = ({ navigation }: Props) => {
                     )
                 }
                 ListHeaderComponent={
-                    Platform.OS === 'web' ? (
-                        <TouchableOpacity 
-                            onPress={handleRefresh} 
+                    !loading && displayedMatches.length > 0 ? (
+                        <TouchableOpacity
+                            onPress={handleRefresh}
                             disabled={isRefreshing}
-                            activeOpacity={0.7}
+                            accessibilityLabel="Carregar partits anteriors"
                             style={{
-                                flexDirection: 'row',
+                                alignSelf: 'center',
+                                width: 40,
+                                height: 40,
+                                borderRadius: 20,
+                                marginTop: 4,
+                                marginBottom: 10,
+                                backgroundColor: '#FFFFFF',
+                                borderWidth: 1,
+                                borderColor: EDITORIAL.hairline,
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                paddingVertical: 10,
-                                marginBottom: 6,
-                                borderRadius: 12,
-                                backgroundColor: 'transparent',
                                 opacity: isRefreshing ? 0.5 : 1,
                             }}
                         >
                             {isRefreshing ? (
-                                <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} />
+                                <ActivityIndicator size="small" color={EDITORIAL.grana} />
                             ) : (
-                                <>
-                                    <Ionicons name="chevron-up-circle-outline" size={16} color={SKETCH_THEME.colors.mutedInverse} />
-                                    <Text style={{ 
-                                        marginLeft: 6, fontSize: 12, color: SKETCH_THEME.colors.mutedInverse, fontFamily: 'Lora', fontWeight: '600'
-                                    }}>
-                                        Carregar partits anteriors
-                                    </Text>
-                                </>
+                                <Ionicons name="chevron-up" size={20} color={EDITORIAL.ink} />
                             )}
                         </TouchableOpacity>
                     ) : null
@@ -512,39 +504,19 @@ const MatchesScreen = ({ navigation }: Props) => {
                 ListFooterComponent={
                     !loading && visibleCount < filteredFutureMatches.length ? (
                         <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                            <ActivityIndicator size="small" color={SKETCH_THEME.colors.gold} />
+                            <ActivityIndicator size="small" color={EDITORIAL.grana} />
                             <Text style={{
-                                color: SKETCH_THEME.colors.mutedInverse,
+                                color: EDITORIAL.inkMuted,
                                 marginTop: 8,
                                 fontSize: 12,
-                                fontFamily: 'Lora'
+                                fontFamily: EDITORIAL.fontRegular
                             }}>
                                 Carregant més partits...
                             </Text>
                         </View>
                     ) : !loading && displayedMatches.length > 0 ? (
-                        <View style={{ alignItems: 'center', marginTop: 12, paddingBottom: 8 }}>
-                            <Ionicons name="checkmark-circle-outline" size={26} color={SKETCH_THEME.colors.mutedInverse} />
-                            <Text style={{
-                                color: SKETCH_THEME.colors.mutedInverse,
-                                marginTop: 6,
-                                fontSize: 12,
-                                fontFamily: 'Lora',
-                                fontWeight: '600',
-                            }}>
-                                Ja estàs al dia!
-                            </Text>
-                            <Text style={{
-                                color: SKETCH_THEME.colors.mutedInverse,
-                                marginTop: 2,
-                                fontSize: 11,
-                                fontFamily: 'Lora',
-                                textAlign: 'center',
-                                paddingHorizontal: 40,
-                                opacity: 0.6,
-                            }}>
-                                No hi ha més partits programats
-                            </Text>
+                        <View style={{ alignItems: 'center', marginTop: 16, paddingBottom: 8 }}>
+                            <Ionicons name="checkmark-circle-outline" size={22} color={EDITORIAL.inkMuted} />
                         </View>
                     ) : null
                 }
@@ -554,23 +526,21 @@ const MatchesScreen = ({ navigation }: Props) => {
                         return (
                             <View style={{
                                 flexDirection: 'row', alignItems: 'center',
-                                marginVertical: 12, paddingHorizontal: 4,
+                                marginVertical: 18, paddingHorizontal: 4,
                             }}>
-                                <View style={{ flex: 1, height: 1, backgroundColor: SKETCH_THEME.colors.border }} />
+                                <View style={{ flex: 1, height: 1, backgroundColor: EDITORIAL.hairline }} />
                                 <View style={{
-                                    paddingHorizontal: 14, paddingVertical: 5,
-                                    backgroundColor: SKETCH_THEME.colors.uiBg,
-                                    borderRadius: 12,
-                                    borderWidth: 1, borderColor: SKETCH_THEME.colors.border,
+                                    paddingHorizontal: 14, paddingVertical: 4,
                                 }}>
                                     <Text style={{
-                                        fontSize: 11, fontWeight: 'bold', fontFamily: 'Lora',
-                                        color: SKETCH_THEME.colors.mutedInverse, letterSpacing: 0.5,
+                                        fontSize: 10, fontFamily: EDITORIAL.fontBold,
+                                        color: EDITORIAL.grana, letterSpacing: 2,
+                                        textTransform: 'uppercase',
                                     }}>
                                         Temporada {sh.season}
                                     </Text>
                                 </View>
-                                <View style={{ flex: 1, height: 1, backgroundColor: SKETCH_THEME.colors.border }} />
+                                <View style={{ flex: 1, height: 1, backgroundColor: EDITORIAL.hairline }} />
                             </View>
                         );
                     }
@@ -588,12 +558,12 @@ const MatchesScreen = ({ navigation }: Props) => {
 };
 const LoadingState = () => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <ActivityIndicator size="large" color={SKETCH_THEME.colors.gold} />
+        <LoadingIndicator size={100} />
         <Text style={{ 
-            color: SKETCH_THEME.colors.mutedInverse, 
+            color: EDITORIAL.inkMuted, 
             marginTop: 16, 
             fontSize: 14,
-            fontFamily: 'Lora'
+            fontFamily: EDITORIAL.fontRegular
         }}>
             Carregant partits...
         </Text>
@@ -602,24 +572,15 @@ const LoadingState = () => (
 
 const EmptyState = ({ filter }: { filter: FilterType }) => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <Ionicons name="calendar-outline" size={64} color={SKETCH_THEME.colors.mutedInverse} />
+        <Ionicons name="calendar-outline" size={56} color={EDITORIAL.inkMuted} />
         <Text style={{ 
-            color: SKETCH_THEME.colors.textInverse, 
-            marginTop: 20, 
-            fontSize: 18,
-            fontWeight: 'bold',
-            fontFamily: 'Lora'
-        }}>
-            No hi ha partits {filter === 'ALL' ? '' : filter === 'MASCULI' ? 'masculins' : 'femenins'} properament
-        </Text>
-        <Text style={{ 
-            color: SKETCH_THEME.colors.mutedInverse, 
-            marginTop: 8, 
-            fontSize: 14,
+            color: EDITORIAL.ink, 
+            marginTop: 18, 
+            fontSize: 16,
+            fontFamily: EDITORIAL.fontBold,
             textAlign: 'center',
-            paddingHorizontal: 40
         }}>
-            Tornarem a actualitzar els horaris aviat
+            Cap partit {filter === 'ALL' ? 'programat' : filter === 'MASCULI' ? 'masculí' : 'femení'}
         </Text>
     </View>
 );

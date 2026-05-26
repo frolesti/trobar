@@ -69,7 +69,7 @@ const BarListItem: React.FC<BarListItemProps> = ({
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialCommunityIcons name="star" size={14} color="#edbb00" style={{ marginRight: 2 }} />
+                    <MaterialCommunityIcons name="star" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
                     <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: 'Lora', fontWeight: 'bold' }}>
                         {bar.rating}
                     </Text>

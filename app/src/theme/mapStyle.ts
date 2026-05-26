@@ -47,7 +47,7 @@ export const CUSTOM_MAP_STYLE = [
     {
         "featureType": "poi.park",
         "elementType": "labels.text.fill",
-        "stylers": [{ "visibility": "on" }, { "color": "#004d98" }] // Blau Barça per a etiquetes de parc
+        "stylers": [{ "visibility": "on" }, { "color": "#0F1B2D" }] // Ink editorial per a etiquetes de parc
     },
     {
       "featureType": "road",
@@ -72,6 +72,6 @@ export const CUSTOM_MAP_STYLE = [
     {
       "featureType": "water",
       "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#004d98" }] // Blau Barça
+      "stylers": [{ "color": "#0F1B2D" }] // Ink editorial per a etiquetes d'aigua
     }
   ];
