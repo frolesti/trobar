@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Icones vectorials
 
-import { fetchBars, fetchBarsForMatch, cacheBarPlaceData } from '../../services/barService';
+import { fetchBars, fetchBarsForMatch, fetchBarsInBounds, cacheBarPlaceData } from '../../services/barService';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -19,13 +19,7 @@ import { Bar, BarAmenity } from '../../models/Bar';
 
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
-// @ts-ignore - Ignorant l'error de tipatge
-
-import MapboxMap, { Marker as MapboxMarker, Popup, MapRef, Source, Layer } from 'react-map-gl/maplibre';
-
-
-
-import MapView, { Marker, PROVIDER_GOOGLE } from '../../utils/GoogleMaps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
 
@@ -42,6 +36,9 @@ import { getUserPreferences } from '../../services/userService';
 import styles from './MapScreen.styles';
 
 import MatchCard from '../../components/MatchCard';
+import { showAlert } from '../../components/AlertBanner';
+import { EDITORIAL } from '../../theme/editorialTheme';
+import { useClusters, ClusterablePoint } from '../../hooks/useClusters';
 
 import BarCard from '../../components/BarCard';
 
@@ -53,20 +50,6 @@ import { fetchBarPlaceDetails, PlaceDetails, isOpenNow } from '../../services/pl
 import { getBarReviewStats } from '../../services/reviewService';
 import { BarReviewStats } from '../../models/Review';
 import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
-
-
-
-// Declaració global per a TypeScript (Google Maps Web)
-
-declare global {
-
-  interface Window {
-
-    google: any;
-
-  }
-
-}
 
 
 
@@ -156,18 +139,11 @@ const getCleanBarName = (name: string) => {
 
 // La bafarada es posiciona dinàmicament perquè el triangle apunti al pin.
 
-const CAMERA_LAT_OFFSET = 0.002;   // graus que el centre de la càmera es desplaça per sobre del bar
+// Petit offset positiu: el centre de la càmera puja una mica al nord del bar
+// perquè el pin del bar quedi just per sobre de la bafarada inferior, no enrere.
+const CAMERA_LAT_OFFSET = 0.0008;
 
 const MAP_REGION_DELTA   = 0.008;  // latitudeDelta de la regió animada
-
-/** Converteix el radi de cerca (km) a un zoom level de Mapbox/MapLibre */
-function radiusToZoom(km: number): number {
-    if (km <= 0.5) return 16;
-    if (km <= 1)   return 15;
-    if (km <= 2)   return 14;
-    if (km <= 5)   return 12.5;
-    return 12;
-}
 
 /** Converteix el radi de cerca (km) a latitudeDelta per a MapView natiu */
 function radiusToLatDelta(km: number): number {
@@ -253,8 +229,7 @@ const MapScreen = () => {
     
 
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
-
-    const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+    const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[] | null>(null);
 
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
 
@@ -309,17 +284,63 @@ const MapScreen = () => {
 
 
 
-    // Refs (Web)
+    // ---- Clustering -------------------------------------------------------
+    // Mantenim dos datasets SEPARATS perquè supercluster NO barregi
+    // bars registrats (grana) amb bars escanejats (gris). Si caiguessin al
+    // mateix clúster perdríem la senyal visual important: "aquí hi ha
+    // contingut Trobar contrastat" vs "aquí només hi ha possibles bars".
+    type ClusterBar =
+        | { kind: 'confirmed'; bar: Bar }
+        | { kind: 'scanned'; bar: OSMBar };
 
-    const mapRef = useRef<MapRef>(null);
+    const clusterPointsConfirmed = useMemo<ClusterablePoint<ClusterBar>[]>(() => {
+        return filteredBars.map((b) => ({
+            id: `c-${b.id}`,
+            latitude: b.latitude,
+            longitude: b.longitude,
+            data: { kind: 'confirmed' as const, bar: b },
+        }));
+    }, [filteredBars]);
 
-    const googleMapRef = useRef<any>(null);
+    const clusterPointsScanned = useMemo<ClusterablePoint<ClusterBar>[]>(() => {
+        return filteredScannedBars.map((b) => ({
+            id: `s-${b.id}`,
+            latitude: b.lat,
+            longitude: b.lon,
+            data: { kind: 'scanned' as const, bar: b },
+        }));
+    }, [filteredScannedBars]);
 
-    const autocompleteInputRef = useRef<any>(null);
+    const clustersConfirmed = useClusters<ClusterBar>({
+        points: clusterPointsConfirmed,
+        bounds: visibleBounds,
+        zoom: currentZoom,
+        radius: 60,
+        maxZoom: 16,
+        minPoints: 3,
+    });
 
-    const polylineRef = useRef<any>(null);
+    const clustersScanned = useClusters<ClusterBar>({
+        points: clusterPointsScanned,
+        bounds: visibleBounds,
+        zoom: currentZoom,
+        radius: 60,
+        maxZoom: 16,
+        minPoints: 3,
+    });
 
-    const userMarkerRef = useRef<any>(null);
+    // Anotem cada feature amb el seu "kind" perquè el render pugui pintar
+    // els clústers en color diferent (grana vs gris) sense ambigüitat.
+    const clusters = useMemo(() => {
+        const tagged: any[] = [];
+        clustersConfirmed.forEach((f) => {
+            tagged.push({ ...f, properties: { ...f.properties, clusterKind: 'confirmed' } });
+        });
+        clustersScanned.forEach((f) => {
+            tagged.push({ ...f, properties: { ...f.properties, clusterKind: 'scanned' } });
+        });
+        return tagged;
+    }, [clustersConfirmed, clustersScanned]);
 
 
 
@@ -331,12 +352,6 @@ const MapScreen = () => {
 
     // Posició del mapa abans d'obrir ReportBar (per restaurar al tancar)
     const preReportPositionRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
-
-    // Estat de càrrega de Mapbox web
-
-    const [mapboxLoaded, setMapboxLoaded] = useState(false);
-
-    
 
     // Animació d'instruccions
 
@@ -430,17 +445,7 @@ const MapScreen = () => {
     // 0b. Quan canvia el radi de cerca, ajustar el zoom del mapa
     useEffect(() => {
         if (!centerLocation) return;
-        if (Platform.OS === 'web') {
-            if (mapboxLoaded && mapRef.current) {
-                mapRef.current.flyTo({
-                    center: [centerLocation.longitude, centerLocation.latitude],
-                    zoom: radiusToZoom(searchRadiusKm),
-                    speed: 1.2,
-                });
-            } else if (googleMapRef.current) {
-                googleMapRef.current.setZoom(radiusToZoom(searchRadiusKm));
-            }
-        } else if (mapRefNative.current) {
+        if (mapRefNative.current) {
             const delta = radiusToLatDelta(searchRadiusKm);
             mapRefNative.current.animateToRegion({
                 latitude: centerLocation.latitude,
@@ -506,39 +511,58 @@ const MapScreen = () => {
         }
     }, [refreshParam]);
 
+    // ---- Refresc per bbox amb debounce + cache ----------------------------
+    // Quan canvia la zona visible, demanem només els bars dins d'aquest bbox
+    // (limit 300) i els fusionem al pool. Així evitem que, en un dataset
+    // gran, haguem de descarregar tota la col·lecció `bars`.
+    // Cache simple per evitar refetches dins una zona ja consultada.
+    const bboxCacheRef = useRef<Map<string, number>>(new Map()); // key → timestamp
+    const bboxFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const BBOX_CACHE_TTL_MS = 60_000;
+
+    useEffect(() => {
+        if (!visibleBounds) return;
+        // Debounce 400ms — esperem que l'usuari acabi de moure el mapa
+        if (bboxFetchTimerRef.current) clearTimeout(bboxFetchTimerRef.current);
+        bboxFetchTimerRef.current = setTimeout(async () => {
+            const { minLat, maxLat, minLng, maxLng } = visibleBounds;
+            // Arrodonim a 2 decimals (~1.1 km) per agrupar bbox semblants a la cache
+            const key = `${minLat.toFixed(2)},${maxLat.toFixed(2)},${minLng.toFixed(2)},${maxLng.toFixed(2)}`;
+            const last = bboxCacheRef.current.get(key);
+            if (last && Date.now() - last < BBOX_CACHE_TTL_MS) return; // ja és recent
+            bboxCacheRef.current.set(key, Date.now());
+            try {
+                const extra = await fetchBarsInBounds(minLat, maxLat, minLng, maxLng, 300);
+                if (extra.length === 0) return;
+                setBars((prev) => {
+                    const seen = new Set(prev.map((b) => b.id));
+                    const merged = prev.slice();
+                    extra.forEach((b) => { if (!seen.has(b.id)) merged.push(b); });
+                    return merged;
+                });
+            } catch {
+                /* ignore */
+            }
+        }, 400);
+        return () => {
+            if (bboxFetchTimerRef.current) clearTimeout(bboxFetchTimerRef.current);
+        };
+    }, [visibleBounds]);
+
     // Navegar a ReportBar centrant el mapa sobre el bar
     const navigateToReportBar = useCallback((osmBar: any) => {
-        // Guardar posició actual del mapa
-        if (Platform.OS === 'web') {
-            if (mapboxLoaded && mapRef.current) {
-                const center = mapRef.current.getCenter();
-                const zoom = mapRef.current.getZoom();
-                preReportPositionRef.current = { lat: center.lat, lng: center.lng, zoom };
-                mapRef.current.flyTo({
-                    center: [osmBar.lon, osmBar.lat],
-                    offset: [0, height * 0.25],
-                    zoom: Math.max(zoom, 16),
-                    speed: 1.5,
-                });
-            }
-        } else {
-            if (mapRefNative.current) {
-                // En natiu, guardem la posició via centerLocation i currentZoom
-                preReportPositionRef.current = {
-                    lat: centerLocation?.latitude || osmBar.lat,
-                    lng: centerLocation?.longitude || osmBar.lon,
-                    zoom: currentZoom,
-                };
-                mapRefNative.current.animateToRegion({
-                    latitude: osmBar.lat + CAMERA_LAT_OFFSET,
-                    longitude: osmBar.lon,
-                    latitudeDelta: MAP_REGION_DELTA,
-                    longitudeDelta: MAP_REGION_DELTA,
-                }, 500);
-            }
+        // Guardar posici\u00f3 actual del mapa (per restaurar-la quan tornem)
+        if (mapRefNative.current) {
+            preReportPositionRef.current = {
+                lat: centerLocation?.latitude || osmBar.lat,
+                lng: centerLocation?.longitude || osmBar.lon,
+                zoom: currentZoom,
+            };
+            // Sense zoom for\u00e7at: nom\u00e9s una recol\u00b7locaci\u00f3 suau si el bar
+            // \u00e9s a prop, perqu\u00e8 ja \u00e9s visible. Evitem el "zoom massa b\u00e8stia".
         }
         navigation.navigate('ReportBar' as any, { osmBar });
-    }, [mapboxLoaded, height, centerLocation, currentZoom, navigation]);
+    }, [centerLocation, currentZoom, navigation]);
 
     // Restaurar posició del mapa quan ReportBar es tanca (detectat via canvi d'estat de navegació)
     useEffect(() => {
@@ -552,30 +576,20 @@ const MapScreen = () => {
                 preReportPositionRef.current = null;
                 // Restaurar posició amb un petit retard per permetre l'animació de tancament
                 setTimeout(() => {
-                    if (Platform.OS === 'web') {
-                        if (mapboxLoaded && mapRef.current) {
-                            mapRef.current.flyTo({
-                                center: [saved.lng, saved.lat],
-                                zoom: saved.zoom,
-                                speed: 1.2,
-                            });
-                        }
-                    } else {
-                        if (mapRefNative.current) {
-                            const delta = 360 / (Math.pow(2, saved.zoom) * 256) * height;
-                            mapRefNative.current.animateToRegion({
-                                latitude: saved.lat,
-                                longitude: saved.lng,
-                                latitudeDelta: delta || MAP_REGION_DELTA,
-                                longitudeDelta: delta || MAP_REGION_DELTA,
-                            }, 500);
-                        }
+                    if (mapRefNative.current) {
+                        const delta = 360 / (Math.pow(2, saved.zoom) * 256) * height;
+                        mapRefNative.current.animateToRegion({
+                            latitude: saved.lat,
+                            longitude: saved.lng,
+                            latitudeDelta: delta || MAP_REGION_DELTA,
+                            longitudeDelta: delta || MAP_REGION_DELTA,
+                        }, 500);
                     }
                 }, 300);
             }
         });
         return unsubscribe;
-    }, [navigation, mapboxLoaded, height]);
+    }, [navigation, height]);
 
 
 
@@ -600,112 +614,6 @@ const MapScreen = () => {
         }, [loadBars])
 
     );
-
-
-
-    // 3. Inicialització específica per a web
-
-    useEffect(() => {
-
-        if (Platform.OS !== 'web') return; 
-
-
-
-        // Injectar Google Fonts (Lora — serif net per a millor llegibilitat)
-
-        const fontLink = document.createElement('link');
-
-        fontLink.href = 'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap';
-
-        fontLink.rel = 'stylesheet';
-
-        document.head.appendChild(fontLink);
-
-
-
-        // Injectar estils personalitzats de scrollbar (estil esbossat)
-
-        const style = document.createElement('style');
-
-        style.innerHTML = `
-
-            ::-webkit-scrollbar {
-
-                width: 10px;
-
-                height: 10px;
-
-            }
-
-            ::-webkit-scrollbar-track {
-
-                background: ${SKETCH_THEME.colors.bg}; 
-
-            }
-
-            ::-webkit-scrollbar-thumb {
-
-                background-color: ${SKETCH_THEME.colors.textMuted};
-
-                border-radius: 5px;
-
-                border: 2px solid ${SKETCH_THEME.colors.bg};
-
-            }
-
-            ::-webkit-scrollbar-thumb:hover {
-
-                background-color: ${SKETCH_THEME.colors.text};
-
-            }
-
-            input::placeholder {
-
-                color: rgba(255,255,255) !important;
-
-            }
-
-            .maplibregl-popup-content {
-
-                padding: 0 !important;
-
-                background: transparent !important;
-
-                box-shadow: none !important;
-
-            }
-
-            .maplibregl-popup-tip {
-
-                display: none !important;
-
-            }
-
-        `;
-
-        document.head.appendChild(style);
-
-
-
-        const mapboxLink = document.createElement('link'); mapboxLink.href='https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'; mapboxLink.rel='stylesheet'; document.head.appendChild(mapboxLink); 
-
-        
-
-        const mapboxScript = document.createElement('script');
-
-        mapboxScript.src = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
-
-        mapboxScript.onload = () => setMapboxLoaded(true);
-
-        mapboxScript.onerror = () => { console.error('MapLibre failed to load'); };
-
-        document.head.appendChild(mapboxScript);
-
-        
-
-        // Ja no carreguem el Google Maps JS API — usem Nominatim per a geocodificació
-
-    }, [centerLocation]); 
 
 
 
@@ -756,18 +664,9 @@ const MapScreen = () => {
 
              );
 
-             // A poc zoom: amagar bars gratuïts per reduir soroll, EXCEPTE si hi ha filtres actius
-             const FREE_HIDE_ZOOM = 11;
-
-             if (currentZoom < FREE_HIDE_ZOOM && activeFilters.size === 0) {
-
-                 setFilteredBars(applyFilters(inView.filter(bar => bar.tier === 'premium')));
-
-             } else {
-
-                 setFilteredBars(applyFilters(inView));
-
-             }
+             // Tots els bars al cluster — el clustering ja agrupa visualment
+             // i el comptador del clúster es manté consistent entre zooms.
+             setFilteredBars(applyFilters(inView));
 
         } else {
 
@@ -987,11 +886,12 @@ const MapScreen = () => {
 
             console.error(e);
 
-            Alert.alert(
-                'Servei temporalment no disponible',
-                'No hem pogut connectar amb el servidor de mapes. Torna-ho a provar d\'aquí uns segons.',
-                [{ text: 'Entesos' }]
-            );
+            showAlert({
+                tone: 'error',
+                eyebrow: 'Servei no disponible',
+                message: "No hem pogut connectar amb el servidor de mapes. Torna-ho a provar d'aquí uns segons.",
+                duration: 6000,
+            });
 
         } finally {
 
@@ -1013,6 +913,13 @@ const MapScreen = () => {
 
         } else {
 
+            // Avisar de la convenció de marcadors grisos abans/durant la cerca
+            showAlert({
+                tone: 'info',
+                eyebrow: 'Avis',
+                message: "En gris trobar\u00e0s bars sense confirmar. Clica'ls per avisar si donen el partit!",
+                duration: 5000,
+            });
             handleManualScan(); // Cercar
 
         }
@@ -1136,7 +1043,7 @@ const MapScreen = () => {
 
                     toValue: 0,
 
-                    useNativeDriver: Platform.OS !== 'web',
+                    useNativeDriver: true,
 
                     friction: 5,
 
@@ -1152,25 +1059,11 @@ const MapScreen = () => {
 
                     duration: 300,
 
-                    useNativeDriver: Platform.OS !== 'web',
+                    useNativeDriver: true,
 
                 }).start();
 
             }
-
-        }
-
-
-
-        // Actualitzar específics de plataforma
-
-        if (Platform.OS === 'web') {
-
-            // La lògica visual de MapBox és reactiva a l'estat (filteredBars), no cal actualitzar el DOM imperativament.
-
-        } else {
-
-            // El mapa natiu s'actualitza automàticament via la prop filteredBars de MapView
 
         }
 
@@ -1192,13 +1085,17 @@ const MapScreen = () => {
 
          bubbleOpacity.setValue(0);
 
+         // La bafarada NO ha d'esperar el placeDetails per aparèixer:
+         // l'usuari ha clicat un bar registrat i espera resposta immediata.
+         // El contingut detallat (fotos, horaris) s'omple a posteriori.
+         if (selectedBar) {
+             // Petit delay per deixar començar l'animació de càmera abans de pintar.
+             setTimeout(() => setBubbleReady(true), 50);
+         }
 
 
          // Animació del BottomSheet
-
-         if (Platform.OS !== 'web' || !isDesktop) {
-
-            if (selectedBar) {
+         if (selectedBar) {
 
                 const target = Math.min(Math.max(380, height * 0.58), height * 0.78);
 
@@ -1213,9 +1110,7 @@ const MapScreen = () => {
                 }).start();
 
                 lastHeight.current = target;
-
-            } else {
-
+         } else {
                 const hasResults = filteredBars.length > 0;
 
                 const target = hasResults ? Math.max(160, height * 0.25) : 120;
@@ -1233,54 +1128,12 @@ const MapScreen = () => {
                 }).start();
 
                 lastHeight.current = target;
-
             }
-
-         }
-
-
-
-         // Web: Centrar bar al mapa + obtenir ruta
-
-         if (Platform.OS === 'web') {
-
-             if (selectedBar) {
-
-                 if (googleMapRef.current) {
-
-                     const map = googleMapRef.current;
-
-                     const targetZoom = Math.max(map.getZoom() || 15, 16);
-
-                     map.setZoom(targetZoom);
-
-                     // Desplazar cap amunt perquè el marcador quedi a la part inferior de la pantalla (compensant la bafarada superposada)
-
-                     // En zoom 16, 0.003 graus aprox compensen molt visualment
-
-                     map.panTo({ lat: selectedBar.latitude + CAMERA_LAT_OFFSET, lng: selectedBar.longitude });
-
-                 }
-
-                 fetchWebRoute(selectedBar);
-
-             } else {
-
-                 setRouteInfo(null);
-
-                 setRouteGeoJSON(null);
-
-                 if (polylineRef.current) polylineRef.current.setMap(null);
-
-             }
-
-         }
-
 
 
          // Natiu: Centrar exactament sobre el bar
 
-         if (Platform.OS !== 'web' && selectedBar && mapRefNative.current) {
+         if (selectedBar && mapRefNative.current) {
 
              const newRegion = {
 
@@ -1300,6 +1153,11 @@ const MapScreen = () => {
 
              mapRefNative.current.animateToRegion(newRegion, 500);
 
+             // Obtenir info de ruta (distància / temps caminant)
+             fetchRoute(selectedBar);
+         } else {
+             setRouteInfo(null);
+             setRouteCoords(null);
          }
 
 
@@ -1338,10 +1196,6 @@ const MapScreen = () => {
                  .finally(() => {
 
                      setLoadingPlaceDetails(false);
-
-                     // Esperar una mica perquè el mapa es calmi, després mostrar la bafarada
-
-                     setTimeout(() => setBubbleReady(true), 350);
 
                  });
 
@@ -1393,83 +1247,7 @@ const MapScreen = () => {
 
 
 
-    // 6. Actualitzar marcador d'usuari al web quan la ubicació estigui disponible
-
-    useEffect(() => {
-
-        if (Platform.OS !== 'web' || !userLocation) return;
-
-
-
-        // Lògica de Mapbox / MapLibre
-
-        if (mapboxLoaded && mapRef.current) {
-
-            if (!selectedBar) {
-
-                mapRef.current.flyTo({
-
-                    center: [userLocation.coords.longitude, userLocation.coords.latitude],
-
-                    zoom: radiusToZoom(searchRadiusKm),
-
-                    speed: 1.2
-
-                });
-
-            }
-
-            return;
-
-        }
-
-        
-
-        if (!googleMapRef.current) return;
-
-        
-
-        // Centrar mapa a la posició real de l'usuari (pot haver-se inicialitzat amb Barcelona per defecte)
-
-        if (!selectedBar) {
-
-            googleMapRef.current.panTo({ lat: userLocation.coords.latitude, lng: userLocation.coords.longitude });
-
-        }
-
-        
-
-        if (userMarkerRef.current) userMarkerRef.current.setMap(null);
-
-        userMarkerRef.current = new window.google.maps.Marker({
-
-            position: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
-
-            map: googleMapRef.current,
-
-            title: "La teva ubicació",
-
-            zIndex: 999,
-
-            icon: {
-
-                path: window.google.maps.SymbolPath.CIRCLE,
-
-                scale: 10,
-
-                fillColor: '#2196F3',
-
-                fillOpacity: 1,
-
-                strokeColor: 'white',
-
-                strokeWeight: 3,
-
-            }
-
-        });
-
-    }, [userLocation, mapboxLoaded, selectedBar]);
+    // 6. L'ubicació de l'usuari es mostra natiu via showsUserLocation={true} a MapView
 
 
 
@@ -1503,14 +1281,19 @@ const MapScreen = () => {
         setCenterLocation(newLocation);
         setSearchQuery(s.display_name.split(',').slice(0, 2).join(','));
         setGeoSuggestions([]);
-        if (mapRef.current) {
-            mapRef.current.flyTo({ center: [newLocation.longitude, newLocation.latitude], zoom: 15 });
+        if (mapRefNative.current) {
+            mapRefNative.current.animateToRegion({
+                latitude: newLocation.latitude,
+                longitude: newLocation.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            }, 500);
         }
     }, []);
 
 
 
-    const fetchWebRoute = async (bar: Bar) => {
+    const fetchRoute = async (bar: Bar) => {
 
         if (!centerLocation) return;
 
@@ -1560,65 +1343,7 @@ const MapScreen = () => {
 
                 const route = result.routes[0];
 
-                if (polylineRef.current) polylineRef.current.setMap(null);
-
-                
-
-                // Configuració de línia de ruta MapLibre
-
-                if (route.polyline && route.polyline.encodedPolyline) {
-
-                    try {
-
-                        const coords = decodePolyline(route.polyline.encodedPolyline);
-
-                        setRouteGeoJSON({
-
-                            type: 'Feature',
-
-                            properties: {},
-
-                            geometry: {
-
-                                type: 'LineString',
-
-                                // @ts-ignore
-
-                                coordinates: coords
-
-                            }
-
-                        });
-
-                    } catch (e) {
-
-                        console.error('Error decoding polyline', e);
-
-                    }
-
-                }
-
-
-
-                // Alternativa per Google Maps si encara s'utilitza
-
-                if (window.google && window.google.maps && window.google.maps.geometry && googleMapRef.current) {
-
-                    const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline.encodedPolyline);
-
-                    polylineRef.current = new window.google.maps.Polyline({
-
-                        path: decodedPath, geodesic: true, strokeColor: SKETCH_THEME.colors.primary,
-
-                        strokeOpacity: 1.0, strokeWeight: 5, map: googleMapRef.current
-
-                    });
-
-                }
-
-
-
-                // Calcular informació
+                // Calcular informació de ruta
 
                 const durationSeconds = parseInt(route.duration.replace('s', ''));
 
@@ -1632,45 +1357,22 @@ const MapScreen = () => {
 
                 setRouteInfo({ distance: distanceKm, duration: durationText });
 
-
-
-                // Fer zoom per encabir els límits de la ruta
-
-                // Al mòbil, mantenim el bar centrat i deixem que l'usuari vegi la ruta des d'allà
-
-                if (isDesktop && mapRef.current && route.polyline && route.polyline.encodedPolyline) {
-
-                    try {
-
-                        const coords = decodePolyline(route.polyline.encodedPolyline);
-
-                        const lats = coords.map((c: any) => c[1]);
-
-                        const lngs = coords.map((c: any) => c[0]);
-
-                        const minLat = Math.min(...lats);
-
-                        const maxLat = Math.max(...lats);
-
-                        const minLng = Math.min(...lngs);
-
-                        const maxLng = Math.max(...lngs);
-
-                        mapRef.current.fitBounds(
-
-                            [Number(minLng), Number(minLat), Number(maxLng), Number(maxLat)],
-
-                            { padding: { top: 60, bottom: 80, left: 420, right: 30 } }
-
-                        );
-
-                    } catch (e) {}
-
+                // Descodificar la polil\u00ednia per dibuixar la ruta sobre el mapa
+                try {
+                    const encoded = route.polyline?.encodedPolyline;
+                    if (encoded) {
+                        const pts = decodePolyline(encoded);
+                        setRouteCoords(pts.map(([lng, lat]) => ({ latitude: lat, longitude: lng })));
+                    } else {
+                        setRouteCoords(null);
+                    }
+                } catch {
+                    setRouteCoords(null);
                 }
 
             }
 
-        }, 'fetchWebRoute');
+        }, 'fetchRoute');
 
     };
 
@@ -1685,41 +1387,9 @@ const MapScreen = () => {
              setCenterLocation({ latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude });
 
              setSearchQuery('');
+             setGeoSuggestions([]);
 
-             // Reinici d'interfície específic per a web
-
-             if (Platform.OS === 'web') {
-
-                 if (mapRef.current) {
-
-                     mapRef.current.flyTo({
-
-                         center: [userLocation.coords.longitude, userLocation.coords.latitude],
-
-                         zoom: 15
-
-                     });
-
-                 } else if (googleMapRef.current) {
-
-                     // Alternativa per Google Maps si encara s'usa (ara usem Mapbox/MapLibre)
-
-                     googleMapRef.current.panTo({ lat: userLocation.coords.latitude, lng: userLocation.coords.longitude });
-
-                     googleMapRef.current.setZoom(15);
-
-                 }
-
-                 
-
-                 if (autocompleteInputRef.current) autocompleteInputRef.current.value = '';
-                 setSearchQuery(''); setGeoSuggestions([]);
-
-             }
-
-             // Reinici d'interfície específic per a natiu
-
-             if (Platform.OS !== 'web' && mapRefNative.current) {
+             if (mapRefNative.current) {
 
                  mapRefNative.current.animateToRegion({
 
@@ -1783,11 +1453,35 @@ const MapScreen = () => {
 
 
 
-        // Web: obrir Google Maps directament (Alert.alert no funciona a la web)
         if (Platform.OS === 'web') {
-            window.open(googleUrl, '_blank');
+
+            // Al web, Alert.alert amb m\u00faltiples bot\u00f3 no exposa callbacks; obrim
+
+            // directament Google Maps en una pestanya nova.
+
+            try {
+
+                if (typeof window !== 'undefined' && window.open) {
+
+                    window.open(googleUrl, '_blank', 'noopener,noreferrer');
+
+                } else {
+
+                    Linking.openURL(googleUrl);
+
+                }
+
+            } catch {
+
+                Linking.openURL(googleUrl);
+
+            }
+
             return;
+
         }
+
+
 
         if (Platform.OS === 'ios') {
 
@@ -1873,8 +1567,9 @@ const MapScreen = () => {
 
         });
         // Esborrar ruta del mapa
-        setRouteGeoJSON(null);
+        // -- Aquí el timeout del renderSearchSettingsOverlay --
         setRouteInfo(null);
+        setRouteCoords(null);
         // Tancar desplegables de cerca/filtres
         setShowFiltersPanel(false);
         setGeoSuggestions([]);
@@ -2096,7 +1791,6 @@ const MapScreen = () => {
                 overflow: 'hidden',
                 maxHeight: height * 0.55,
                 ...Platform.select({
-                    web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any,
                     ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
                     android: { elevation: 10 },
                     default: {},
@@ -2111,7 +1805,7 @@ const MapScreen = () => {
                     )}
                 </View>
                 <ScrollView
-                    style={Platform.OS === 'web' ? { maxHeight: height * 0.48, overflow: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' } as any : { maxHeight: height * 0.48 }}
+                    style={{ maxHeight: height * 0.48 }}
                     bounces={false}
                     showsVerticalScrollIndicator={false}
                 >
@@ -2159,7 +1853,7 @@ const MapScreen = () => {
                     justifyContent: 'center', alignItems: 'center',
                 }}
             >
-                <Feather name="sliders" size={18} color={hasActiveFilters ? 'white' : SKETCH_THEME.colors.textInverse} />
+                <Feather name="sliders" size={18} color={hasActiveFilters ? 'white' : SKETCH_THEME.colors.text} />
                 {hasActiveFilters && (
                     <View style={{
                         position: 'absolute', top: -4, right: -4,
@@ -2173,45 +1867,21 @@ const MapScreen = () => {
             </TouchableOpacity>
         );
 
-        if (Platform.OS === 'web') {
-             return (
-                 <View style={styles.searchBar}>
-                    <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
-                    {/* @ts-ignore */}
-                    <input
-                        ref={autocompleteInputRef}
-                        type="text"
-                        placeholder={placeholderText}
-                        style={{
-                            flex: 1, fontSize: '16px', border: 'none', outline: 'none', backgroundColor: 'transparent', height: '100%', color: SKETCH_THEME.colors.textInverse, fontFamily: 'Lora'
-                        }}
-                        value={searchQuery}
-                        onChange={(e: any) => handleSearchInput(e.target.value)}
-                    />
-                     {searchQuery !== '' && (
-                        <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 4}}>
-                            <Feather name="x" size={16} color="rgba(255,255,255,0.6)" />
-                        </TouchableOpacity>
-                    )}
-                    {filterIconButton}
-                 </View>
-             )
-        }
         // Input natiu
         return (
              <View style={styles.searchBar}>
-                <Feather name="search" size={20} color={SKETCH_THEME.colors.textInverse} style={{marginRight: 10}} />
+                <Feather name="search" size={18} color={SKETCH_THEME.colors.textMuted} style={{marginRight: 10}} />
                 <TextInput 
                     placeholder={placeholderText} 
                     style={[styles.searchInput, { flex: 1 }]}
-                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    placeholderTextColor="rgba(15,27,45,0.4)"
                     value={searchQuery}
                     onChangeText={handleSearchInput}
                     onSubmitEditing={() => searchNominatim(searchQuery)}
                 />
                 {searchQuery !== '' && (
                     <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 4}}>
-                        <Feather name="x" size={16} color="rgba(255,255,255,0.6)" />
+                        <Feather name="x" size={16} color={SKETCH_THEME.colors.textMuted} />
                     </TouchableOpacity>
                 )}
                 {filterIconButton}
@@ -2234,7 +1904,7 @@ const MapScreen = () => {
                             borderRadius: 12,
                             borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
                             overflow: 'hidden',
-                            ...Platform.select({ web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any, default: {} }),
+                            ...Platform.select({ default: {} }),
                         }}>
                             {geoSuggestions.map((s, i) => (
                                 <TouchableOpacity
@@ -2280,7 +1950,6 @@ const MapScreen = () => {
                         borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
                         overflow: 'hidden',
                         ...Platform.select({
-                            web: { boxShadow: '0 4px 16px rgba(0,0,0,0.14)' } as any,
                             ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
                             android: { elevation: 10 },
                             default: {},
@@ -2360,7 +2029,7 @@ const MapScreen = () => {
 
              {(selectedMatch || nextMatch) && (
 
-                <View style={{ marginTop: 8, marginHorizontal: Platform.OS === 'web' ? 0 : 4 }}>
+                <View style={{ marginTop: 8, marginHorizontal: 4 }}>
 
                     {selectedMatch ? (
                         <MatchCard
@@ -2398,127 +2067,8 @@ const MapScreen = () => {
 
                     {renderRadiusSlider()}
 
-                        {/* Amagar botó de cerca si l'àrea visible > 5 km */}
-
-                        {(() => {
-                            if (matchIdFromNav) return null;
-                            const visibleWidthKm = visibleBounds
-                                ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
-                                : 0;
-                            if (visibleBounds && visibleWidthKm > 5) return null;
-                            return (
-                                <>
-
-                        {/* Cerca OSM */}
-
-                        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10}}>
-
-                            {/* Acció de bars escanejats/trobats */}
-
-                            <TouchableOpacity 
-
-                                onPress={handleScanToggle}
-
-                                disabled={isScanning}
-
-                                style={{
-
-                                    backgroundColor: SKETCH_THEME.colors.card,
-
-                                    borderWidth: 2, 
-
-                                    borderColor: SKETCH_THEME.colors.primary,
-
-                                    borderRadius: 20,
-
-                                    paddingVertical: 8,
-
-                                    paddingHorizontal: 16,
-
-                                    flexDirection: 'row',
-
-                                    alignItems: 'center',
-
-                                    ...Platform.select({
-
-                                        web: { boxShadow: '2px 2px 8px rgba(0,0,0,0.1)' },
-
-                                        ios: { shadowColor: 'black', shadowOffset: {width: 2, height: 2}, shadowOpacity: 0.1, shadowRadius: 4 },
-
-                                        android: { elevation: 4 }
-
-                                    })
-
-                                }}
-
-                            >
-
-                                {isScanning ? (
-
-                                    <ActivityIndicator size="small" color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-
-                                ) : (
-
-                                    scannedBars.length > 0 ? (
-
-                                        <Feather name="eye-off" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-
-                                    ) : (
-
-                                        <Feather name="search" size={16} color={SKETCH_THEME.colors.primary} style={{marginRight: 8}} />
-
-                                    )
-
-                                )}
-
-                                <Text style={{
-
-                                    color: SKETCH_THEME.colors.primary, 
-
-                                    fontWeight: 'bold', 
-
-                                    fontFamily: 'Lora',
-
-                                    fontSize: 12
-
-                                }}>
-
-                                    {isScanning ? 'Cercant bars...' : (
-
-                                        scannedBars.length > 0 ? 'Amaga bars' : 'Cerca bars en aquesta zona'
-
-                                    )}
-
-                                </Text>
-
-                            </TouchableOpacity>
-
-
-
-                            {/* Mostra "Afegir més" només si ja en tenim però ens hem mogut?
-                                En realitat l'usuari volia un commutador: si hi ha bars, el botó els amaga.
-                                I si volem buscar de nou? L'slider de radi gestiona el cas "ampliar cerca".
-                            */}
-
-                        </View>
-
-                    { (showScanTip) && (
-
-                        <View style={{ marginTop: 8, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, paddingVertical: 4 }}>
-
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textMuted, textAlign: 'center', fontFamily: 'Lora' }}>
-
-                                En gris trobareu bars sense confirmar. Clica'ls per avisar si donen partits!
-
-                            </Text>
-
-                        </View>
-
-                    )}
-
-                                </>
-                            );
-                        })()}
+                        {/* El bot\u00f3 de cerca de bars ara \u00e9s un FAB stackejat sobre el GPS.
+                            Mantenim aquest fragment buit per no trencar el layout del header. */}
 
                  </>
 
@@ -2572,369 +2122,7 @@ const MapScreen = () => {
 
              <View style={styles.mapContainer}>
 
-                {Platform.OS === 'web' ? (
-
-                    mapboxLoaded ? (
-
-                    <MapboxMap
-
-                        ref={mapRef}
-
-                        mapLib={(window as any).maplibregl}
-
-                        initialViewState={{ longitude: centerLocation?.longitude || 2.1734, latitude: centerLocation?.latitude || 41.3851, zoom: radiusToZoom(searchRadiusKm) }}
-
-                        onMoveEnd={(evt: any) => {
-
-                             setCenterLocation({ latitude: evt.viewState.latitude, longitude: evt.viewState.longitude });
-
-                             const bounds = evt.target.getBounds();
-
-                             if (bounds) {
-
-                                 setVisibleBounds({ minLat: bounds.getSouth(), maxLat: bounds.getNorth(), minLng: bounds.getWest(), maxLng: bounds.getEast() });
-
-                             }
-
-                             const z = evt.target.getZoom();
-
-                             if (z != null) setCurrentZoom(z);
-
-                        }}
-
-                        onLoad={(evt: any) => {
-
-                             const bounds = evt.target.getBounds();
-
-                             if (bounds) {
-
-                                 setVisibleBounds({ minLat: bounds.getSouth(), maxLat: bounds.getNorth(), minLng: bounds.getWest(), maxLng: bounds.getEast() });
-
-                             }
-
-                             const z = evt.target.getZoom();
-
-                             if (z != null) setCurrentZoom(z);
-
-                        }}
-
-                        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-
-                        style={{width: '100%', height: '100%'}}
-
-                        onClick={() => { closeBarBubble(); Keyboard.dismiss(); }}
-
-                    >
-
-                        {routeGeoJSON && (
-
-                            <Source id="route-source" type="geojson" data={routeGeoJSON}>
-
-                                <Layer
-
-                                    id="route-layer"
-
-                                    type="line"
-
-                                    layout={{
-
-                                        'line-join': 'round',
-
-                                        'line-cap': 'round'
-
-                                    }}
-
-                                    paint={{
-
-                                        'line-color': SKETCH_THEME.colors.primary,
-
-                                        'line-width': 5,
-
-                                        'line-opacity': 0.8
-
-                                    }}
-
-                                />
-
-                            </Source>
-
-                        )}
-
-                        {userLocation && (
-
-                             <MapboxMarker longitude={userLocation.coords.longitude} latitude={userLocation.coords.latitude} anchor="center">
-
-                                 <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#2196F3', borderWidth: 3, borderColor: 'white', ...Platform.select({ web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' } }) }} />
-
-                             </MapboxMarker>
-
-                        )}
-
-                        {filteredScannedBars.map(osmBar => (
-
-                             <MapboxMarker key={osmBar.id} longitude={osmBar.lon} latitude={osmBar.lat} anchor="center" onClick={(e: any) => { e.originalEvent.stopPropagation(); navigateToReportBar(osmBar); }}>
-
-                                 <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#777', borderWidth: 2, borderColor: 'white', ...Platform.select({ web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' } }) }} />
-
-                             </MapboxMarker>
-
-                        ))}
-
-                        {filteredBars
-
-                        .slice() // còpia perquè l'ordenació no muti l'original
-
-                        .sort((a, b) => {
-
-                            // Renderitzar bars premium AL FINAL perquè apareguin a sobre (z-index més alt al mapa)
-
-                            const aTier = a.tier === 'premium' ? 1 : 0;
-
-                            const bTier = b.tier === 'premium' ? 1 : 0;
-
-                            return aTier - bTier;
-
-                        })
-
-                        .map(bar => {
-
-                             const isPremium = bar.tier === 'premium';
-
-                             const isSelected = selectedBar?.id === bar.id;
-
-                             return (
-
-                             <MapboxMarker 
-
-                                key={bar.id} 
-
-                                longitude={bar.longitude} 
-
-                                latitude={bar.latitude} 
-
-                                anchor="bottom" 
-
-                                onClick={(e: any) => { 
-
-                                    e.originalEvent.stopPropagation(); 
-
-                                    setSelectedBar(bar);
-
-                                    if(mapRef.current) {
-
-                                       mapRef.current.flyTo({
-
-                                           center: [bar.longitude, bar.latitude],
-
-                                           offset: [0, height * 0.25], 
-
-                                           zoom: 16,
-
-                                           speed: 1.2
-
-                                       });
-
-                                    }
-
-                                }}
-
-                            >
-
-                                 <View style={[styles.markerContainer, isPremium && { zIndex: 100 }]}>
-
-                                    <View style={[styles.markerPin]}>
-
-                                        {/* Cap del pin 3D — igual per a tots els bars */}
-
-                                        <View style={{
-
-                                            width: 34, height: 34, borderRadius: 17,
-
-                                            borderBottomRightRadius: 2,
-
-                                            transform: [{ rotate: '45deg' }],
-
-                                            justifyContent: 'center', alignItems: 'center',
-
-                                            ...Platform.select({
-
-                                                web: {
-
-                                                    background: isSelected
-
-                                                        ? 'linear-gradient(135deg, #555 0%, #222 100%)'
-
-                                                        : `linear-gradient(135deg, ${SKETCH_THEME.colors.primary} 0%, #003270 100%)`,
-
-                                                    boxShadow: '0px 4px 10px rgba(0,0,0,0.35), inset 0px 1px 2px rgba(255,255,255,0.3)',
-
-                                                },
-
-                                            }),
-
-                                            backgroundColor: isSelected ? SKETCH_THEME.colors.text : SKETCH_THEME.colors.primary,
-
-                                        }}>
-
-                                            <View style={{
-
-                                                width: 16, height: 16, borderRadius: 8,
-
-                                                backgroundColor: 'white',
-
-                                                transform: [{ rotate: '-45deg' }],
-
-                                                ...Platform.select({
-
-                                                    web: { boxShadow: 'inset 0px 1px 3px rgba(0,0,0,0.15), 0px 1px 1px rgba(255,255,255,0.4)' },
-
-                                                })
-
-                                            }} />
-
-                                        </View>
-
-                                        {/* Insígnia d'estrella premium */}
-
-                                        {isPremium && (
-
-                                            <View style={{
-
-                                                position: 'absolute', top: -4, right: -6,
-
-                                                width: 20, height: 20, borderRadius: 10,
-
-                                                backgroundColor: '#edbb00', justifyContent: 'center', alignItems: 'center',
-
-                                                borderWidth: 2, borderColor: 'white',
-
-                                                ...Platform.select({
-
-                                                    web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.3)' },
-
-                                                }),
-
-                                            }}>
-
-                                                <Feather name="star" size={10} color="white" />
-
-                                            </View>
-
-                                        )}
-
-                                    </View>
-
-                                 </View>
-
-                             </MapboxMarker>
-
-                             );
-
-                        })}
-
-
-
-                        {selectedBar && (
-
-                            <Popup 
-
-                                longitude={selectedBar.longitude} 
-
-                                latitude={selectedBar.latitude} 
-
-                                anchor="bottom" 
-
-                                offset={[0, -47]} // Flotar per sobre del marcador 3D del pin
-
-                                onClose={() => closeBarBubble()} 
-
-                                closeOnClick={false} 
-
-                                closeButton={false}
-
-                                maxWidth="none"
-
-                                style={{ padding: 0 }}
-
-                            >
-
-                                <View style={{
-
-                                    width: Math.min(340, width * 0.88),
-
-                                    backgroundColor: selectedBar?.tier === 'premium' ? SKETCH_THEME.colors.accent : 'white',
-
-                                    borderRadius: 14,
-
-                                    overflow: 'hidden',
-
-                                    ...Platform.select({
-
-                                        web: { boxShadow: '0px 8px 30px rgba(0,0,0,0.18)' },
-
-                                        ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.2, shadowRadius: 14 },
-
-                                        android: { elevation: 12 }
-
-                                    })
-
-                                }}>
-
-                                    <ScrollView 
-
-                                        style={{ maxHeight: Math.min(420, height * 0.55) }}
-
-                                        showsVerticalScrollIndicator={false}
-
-                                        bounces={false}
-
-                                    >
-
-                                        <View style={{ padding: 14, paddingTop: 12, paddingBottom: 10 }}>
-
-                                            <BarCard 
-
-                                                name={selectedBar.name} 
-
-                                                address={selectedBar.address} 
-
-                                                latitude={selectedBar.latitude} 
-
-                                                longitude={selectedBar.longitude} 
-
-                                                placeDetails={placeDetails} 
-
-                                                loadingPlaceDetails={loadingPlaceDetails} 
-
-                                                verified={true} 
-
-                                                fallbackRating={selectedBar.rating} 
-
-                                                fallbackIsOpen={isOpenNow(selectedBar.openingPeriods)} 
-
-                                                distanceText={routeInfo ? `${routeInfo.duration} caminant (${routeInfo.distance})` : undefined} 
-
-                                                onClose={() => closeBarBubble()} 
-
-                                                onNavigate={() => openExternalMaps(selectedBar)} 
-
-                                                tier={selectedBar.tier || 'free'}
-
-                                                onProfileOpen={() => setShowBarProfile(true)}
-
-                                            />
-
-                                        </View>
-
-                                    </ScrollView>
-
-                                </View>
-
-                            </Popup>
-
-                        )}
-
-                    </MapboxMap>) : (<View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}><ActivityIndicator size="large" color={SKETCH_THEME.colors.primary} /></View>)) : (<MapView
+                <MapView
 
                         ref={mapRefNative}
 
@@ -3040,78 +2228,100 @@ const MapScreen = () => {
 
 
 
-                         {/* Bars escanejats d'OSM */}
+                         {/* Marcadors agrupats per supercluster.
+                             Si un clúster té múltiples punts → bombolla grana amb el comptador.
+                             Si és un sol punt → marcador habitual segons tipus (confirmat/escanejat). */}
+                         {clusters.map((feature) => {
+                             const [lng, lat] = feature.geometry.coordinates;
+                             const props: any = feature.properties;
 
-                         {filteredScannedBars.map(osmBar => (
+                             if (props.cluster) {
+                                 const count: number = props.point_count;
+                                 const size = count < 10 ? 32 : count < 50 ? 40 : 50;
+                                 // El `clusterKind` ens diu si aquest clúster prové del
+                                 // dataset de bars registrats o del d'escanejats — mai
+                                 // contenen una barreja perquè usem índexs independents.
+                                 const onlyScanned = props.clusterKind === 'scanned';
+                                 const clusterBg     = onlyScanned ? '#FFFFFF' : EDITORIAL.grana;
+                                 const clusterText   = onlyScanned ? EDITORIAL.inkMuted : '#FFFFFF';
+                                 const clusterBorder = onlyScanned ? EDITORIAL.hairlineStrong : '#FFFFFF';
+                                 return (
+                                     <Marker
+                                         key={`cluster-${props.clusterKind}-${props.cluster_id}`}
+                                         coordinate={{ latitude: lat, longitude: lng }}
+                                         anchor={{ x: 0.5, y: 0.5 }}
+                                         zIndex={onlyScanned ? 30 : 50}
+                                         onPress={() => {
+                                             // En clicar el clúster, ampliem zoom cap al centre del clúster
+                                             const next = Math.min(20, Math.max(currentZoom + 2, 14));
+                                             const newDelta = 360 / Math.pow(2, next);
+                                             const region = {
+                                                 latitude: lat,
+                                                 longitude: lng,
+                                                 latitudeDelta: newDelta,
+                                                 longitudeDelta: newDelta,
+                                             };
+                                             if (mapRefNative.current?.animateToRegion) {
+                                                 mapRefNative.current.animateToRegion(region, 350);
+                                             }
+                                         }}
+                                     >
+                                         <View style={{
+                                             width: size, height: size, borderRadius: size / 2,
+                                             backgroundColor: clusterBg,
+                                             borderWidth: 2, borderColor: clusterBorder,
+                                             alignItems: 'center', justifyContent: 'center',
+                                             ...Platform.select({
+                                                 web: { boxShadow: '0 4px 10px rgba(15,27,45,0.18)' } as any,
+                                                 ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5 },
+                                                 android: { elevation: 8 },
+                                             }),
+                                         }}>
+                                             <Text style={{
+                                                 color: clusterText,
+                                                 fontFamily: 'Lora_700Bold',
+                                                 fontSize: count < 10 ? 13 : count < 100 ? 12 : 11,
+                                             }}>
+                                                 {count < 100 ? count : `${Math.floor(count / 10) * 10}+`}
+                                             </Text>
+                                         </View>
+                                     </Marker>
+                                 );
+                             }
 
-                            <Marker
+                             const data: ClusterBar = props.data;
+                             if (data.kind === 'scanned') {
+                                 const osmBar = data.bar;
+                                 return (
+                                     <Marker
+                                         key={`scanned-${osmBar.id}`}
+                                         coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
+                                         onPress={() => navigateToReportBar(osmBar)}
+                                         zIndex={1}
+                                     >
+                                         <View style={{
+                                             width: 16, height: 16, borderRadius: 8,
+                                             backgroundColor: '#777',
+                                             borderWidth: 2, borderColor: 'white',
+                                             ...Platform.select({
+                                                 ios: { shadowColor: 'black', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 2 },
+                                                 android: { elevation: 4 },
+                                             }),
+                                         }} />
+                                     </Marker>
+                                 );
+                             }
 
-                                key={osmBar.id}
-
-                                coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
-
-                                onPress={() => navigateToReportBar(osmBar)}
-
-                                zIndex={1}
-
-                            >
-
-                                <View style={{ 
-
-                                    width: 16, height: 16, borderRadius: 8, 
-
-                                    backgroundColor: '#777', 
-
-                                    borderWidth: 2, borderColor: 'white',
-
-                                    ...Platform.select({
-
-                                        ios: { shadowColor: 'black', shadowOffset: {width:0, height:2}, shadowOpacity: 0.3, shadowRadius: 2 },
-
-                                        android: { elevation: 4 }
-
-                                    })
-
-                                }} />
-
-                            </Marker>
-
-                         ))}
-
-
-
-                         {filteredBars
-
-                         .slice()
-
-                         .sort((a, b) => {
-
-                             const aTier = a.tier === 'premium' ? 1 : 0;
-
-                             const bTier = b.tier === 'premium' ? 1 : 0;
-
-                             return aTier - bTier;
-
-                         })
-
-                         .map((bar) => {
-
+                             // confirmed
+                             const bar = data.bar;
                              const isPremium = bar.tier === 'premium';
-
                              const isSelected = selectedBar?.id === bar.id;
-
                              return (
-
                                 <Marker
-
-                                    key={bar.id}
-
+                                    key={`bar-${bar.id}`}
                                     coordinate={{ latitude: bar.latitude, longitude: bar.longitude }}
-
                                     title={getCleanBarName(bar.name)}
-
                                     anchor={{ x: 0.5, y: 1.0 }}
-
                                     onPress={() => setSelectedBar(bar)}
 
                                     zIndex={isPremium ? 100 : 1}
@@ -3192,13 +2402,20 @@ const MapScreen = () => {
 
                                 </Marker>
 
-                             )
-
+                             );
                          })}
 
-                    </MapView>
+                        {/* Ruta caminant fins al bar seleccionat */}
+                        {routeCoords && routeCoords.length > 1 && (
+                            <Polyline
+                                coordinates={routeCoords}
+                                strokeColor={EDITORIAL.grana}
+                                strokeWidth={4}
+                                zIndex={5}
+                            />
+                        )}
 
-                )}
+                    </MapView>
 
              </View>
 
@@ -3237,39 +2454,105 @@ const MapScreen = () => {
                     {/* Overlay flotant de suggeriments/filtres — fora del header per evitar clipping */}
                     {renderSearchDropdownOverlay()}
 
-                    <TouchableOpacity 
-
+                    {/* Controls flotants de l'app — apilats a baix-dreta.
+                        Els controls natius de Google (+/-) viuen a l'esquerra. */}
+                    <TouchableOpacity
                         style={[
-
                             styles.fabGps,
-
-                            { 
-
-                                // Moure el botó GPS amunt si hi ha bar seleccionat per no solapar la bafarada inferior? 
-
-                                // O mantenir-lo a baix. La imatge el mostra a baix a la dreta.
-
-                                bottom: user ? 100 : 20 
-
-                            } 
-
+                            { bottom: user ? 100 : 20 },
                         ]}
-
                         onPress={centerMapToGPS}
-
+                        accessibilityLabel="Centrar a la meva ubicaci\u00f3"
                     >
-
-                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.primary} />
-
+                        <Feather name="crosshair" size={22} color={EDITORIAL.grana} />
                     </TouchableOpacity>
 
+                    {(() => {
+                        if (matchIdFromNav) return null;
+                        const visibleWidthKm = visibleBounds
+                            ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
+                            : 0;
+                        if (visibleBounds && visibleWidthKm > 2) return null;
+                        return (
+                            <TouchableOpacity
+                                style={[
+                                    styles.fabGps,
+                                    { bottom: (user ? 100 : 20) + 44 },
+                                ]}
+                                onPress={handleScanToggle}
+                                disabled={isScanning}
+                                accessibilityLabel={scannedBars.length > 0 ? 'Amagar bars sense confirmar' : 'Cercar bars a la zona visible'}
+                            >
+                                {isScanning ? (
+                                    <ActivityIndicator size="small" color={EDITORIAL.grana} />
+                                ) : (
+                                    <Feather
+                                        name={scannedBars.length > 0 ? 'eye-off' : 'search'}
+                                        size={22}
+                                        color={EDITORIAL.grana}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })()}
 
 
-                    {/* Targeta de detall del bar — ELIMINADA */}
+
+                    {/* Targeta de detall del bar (mòbil) — bafarada flotant que apareix
+                        quan s'ha seleccionat un bar. Reutilitza renderContentPanel(),
+                        que ja sap dibuixar la BarCard si selectedBar != null. */}
+                    {selectedBar && (
+                        <Animated.View
+                            style={{
+                                position: 'absolute',
+                                left: 12,
+                                right: 12,
+                                bottom: (user ? 90 : 20) + 12,
+                                opacity: bubbleOpacity,
+                                transform: [{ scale: bubbleScale }],
+                                zIndex: 20,
+                                backgroundColor: EDITORIAL.paper,
+                                borderRadius: 8,
+                                padding: 16,
+                                borderWidth: 1,
+                                borderColor: EDITORIAL.hairlineStrong,
+                                ...(selectedBar.tier === 'premium' && {
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: EDITORIAL.grana,
+                                }),
+                                ...Platform.select({
+                                    web: { boxShadow: '0 8px 24px rgba(15,27,45,0.18)' } as any,
+                                    ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 },
+                                    android: { elevation: 12 },
+                                }),
+                            }}
+                        >
+                            {/* Botó tancar */}
+                            <TouchableOpacity
+                                onPress={() => closeBarBubble()}
+                                style={{
+                                    position: 'absolute',
+                                    top: 8,
+                                    right: 8,
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 14,
+                                    backgroundColor: EDITORIAL.granaSoft,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    zIndex: 30,
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Feather name="x" size={16} color={EDITORIAL.grana} />
+                            </TouchableOpacity>
+                            {renderContentPanel()}
+                        </Animated.View>
+                    )}
 
 
 
-                    {/* Barra de navegació inferior — Només mostrar si autenticat */}
+                    {/* Barra de navegació inferior — Editorial */}
 
                     {user && (
 
@@ -3283,11 +2566,11 @@ const MapScreen = () => {
 
                             right: 0,
 
-                            backgroundColor: SKETCH_THEME.colors.bg,
+                            backgroundColor: EDITORIAL.paper,
 
                             borderTopWidth: 1,
 
-                            borderTopColor: 'rgba(255,255,255,0.15)',
+                            borderTopColor: EDITORIAL.hairline,
 
                             paddingBottom: 20,
 
@@ -3300,13 +2583,9 @@ const MapScreen = () => {
                             alignItems: 'center',
 
                             ...Platform.select({
-
-                                web: { boxShadow: '0px -2px 10px rgba(0,0,0,0.1)' },
-
-                                ios: { shadowColor: 'black', shadowOffset: {width: 0, height: -2}, shadowOpacity: 0.1, shadowRadius: 4 },
-
+                                web: { boxShadow: '0 -2px 8px rgba(15,27,45,0.06)' } as any,
+                                ios: { shadowColor: '#000', shadowOffset: {width: 0, height: -2}, shadowOpacity: 0.06, shadowRadius: 6 },
                                 android: { elevation: 8 }
-
                             })
 
                         }}>
@@ -3319,9 +2598,9 @@ const MapScreen = () => {
 
                         >
 
-                            <Ionicons name="calendar-outline" size={26} color={SKETCH_THEME.colors.mutedInverse} />
+                            <Ionicons name="calendar-outline" size={24} color={EDITORIAL.inkMuted} />
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.mutedInverse, marginTop: 4, fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 10, color: EDITORIAL.inkMuted, marginTop: 4, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
 
                                 Partits
 
@@ -3341,7 +2620,7 @@ const MapScreen = () => {
 
                             <View style={{
 
-                                backgroundColor: SKETCH_THEME.colors.accent,
+                                backgroundColor: EDITORIAL.grana,
 
                                 width: 56,
 
@@ -3357,17 +2636,21 @@ const MapScreen = () => {
 
                                 borderWidth: 4,
 
-                                borderColor: SKETCH_THEME.colors.bg,
+                                borderColor: EDITORIAL.paper,
 
-                                ...sketchShadow()
+                                ...Platform.select({
+                                    web: { boxShadow: '0 4px 12px rgba(165,0,68,0.25)' } as any,
+                                    ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.2, shadowRadius: 8 },
+                                    android: { elevation: 6 }
+                                })
 
                             }}>
 
-                                <Feather name="map-pin" size={28} color="white" />
+                                <Feather name="map-pin" size={26} color="#FFFFFF" />
 
                             </View>
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.textInverse, marginTop: 8, fontWeight: 'bold', fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 10, color: EDITORIAL.grana, marginTop: 8, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
 
                                 Mapa
 
@@ -3399,9 +2682,9 @@ const MapScreen = () => {
 
                                         borderRadius: 13,
 
-                                        borderWidth: 1.5,
+                                        borderWidth: 1,
 
-                                        borderColor: SKETCH_THEME.colors.mutedInverse
+                                        borderColor: EDITORIAL.hairlineStrong
 
                                     }} 
 
@@ -3409,11 +2692,11 @@ const MapScreen = () => {
 
                             ) : (
 
-                                <Feather name="user" size={26} color={SKETCH_THEME.colors.mutedInverse} />
+                                <Feather name="user" size={24} color={EDITORIAL.inkMuted} />
 
                             )}
 
-                            <Text style={{ fontSize: 11, color: SKETCH_THEME.colors.mutedInverse, marginTop: 4, fontFamily: 'Lora' }}>
+                            <Text style={{ fontSize: 10, color: EDITORIAL.inkMuted, marginTop: 4, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
 
                                 Perfil
 
@@ -3431,22 +2714,43 @@ const MapScreen = () => {
 
 
 
-             {/* BOTÓ GPS D'ESCRIPTORI */}
-
+             {/* CONTROLS DE L'APP — ESCRIPTORI: apilats a baix-dreta */}
              {isDesktop && (
-
                 <>
-
-                    <TouchableOpacity style={[styles.fabGps, { right: 20, bottom: 20 }]} onPress={centerMapToGPS}>
-
-                        <Feather name="crosshair" size={24} color={SKETCH_THEME.colors.primary} />
-
+                    <TouchableOpacity
+                        style={[styles.fabGps, { right: 20, bottom: 20 }]}
+                        onPress={centerMapToGPS}
+                        accessibilityLabel="Centrar a la meva ubicaci\u00f3"
+                    >
+                        <Feather name="crosshair" size={22} color={EDITORIAL.grana} />
                     </TouchableOpacity>
 
-
-
+                    {(() => {
+                        if (matchIdFromNav) return null;
+                        const visibleWidthKm = visibleBounds
+                            ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
+                            : 0;
+                        if (visibleBounds && visibleWidthKm > 2) return null;
+                        return (
+                            <TouchableOpacity
+                                style={[styles.fabGps, { right: 20, bottom: 64 }]}
+                                onPress={handleScanToggle}
+                                disabled={isScanning}
+                                accessibilityLabel={scannedBars.length > 0 ? 'Amagar bars sense confirmar' : 'Cercar bars a la zona visible'}
+                            >
+                                {isScanning ? (
+                                    <ActivityIndicator size="small" color={EDITORIAL.grana} />
+                                ) : (
+                                    <Feather
+                                        name={scannedBars.length > 0 ? 'eye-off' : 'search'}
+                                        size={22}
+                                        color={EDITORIAL.grana}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })()}
                 </>
-
              )}
 
 
