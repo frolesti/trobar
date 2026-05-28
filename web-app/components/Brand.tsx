@@ -5,6 +5,7 @@ interface BrandProps {
   size?: number;          // alçada total en px del wordmark
   href?: string | null;   // null => no és link
   dotColor?: string;      // color del "punt" del logo
+  showLeadLogo?: boolean; // mostra el logo principal abans del wordmark
 }
 
 /**
@@ -16,10 +17,21 @@ interface BrandProps {
  *
  * S'usa al Header, Footer i als heros de les pàgines.
  */
-export default function Brand({ size = 28, href = '/', dotColor = 'var(--gold)' }: BrandProps) {
+export default function Brand({
+  size = 28,
+  href = '/',
+  dotColor = 'var(--gold)',
+  showLeadLogo = false,
+}: BrandProps) {
   const dotSize = Math.round(size * 0.55);
+  const leadSize = Math.round(size * 0.9);
   const content = (
     <span className="wordmark" style={{ fontSize: size }}>
+      {showLeadLogo && (
+        <span className="wordmark__lead" style={{ width: leadSize, height: leadSize }}>
+          <Logo size={leadSize} color={dotColor} />
+        </span>
+      )}
       <span className="wordmark__tro">tro</span>
       <span className="wordmark__dot" style={{ width: dotSize, height: dotSize }}>
         <Logo size={dotSize} color={dotColor} />

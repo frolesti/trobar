@@ -40,7 +40,7 @@ export default function Header() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 16,
       }}>
-        <Brand size={26} />
+        <Brand size={26} showLeadLogo dotColor="var(--gold)" />
 
         <nav style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
           <Link href="/#com-funciona" style={{

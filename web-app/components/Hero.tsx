@@ -1,3 +1,5 @@
+import Brand from './Brand'
+
 export default function Hero() {
   return (
     <section
@@ -17,6 +19,9 @@ export default function Hero() {
         alignItems: 'center', width: '100%',
       }} className="hero-grid">
         <div className="fade-up">
+          <div style={{ marginBottom: 20 }}>
+            <Brand size={38} href={null} showLeadLogo dotColor="var(--gold)" />
+          </div>
           <span className="eyebrow">L&apos;app dels culers</span>
           <h1 style={{ marginBottom: 24 }}>
             Troba <em style={{ color: 'var(--gold)', fontWeight: 500 }}>on veure</em><br />

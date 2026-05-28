@@ -26,7 +26,7 @@ export default function Footer() {
         }}>
           <div style={{ flex: '1 1 300px', maxWidth: 340 }}>
             <div style={{ marginBottom: 18 }}>
-              <Brand size={28} />
+              <Brand size={28} showLeadLogo dotColor="var(--gold)" />
             </div>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--paper-mute)', margin: 0 }}>
               L&apos;app per trobar on veure el Barça. Bars verificats, partits en directe
@@ -70,7 +70,15 @@ export default function Footer() {
           flexWrap: 'wrap', gap: 12,
         }}>
           <span style={{ color: 'var(--paper-faint)', fontSize: 13, fontStyle: 'italic' }}>
-            © {new Date().getFullYear()} troBar · Fet a Barcelona
+            © {new Date().getFullYear()} troBar · Producte de{' '}
+            <a
+              href="https://frolesti.cat"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--gold)', fontStyle: 'normal', fontWeight: 700 }}
+            >
+              frolesti
+            </a>
           </span>
           <span style={{ color: 'var(--paper-faint)', fontSize: 13, fontStyle: 'italic' }}>
             v1.3.0
