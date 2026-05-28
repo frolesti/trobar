@@ -42,9 +42,13 @@ export default function Hero() {
             <img
               src="/trobar-logo-round.png"
               alt="troBar"
-              width={180}
-              height={180}
-              style={{ display: 'block', width: 180, height: 180 }}
+              width={260}
+              height={260}
+              style={{
+                display: 'block',
+                width: 'clamp(220px, 26vw, 300px)',
+                height: 'auto',
+              }}
             />
           </div>
 

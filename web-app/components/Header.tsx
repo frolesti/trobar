@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import Brand from './Brand'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
@@ -37,11 +36,9 @@ export default function Header() {
     }}>
       <div style={{
         maxWidth: 1200, margin: '0 auto',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
         gap: 16,
       }}>
-        <Brand size={36} />
-
         <nav style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
           <Link href="/#com-funciona" style={{
             color: 'var(--paper-mute)', fontSize: 14,
