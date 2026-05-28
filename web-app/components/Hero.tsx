@@ -16,24 +16,11 @@ export default function Hero() {
         display: 'flex',
         alignItems: 'center',
         padding: '140px 0 80px',
-        // Fons granat opac que tapa l'animació de fum
-        background: 'var(--grana)',
+        // Transicio integrada al propi hero per evitar qualsevol tall visible
+        background:
+          'linear-gradient(to bottom, var(--grana) 0%, var(--grana) 56%, rgba(165,0,68,0.88) 72%, rgba(13,27,42,0) 100%)',
       }}
     >
-      {/* Gradient de transició visible: de grana a fosc */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '280px',
-          background: 'linear-gradient(to bottom, var(--grana) 0%, rgba(109,0,48,0.8) 40%, rgba(13,27,42,0.6) 100%)',
-          pointerEvents: 'none',
-          zIndex: 1,
-        }}
-        aria-hidden="true"
-      />
       <div
         className="hero-grid"
         style={{
