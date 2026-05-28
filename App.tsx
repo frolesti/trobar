@@ -121,7 +121,7 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <AppNavigator />
-          <AlertBannerHost topOffset={24} />
+          <AlertBannerHost defaultPosition="bottom" bottomOffset={88} />
         </AuthProvider>
       </SafeAreaProvider>
     </ErrorBoundary>

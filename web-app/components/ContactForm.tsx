@@ -367,7 +367,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📧</div>
-          <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'Lora' }}>
+          <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Crea el teu compte
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 15, marginTop: 8, lineHeight: 1.5 }}>
@@ -438,7 +438,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
-          <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'Lora' }}>
+          <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Verifica el teu email
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 15, marginTop: 8, lineHeight: 1.5 }}>
@@ -508,7 +508,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📍</div>
-          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'Lora' }}>
+          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Troba el teu bar
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
@@ -612,7 +612,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={{ ...cardStyle, maxWidth: 600 }}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'Lora' }}>
+          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Dades del teu bar
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
@@ -732,7 +732,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'Lora' }}>
+          <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Tria la facturació
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
@@ -837,7 +837,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     <div style={cardStyle}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
-        <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'Lora' }}>
+        <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
           Benvingut a troBar!
         </h2>
         <p style={{ color: 'var(--muted)', fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>

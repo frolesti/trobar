@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Alert, ScrollView, useWindowDimensions, Animated, Easing, Text } from 'react-native';
+import { View, TouchableOpacity, ScrollView, useWindowDimensions, Animated, Easing, Text } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
@@ -7,6 +7,8 @@ import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
+import { auth as fbAuth } from '../../config/firebase';
+import { signInAnonymously } from 'firebase/auth';
 import BarCard from '../../components/BarCard';
 import { showAlert } from '../../components/AlertBanner';
 import { Feather } from '@expo/vector-icons';
@@ -90,22 +92,25 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
     };
 
     const handleConfirm = async () => {
-        if (!user) {
-            Alert.alert("Inicia sessió", "Has d'iniciar sessió per confirmar nous llocs.", [
-                { text: "Cancel·lar", style: 'cancel' },
-                { text: "Iniciar Sessió", onPress: () => navigation.navigate('Login') }
-            ]);
-            return;
-        }
-
         setIsSubmitting(true);
         try {
-            await addUserReportedBar(osmBar, user.id);
-            Alert.alert(
-                "Bar registrat correctament",
-                "Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.",
-                [{ text: "Tornar al Mapa", onPress: () => navigation.navigate('Map', { refresh: Date.now() }) }]
-            );
+            // Si l'usuari no està autenticat, fem un login anònim transparent
+            // perquè les regles de Firestore permetin l'escriptura.
+            let reporterId = user?.id;
+            if (!reporterId) {
+                if (!fbAuth.currentUser) {
+                    const cred = await signInAnonymously(fbAuth);
+                    reporterId = cred.user.uid;
+                } else {
+                    reporterId = fbAuth.currentUser.uid;
+                }
+            }
+            await addUserReportedBar(osmBar, reporterId!);
+            setSubmitSuccess(true);
+            showAlert({ tone: 'success', message: 'Bar registrat! Gràcies per ajudar la comunitat.' });
+            setTimeout(() => {
+                navigation.navigate('Map', { refresh: Date.now() });
+            }, 1800);
         } catch (error) {
             console.error(error);
             showAlert({ tone: 'error', message: "No s'ha pogut guardar. Torna-ho a provar." });

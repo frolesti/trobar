@@ -28,10 +28,9 @@ export default function Features() {
           backdropFilter: 'blur(6px)',
         }}>
           <span style={{
-            fontFamily: 'Lora, serif',
-            fontStyle: 'italic',
-            fontWeight: 500,
-            fontSize: 80,
+            fontFamily: 'var(--font-ui)',
+            fontWeight: 800,
+            fontSize: 64,
             lineHeight: 0.8,
             color: 'var(--gold)',
             flexShrink: 0,

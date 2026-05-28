@@ -79,7 +79,11 @@ export function useClusters<T>({
             : [bounds.minLng, bounds.minLat, bounds.maxLng, bounds.maxLat];
         const z = Math.max(0, Math.min(maxZoom + 4, Math.round(zoom)));
         return index.getClusters(bbox, z) as ClusterFeature<T>[];
-    }, [bounds, zoom, maxZoom]);
+        // IMPORTANT: cal incloure `points` per recomputar quan canvia el
+        // dataset (filtres, escaneig, amagat, refresc). Sense `points` el
+        // hook torna sempre la mateixa llista cachejada fins que canvia
+        // el zoom o els bounds — i això fa que res s'actualitzi al mapa.
+    }, [bounds, zoom, maxZoom, points]);
 }
 
 export default useClusters;

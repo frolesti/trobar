@@ -24,6 +24,8 @@ export interface AlertPayload {
     duration?: number;
     /** Optional short eyebrow above the message (e.g. "Avís", "Error"). */
     eyebrow?: string;
+    /** Visual position of the banner. Defaults to host defaultPosition. */
+    position?: 'top' | 'bottom';
 }
 
 type Listener = (a: AlertPayload | null) => void;
@@ -43,27 +45,33 @@ const TONE_EYEBROW: Record<AlertTone, string> = {
     error: '#B00020',
 };
 
-export const AlertBannerHost: React.FC<{ topOffset?: number }> = ({ topOffset = 16 }) => {
+export const AlertBannerHost: React.FC<{ topOffset?: number; bottomOffset?: number; defaultPosition?: 'top' | 'bottom' }> = ({
+    topOffset = 16,
+    bottomOffset = 90,
+    defaultPosition = 'top',
+}) => {
     const [alert, setAlert] = useState<AlertPayload | null>(null);
     const opacity = useRef(new Animated.Value(0)).current;
     const translateY = useRef(new Animated.Value(-12)).current;
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const close = useCallback(() => {
+        const isBottom = (alert?.position ?? defaultPosition) === 'bottom';
         Animated.parallel([
             Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-            Animated.timing(translateY, { toValue: -12, duration: 200, useNativeDriver: true }),
+            Animated.timing(translateY, { toValue: isBottom ? 12 : -12, duration: 200, useNativeDriver: true }),
         ]).start(() => setAlert(null));
         if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    }, [opacity, translateY]);
+    }, [alert?.position, defaultPosition, opacity, translateY]);
 
     useEffect(() => {
         const listener: Listener = (payload) => {
             if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
             if (!payload) { close(); return; }
             setAlert(payload);
+            const isBottom = (payload.position ?? defaultPosition) === 'bottom';
             opacity.setValue(0);
-            translateY.setValue(-12);
+            translateY.setValue(isBottom ? 12 : -12);
             Animated.parallel([
                 Animated.timing(opacity, { toValue: 1, duration: 240, useNativeDriver: true }),
                 Animated.timing(translateY, { toValue: 0, duration: 240, useNativeDriver: true }),
@@ -83,13 +91,14 @@ export const AlertBannerHost: React.FC<{ topOffset?: number }> = ({ topOffset = 
     if (!alert) return null;
 
     const eyebrowColor = TONE_EYEBROW[alert.tone ?? 'info'];
+    const isBottom = (alert.position ?? defaultPosition) === 'bottom';
 
     return (
         <Animated.View
             pointerEvents="box-none"
             style={[
                 styles.host,
-                { top: topOffset, opacity, transform: [{ translateY }] },
+                isBottom ? { bottom: bottomOffset, opacity, transform: [{ translateY }] } : { top: topOffset, opacity, transform: [{ translateY }] },
             ]}
         >
             <View style={styles.card}>

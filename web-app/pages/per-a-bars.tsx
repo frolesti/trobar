@@ -69,7 +69,7 @@ export default function PerABars() {
                   backdropFilter: 'blur(6px)',
                 }}>
                   <span style={{
-                    fontFamily: 'Lora, serif', fontStyle: 'italic', fontWeight: 500,
+                    fontFamily: 'var(--font-ui)', fontWeight: 500,
                     fontSize: 72, lineHeight: 0.8, color: 'var(--gold)',
                     flexShrink: 0, marginTop: 4,
                   }} aria-hidden>

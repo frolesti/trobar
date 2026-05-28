@@ -18,6 +18,9 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
 import { getUserFriendlyError } from '../../utils/errorHandler';
+import { auth as fbAuth } from '../../config/firebase';
+import { fetchSignInMethodsForEmail, sendPasswordResetEmail } from 'firebase/auth';
+import { showAlert } from '../../components/AlertBanner';
 import styles from './LoginModal.styles';
 
 type Props = {
@@ -144,6 +147,23 @@ const LoginModal = ({ navigation }: Props) => {
 
         try {
             if (isRegistering) {
+                // Comprovem si l'email ja existeix amb un altre proveïdor abans de registrar
+                try {
+                    const methods = await fetchSignInMethodsForEmail(fbAuth, cleanEmail);
+                    if (methods.includes('google.com')) {
+                        setLocalError("Aquest correu ja està registrat amb Google. Torna enrere i clica 'Continuar amb Google'.");
+                        return;
+                    }
+                    if (methods.includes('apple.com')) {
+                        setLocalError("Aquest correu ja està registrat amb Apple. Torna enrere i clica 'Continuar amb Apple'.");
+                        return;
+                    }
+                    if (methods.includes('password')) {
+                        setLocalError("Aquest correu ja té compte. Torna a 'Inicia sessió' i posa la contrasenya.");
+                        setIsRegistering(false);
+                        return;
+                    }
+                } catch {}
                 await registerEmail(cleanEmail, password, fullName);
                 setVerificationSent(true);
             } else {
@@ -152,7 +172,6 @@ const LoginModal = ({ navigation }: Props) => {
                 // El onAuthStateChanged actualitzarà user, però necessitem esperar-lo
                 // Per tant, fem servir un listener temporal
                 const { getUserProfile } = require('../../services/userService');
-                const { auth: fbAuth } = require('../../config/firebase');
                 const currentUser = fbAuth.currentUser;
                 if (currentUser) {
                     const profile = await getUserProfile(currentUser.uid);
@@ -163,6 +182,44 @@ const LoginModal = ({ navigation }: Props) => {
                 }
                 navigation.goBack();
             }
+        } catch (e: any) {
+            // Si el login per email falla, comprovem si l'usuari ja existeix amb un altre proveïdor
+            if (!isRegistering && (e?.code === 'auth/wrong-password' || e?.code === 'auth/user-not-found' || e?.code === 'auth/invalid-credential')) {
+                try {
+                    const methods = await fetchSignInMethodsForEmail(fbAuth, cleanEmail);
+                    if (methods.includes('google.com')) {
+                        setLocalError("Aquest correu està registrat amb Google. Torna enrere i clica 'Continuar amb Google'.");
+                        return;
+                    }
+                    if (methods.includes('apple.com')) {
+                        setLocalError("Aquest correu està registrat amb Apple. Torna enrere i clica 'Continuar amb Apple'.");
+                        return;
+                    }
+                    if (methods.length === 0) {
+                        setLocalError("Aquest correu no té compte. Clica 'No tens compte? Registra't' per crear-lo.");
+                        return;
+                    }
+                } catch {}
+            }
+            setLocalError(getUserFriendlyError(e));
+        }
+    };
+
+    const handlePasswordReset = async () => {
+        setLocalError(null);
+        const cleanEmail = email.trim();
+        if (!cleanEmail) {
+            setLocalError("Escriu el teu correu electrònic primer i tornem-ho a provar.");
+            return;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(cleanEmail)) {
+            setLocalError("El format del correu electrònic no sembla vàlid.");
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(fbAuth, cleanEmail);
+            showAlert({ tone: 'success', message: `T'hem enviat un correu per restablir la contrasenya a ${cleanEmail}.` });
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
         }
@@ -186,7 +243,7 @@ const LoginModal = ({ navigation }: Props) => {
 
     const renderEmailForm = () => (
         <View style={{ width: '100%' }}>
-            <Text style={styles.formTitle}>{isRegistering ? 'Crear Compte' : 'Iniciar Sessió'}</Text>
+            <Text style={styles.formTitle}>{isRegistering ? 'Crea un compte' : 'Inicia sessió'}</Text>
 
             {isRegistering && (
                 <>
@@ -247,6 +304,14 @@ const LoginModal = ({ navigation }: Props) => {
                     {isRegistering ? 'Ja tens compte? Inicia sessió' : "No tens compte? Registra't"}
                 </Text>
             </TouchableOpacity>
+
+            {!isRegistering && (
+                <TouchableOpacity onPress={handlePasswordReset} style={[styles.inlineLink, { marginTop: 4 }]}>
+                    <Text style={[styles.inlineLinkText, { fontSize: 13 }]}>
+                        Has oblidat la contrasenya?
+                    </Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 
@@ -267,8 +332,14 @@ const LoginModal = ({ navigation }: Props) => {
                         <TouchableOpacity 
                             style={styles.closeButton} 
                             onPress={() => {
+                                if (showEmailForm && isRegistering) {
+                                    // Des de registre → tornem al formulari de login per mail
+                                    setIsRegistering(false);
+                                    setLocalError(null);
+                                    return;
+                                }
                                 if (showEmailForm) {
-                                    // Si estem al formulari d'email, tornem al selector de proveedor
+                                    // Des del login per mail → tornem al selector de proveïdor
                                     setShowEmailForm(false);
                                     setLocalError(null);
                                     return;
@@ -293,12 +364,12 @@ const LoginModal = ({ navigation }: Props) => {
 
                     {!showEmailForm && (
                         <View style={styles.header}>
-                            <Text style={styles.eyebrow}>Benvingut</Text>
+                            <Text style={styles.eyebrow}>Inicia sessió</Text>
                             <Text style={styles.title}>
                                 Entra a <Text style={styles.titleItalic}>troBar</Text>
                             </Text>
                             <Text style={styles.subtitle}>
-                                Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic.
+                                Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic. Si encara no tens compte, el crearem automàticament la primera vegada.
                             </Text>
                         </View>
                     )}
@@ -344,7 +415,7 @@ const LoginModal = ({ navigation }: Props) => {
                                     activeOpacity={0.7}
                                 >
                                     <Text style={styles.emailLinkText}>
-                                        Continuar amb correu electrònic
+                                        Inicia sessió amb el teu mail
                                     </Text>
                                 </TouchableOpacity>
                             </>

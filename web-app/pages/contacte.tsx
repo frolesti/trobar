@@ -105,7 +105,7 @@ export default function Contacte() {
 
         <div style={{
           marginTop: 64, textAlign: 'center',
-          fontSize: 15, color: 'var(--paper-mute)', fontStyle: 'italic',
+          fontSize: 15, color: 'var(--paper-mute)',
         }}>
           <p>O escriu-nos directament a</p>
           <a href="mailto:hola@trobar-app.cat" style={{ color: 'var(--gold)', fontStyle: 'normal' }}>

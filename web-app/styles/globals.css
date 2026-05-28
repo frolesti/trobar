@@ -1,7 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Lora:ital,wght@0,500;0,700;1,500;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root{
-  /* Paleta FC Barcelona — només els tres tons clau, sense daurat estrident */
+  /* Paleta FC Barcelona */
   --grana: #a50044;
   --grana-soft: rgba(165,0,68,0.12);
   --grana-deep: #6d0030;
@@ -9,14 +9,17 @@
   --blau-deep: #003570;
   --ink: #0d1b2a;
   --gold: #edbb00;
-  --paper: #f6efe4;          /* crema editorial, per text sobre fons fosc */
-  --paper-mute: rgba(246,239,228,0.7);
-  --paper-faint: rgba(246,239,228,0.45);
-  --hairline: rgba(246,239,228,0.14);
+  --paper: #f6efe4;
+  --paper-mute: rgba(246,239,228,0.72);
+  --paper-faint: rgba(246,239,228,0.5);
+  --hairline: rgba(246,239,228,0.16);
   --max-width: 1100px;
 
-  /* ── Compatibilitat enrere amb components antics (ContactForm, etc.) ──
-     Tot s'integra sobre el degradat fix del body sense caixes blanques. */
+  /* UNA SOLA FAMÍLIA: tota la landing comparteix Inter per llegibilitat
+     i coherència visual. Sense barreja de serif/sans-serif. */
+  --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif;
+
+  /* Compatibilitat enrere amb components antics (ContactForm) */
   --text: var(--paper);
   --muted: var(--paper-mute);
   --accent: var(--grana);
@@ -36,16 +39,15 @@
 html, body, #__next { height: 100%; }
 html { scroll-behavior: smooth; }
 
-/* ── Fons únic continu per a TOTES les pàgines.
-   Es queda fix mentre fas scroll: cap canvi sobtat de secció. ── */
+/* ── Fons únic continu per a TOTES les pàgines. ── */
 body {
   margin: 0;
-  font-family: 'Atkinson Hyperlegible', 'Segoe UI', Tahoma, sans-serif;
+  font-family: var(--font-ui);
   color: var(--paper);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 17px;
-  line-height: 1.7;
+  line-height: 1.65;
   background:
     radial-gradient(ellipse 70% 50% at 15% 8%,  rgba(165,0,68,0.55) 0%, transparent 60%),
     radial-gradient(ellipse 60% 45% at 85% 35%, rgba(0,77,152,0.55) 0%, transparent 60%),
@@ -65,29 +67,28 @@ body {
 }
 
 a { color: var(--gold); text-decoration: none; transition: opacity .2s; }
-a:hover { opacity: .75; }
+a:hover { opacity: .8; }
 
 h1, h2, h3, h4 {
-  font-family: 'Lora', serif;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--paper);
   margin: 0;
 }
 
-h1 { font-size: clamp(40px, 6vw, 76px); line-height: 1.05; letter-spacing: -1.5px; }
-h2 { font-size: clamp(30px, 4vw, 48px); line-height: 1.15; letter-spacing: -1px; }
-h3 { font-size: clamp(20px, 2vw, 24px); line-height: 1.3; }
+h1 { font-size: clamp(40px, 6vw, 72px); line-height: 1.05; letter-spacing: -0.03em; }
+h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1.15; letter-spacing: -0.02em; }
+h3 { font-size: clamp(18px, 2vw, 22px); line-height: 1.3; font-weight: 700; }
 p  { margin: 0 0 1em; color: var(--paper-mute); }
 
 ::selection { background: var(--gold); color: var(--ink); }
 
 .eyebrow {
   display: inline-block;
-  font-family: 'Lora', serif;
-  font-style: italic;
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--gold);
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -98,67 +99,42 @@ p  { margin: 0 0 1em; color: var(--paper-mute); }
 
 section[id], div[id] { scroll-margin-top: 100px; }
 
-/* ── Wordmark troBar — font integrada amb el punt-logo ── */
-.wordmark {
-  display: inline-flex;
-  align-items: center;
-  font-family: 'Atkinson Hyperlegible', 'Segoe UI', Tahoma, sans-serif;
-  font-weight: 800;
-  color: var(--paper);
-  text-decoration: none;
-  line-height: 1;
-  letter-spacing: -0.5px;
-  white-space: nowrap;
-}
-.wordmark__tro { font-style: italic; font-weight: 500; opacity: 0.92; }
-.wordmark__lead {
-  display: inline-flex;
-  margin-right: 10px;
-  filter: drop-shadow(0 2px 10px rgba(0,0,0,0.25));
-}
-.wordmark__dot {
-  display: inline-block;
-  margin: 0 2px;
-  position: relative;
-  transform: translateY(-0.04em);
-}
-.wordmark__bar { font-weight: 800; }
-
 @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 .fade-up { animation: fadeUp 0.7s ease-out both; }
 
-/* ── Botons editorials ── */
+/* ── Botons editorials (només per CTAs de text — els d'app store
+       són badges oficials a StoreBadges.tsx). ── */
 .btn-slab {
   display: inline-block;
-  padding: 16px 30px;
-  font-family: 'Atkinson Hyperlegible', 'Segoe UI', Tahoma, sans-serif;
-  font-weight: 700;
+  padding: 14px 26px;
+  font-family: var(--font-ui);
+  font-weight: 600;
   font-size: 15px;
-  letter-spacing: 0.3px;
-  border-radius: 2px;
+  letter-spacing: -0.01em;
+  border-radius: 10px;
   background: var(--paper);
   color: var(--ink);
   border: none;
   cursor: pointer;
-  transition: transform .25s ease, box-shadow .25s ease;
-  box-shadow: 0 6px 28px rgba(0,0,0,0.18);
+  transition: transform .2s ease, box-shadow .2s ease;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.18);
   text-decoration: none;
 }
-.btn-slab:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(0,0,0,0.28); opacity:1;}
+.btn-slab:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0,0,0,0.26); opacity:1;}
 
 .btn-ghost {
   display: inline-block;
-  padding: 16px 30px;
-  font-family: 'Atkinson Hyperlegible', 'Segoe UI', Tahoma, sans-serif;
-  font-weight: 600;
+  padding: 14px 26px;
+  font-family: var(--font-ui);
+  font-weight: 500;
   font-size: 15px;
-  letter-spacing: 0.3px;
-  border-radius: 2px;
+  letter-spacing: -0.01em;
+  border-radius: 10px;
   background: transparent;
   color: var(--paper);
   border: 1px solid rgba(246,239,228,0.35);
   cursor: pointer;
-  transition: all .25s ease;
+  transition: all .2s ease;
   text-decoration: none;
 }
 .btn-ghost:hover { background: rgba(246,239,228,0.08); border-color: var(--paper); opacity:1; }
@@ -178,16 +154,15 @@ ul.legal li::before {
   position: absolute;
   left: 0;
   color: var(--gold);
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* ── Camps de formulari editorials ── */
+/* ── Camps de formulari ── */
 .field-label {
   display: block;
-  font-family: 'Lora', serif;
-  font-style: italic;
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--paper-faint);
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -195,9 +170,9 @@ ul.legal li::before {
 }
 .field-input {
   width: 100%;
-  padding: 14px 0;
-  font-family: 'Atkinson Hyperlegible', 'Segoe UI', Tahoma, sans-serif;
-  font-size: 17px;
+  padding: 12px 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
   color: var(--paper);
   background: transparent;
   border: none;
@@ -205,9 +180,9 @@ ul.legal li::before {
   outline: none;
   transition: border-color .2s;
 }
-.field-input::placeholder { color: rgba(246,239,228,0.3); }
+.field-input::placeholder { color: rgba(246,239,228,0.32); }
 .field-input:focus { border-bottom-color: var(--gold); }
-textarea.field-input { resize: vertical; min-height: 100px; padding: 14px 0; }
+textarea.field-input { resize: vertical; min-height: 100px; }
 
 @media (max-width: 768px) {
   body { font-size: 16px; }

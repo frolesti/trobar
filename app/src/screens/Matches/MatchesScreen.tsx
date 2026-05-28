@@ -284,7 +284,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 }
             }
                 
-            const history = await fetchPastMatches(oldestDate, 5, categoryForQuery);
+            const history = await fetchPastMatches(oldestDate, 10, categoryForQuery);
             const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
             
             if (sortedHistory.length > 0) {
@@ -411,9 +411,9 @@ const MatchesScreen = ({ navigation }: Props) => {
                                     paddingVertical: 6,
                                     paddingHorizontal: 14,
                                     borderRadius: 4,
-                                    backgroundColor: selectedComp === c ? EDITORIAL.ink : '#FFFFFF',
+                                    backgroundColor: selectedComp === c ? EDITORIAL.grana : '#FFFFFF',
                                     borderWidth: 1,
-                                    borderColor: selectedComp === c ? EDITORIAL.ink : EDITORIAL.hairline,
+                                    borderColor: selectedComp === c ? EDITORIAL.grana : EDITORIAL.hairline,
                                 }}
                             >
                                 <Text style={{

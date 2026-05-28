@@ -6,10 +6,10 @@ import Brand from './Brand'
  * Només una hairline superior i les columnes amb tipografia editorial.
  */
 export default function Footer() {
-  const linkStyle = { color: 'var(--paper-faint)', fontSize: 14, fontFamily: 'Lora, serif' }
+  const linkStyle = { color: 'var(--paper-faint)', fontSize: 14, fontFamily: 'var(--font-ui)' }
   const h4Style = {
     color: 'var(--paper)', marginBottom: 16, fontSize: 13, fontWeight: 600,
-    textTransform: 'uppercase' as const, letterSpacing: 2, fontStyle: 'italic',
+    textTransform: 'uppercase' as const, letterSpacing: 2,
   }
 
   return (
@@ -26,7 +26,7 @@ export default function Footer() {
         }}>
           <div style={{ flex: '1 1 300px', maxWidth: 340 }}>
             <div style={{ marginBottom: 18 }}>
-              <Brand size={28} showLeadLogo dotColor="var(--gold)" />
+              <Brand size={40} />
             </div>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--paper-mute)', margin: 0 }}>
               L&apos;app per trobar on veure el Barça. Bars verificats, partits en directe
@@ -69,7 +69,7 @@ export default function Footer() {
           justifyContent: 'space-between', alignItems: 'center',
           flexWrap: 'wrap', gap: 12,
         }}>
-          <span style={{ color: 'var(--paper-faint)', fontSize: 13, fontStyle: 'italic' }}>
+          <span style={{ color: 'var(--paper-faint)', fontSize: 13 }}>
             © {new Date().getFullYear()} troBar · Producte de{' '}
             <a
               href="https://frolesti.cat"
@@ -80,7 +80,7 @@ export default function Footer() {
               frolesti
             </a>
           </span>
-          <span style={{ color: 'var(--paper-faint)', fontSize: 13, fontStyle: 'italic' }}>
+          <span style={{ color: 'var(--paper-faint)', fontSize: 13 }}>
             v1.3.0
           </span>
         </div>

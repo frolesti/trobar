@@ -45,7 +45,7 @@ export default function Home() {
                   borderLeft: i > 0 ? '1px solid var(--hairline)' : 'none',
                 }}>
                   <span style={{
-                    fontFamily: 'Lora, serif', fontStyle: 'italic', fontWeight: 500,
+                    fontFamily: 'var(--font-ui)', fontWeight: 500,
                     fontSize: 56, lineHeight: 1, color: 'var(--gold)',
                     display: 'block', marginBottom: 24,
                   }}>{s.num}</span>

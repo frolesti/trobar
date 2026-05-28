@@ -88,7 +88,10 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
     const compName = match.competition?.name || match.league || 'Partit';
     const compLogoSource = resolveCompLogo(match);
 
-    const isFemenino = match.category === 'FEMENI' || (compName.toLowerCase().includes('feman') || compName.toLowerCase().includes('liga f') || compName.toLowerCase().includes('uwcl'));
+    const catLower = String(match.category || '').toLowerCase();
+    const compLower = compName.toLowerCase();
+    const isFemenino = catLower === 'femenino' || catLower === 'femeni' || compLower.includes('feman') || compLower.includes('femen') || compLower.includes('liga f') || compLower.includes('uwcl');
+    const genderAccent = isFemenino ? BARCA.grana : BARCA.blau;
 
 
     const formatDate = (match: Match) => {
@@ -187,18 +190,24 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
         borderRadius: 4,
         paddingVertical: 14,
         paddingHorizontal: 14,
+        paddingLeft: 18,
         marginHorizontal: 4,
         marginTop: 8,
         borderWidth: 1,
         borderColor: isFilter ? BARCA.grana : 'rgba(15,27,45,0.14)',
+        borderLeftWidth: 5,
+        borderLeftColor: genderAccent,
         ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.05)' }, default: sketchShadow() })
     } : {
         backgroundColor: '#FFFFFF',
         borderRadius: 4,
         padding: 18,
+        paddingLeft: 22,
         marginBottom: 14,
         borderWidth: 1,
         borderColor: 'rgba(15,27,45,0.14)',
+        borderLeftWidth: 5,
+        borderLeftColor: genderAccent,
         ...Platform.select({
             web: { boxShadow: '0 2px 12px rgba(15,27,45,0.06)' },
             default: sketchShadow()
@@ -236,7 +245,7 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                     <Text style={{ 
                         fontSize: 10, fontWeight: '700',
-                        color: BARCA.grana,
+                        color: genderAccent,
                         fontFamily: 'Lora_700Bold', 
                         letterSpacing: 2, textAlign: 'center',
                         textTransform: 'uppercase',
@@ -296,11 +305,11 @@ const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFi
                 marginBottom: 14,
             }}>
                 {compLogoSource && (
-                    <Image source={compLogoSource} style={{ width: 14, height: 14, marginRight: 8, tintColor: BARCA.grana }} resizeMode="contain" />
+                    <Image source={compLogoSource} style={{ width: 14, height: 14, marginRight: 8, tintColor: genderAccent }} resizeMode="contain" />
                 )}
                 <Text style={{
                     fontSize: 10, fontFamily: 'Lora_700Bold', textTransform: 'uppercase',
-                    color: BARCA.grana, letterSpacing: 2,
+                    color: genderAccent, letterSpacing: 2,
                 }}>
                     {displayCompName(compName)}  ·  {formatDate(match)}
                 </Text>

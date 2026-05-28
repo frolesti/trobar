@@ -2,44 +2,49 @@ import Link from 'next/link'
 import Logo from './Logo'
 
 interface BrandProps {
-  size?: number;          // alçada total en px del wordmark
+  size?: number;          // alçada del logo en px
   href?: string | null;   // null => no és link
-  dotColor?: string;      // color del "punt" del logo
-  showLeadLogo?: boolean; // mostra el logo principal abans del wordmark
+  showWordmark?: boolean; // mostra "troBar" al costat del logo
 }
 
 /**
- * Wordmark editorial de troBar:
- *    tro·Bar
- * - "tro" en cursiva fina (Lora italic 500)
- * - punt = mark del logo, ple de color gold/grana
- * - "Bar" en regular bold (Lora 800)
- *
- * S'usa al Header, Footer i als heros de les pàgines.
+ * Identitat visual: logo oficial + wordmark "troBar" en una sola tipografia.
+ * Sense efectes tipogràfics (ni cursives, ni punts intercalats).
+ * El logo PNG sempre és el protagonista.
  */
-export default function Brand({
-  size = 28,
-  href = '/',
-  dotColor = 'var(--gold)',
-  showLeadLogo = false,
-}: BrandProps) {
-  const dotSize = Math.round(size * 0.55);
-  const leadSize = Math.round(size * 0.9);
+export default function Brand({ size = 36, href = '/', showWordmark = true }: BrandProps) {
   const content = (
-    <span className="wordmark" style={{ fontSize: size }}>
-      {showLeadLogo && (
-        <span className="wordmark__lead" style={{ width: leadSize, height: leadSize }}>
-          <Logo size={leadSize} color={dotColor} />
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: Math.round(size * 0.32),
+        textDecoration: 'none',
+        color: 'var(--paper)',
+        lineHeight: 1,
+      }}
+    >
+      <Logo size={size} />
+      {showWordmark && (
+        <span
+          style={{
+            fontFamily: 'var(--font-ui)',
+            fontWeight: 700,
+            fontSize: Math.round(size * 0.62),
+            letterSpacing: '-0.01em',
+            color: 'var(--paper)',
+          }}
+        >
+          troBar
         </span>
       )}
-      <span className="wordmark__tro">tro</span>
-      <span className="wordmark__dot" style={{ width: dotSize, height: dotSize }}>
-        <Logo size={dotSize} color={dotColor} />
-      </span>
-      <span className="wordmark__bar">Bar</span>
     </span>
   );
 
   if (!href) return content;
-  return <Link href={href} aria-label="troBar — inici" style={{ display: 'inline-flex' }}>{content}</Link>;
+  return (
+    <Link href={href} aria-label="troBar — inici" style={{ display: 'inline-flex' }}>
+      {content}
+    </Link>
+  );
 }

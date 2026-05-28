@@ -14,7 +14,7 @@ export default function LegalBody({ doc }: LegalBodyProps) {
   return (
     <article style={{ maxWidth: 680, margin: '0 auto' }}>
       <p style={{
-        fontFamily: 'Lora, serif', fontStyle: 'italic',
+        fontFamily: 'var(--font-ui)',
         color: 'var(--gold)', fontSize: 13, letterSpacing: 2,
         textTransform: 'uppercase', marginBottom: 12,
       }}>
@@ -24,7 +24,7 @@ export default function LegalBody({ doc }: LegalBodyProps) {
         {doc.title} <em style={{ color: 'var(--gold)', fontWeight: 500 }}>{doc.titleAccent}</em>
       </h1>
       <p style={{
-        color: 'var(--paper-faint)', fontStyle: 'italic',
+        color: 'var(--paper-faint)',
         fontSize: 14, marginBottom: 40,
       }}>
         Última actualització — {doc.lastUpdated}

@@ -1,4 +1,5 @@
 import Brand from './Brand'
+import StoreBadges from './StoreBadges'
 
 export default function Hero() {
   return (
@@ -19,27 +20,18 @@ export default function Hero() {
         alignItems: 'center', width: '100%',
       }} className="hero-grid">
         <div className="fade-up">
-          <div style={{ marginBottom: 20 }}>
-            <Brand size={38} href={null} showLeadLogo dotColor="var(--gold)" />
+          <div style={{ marginBottom: 28 }}>
+            <Brand size={64} href={null} />
           </div>
-          <span className="eyebrow">L&apos;app dels culers</span>
           <h1 style={{ marginBottom: 24 }}>
-            Troba <em style={{ color: 'var(--gold)', fontWeight: 500 }}>on veure</em><br />
-            el Barça
+            Troba <span style={{ color: 'var(--gold)' }}>on veure</span> el Barça
           </h1>
-          <p style={{ fontSize: 19, maxWidth: 500, marginBottom: 40 }}>
-            Bars verificats que emeten els partits del FC&nbsp;Barcelona a prop teu.
-            Horaris, ambient i pantalles — tot en una app.
+          <p style={{ fontSize: 19, maxWidth: 520, marginBottom: 40 }}>
+            Mapa col·laboratiu de bars on els culers veuen els partits del Barça.
+            La comunitat afegeix bars, valora-hi l&apos;ambient i confirma quins emeten cada jornada.
           </p>
 
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="btn-slab">
-              Descarrega a iOS
-            </a>
-            <a href="https://play.google.com" target="_blank" rel="noopener noreferrer" className="btn-ghost">
-              Descarrega a Android
-            </a>
-          </div>
+          <StoreBadges />
         </div>
 
         <div style={{
@@ -66,6 +58,10 @@ export default function Hero() {
             gap: 40px !important;
           }
           :global(.hero-grid h1 br) { display: none; }
+          :global(.hero-grid > div:first-child > div:first-child) {
+            display: flex;
+            justify-content: center;
+          }
         }
       `}</style>
     </section>

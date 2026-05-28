@@ -352,6 +352,7 @@ const MapScreen = () => {
 
     // Posició del mapa abans d'obrir ReportBar (per restaurar al tancar)
     const preReportPositionRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
+    const shouldRestoreAfterReportRef = useRef(false);
 
     // Animació d'instruccions
 
@@ -456,6 +457,22 @@ const MapScreen = () => {
         }
     }, [searchRadiusKm]);
 
+    // 0c. Sembrar `visibleBounds` i `currentZoom` tan bon punt tinguem
+    // ubicació + radi. Sense això, el primer render no té bounds, el hook
+    // de clústers retorna [] i el mapa apareix BUIT fins que l'usuari hi
+    // interactua i es dispara `onRegionChangeComplete`.
+    useEffect(() => {
+        if (!centerLocation || visibleBounds) return;
+        const delta = radiusToLatDelta(searchRadiusKm);
+        setVisibleBounds({
+            minLat: centerLocation.latitude - delta / 2,
+            maxLat: centerLocation.latitude + delta / 2,
+            minLng: centerLocation.longitude - delta / 2,
+            maxLng: centerLocation.longitude + delta / 2,
+        });
+        setCurrentZoom(Math.log2(360 / delta));
+    }, [centerLocation, searchRadiusKm, visibleBounds]);
+
 
 
     // 1. Localització GPS
@@ -463,28 +480,53 @@ const MapScreen = () => {
     useEffect(() => {
 
         (async () => {
+            const applyInitialRegion = (loc: { latitude: number; longitude: number }) => {
+                const delta = radiusToLatDelta(searchRadiusKm);
+                setCenterLocation(loc);
+                setVisibleBounds({
+                    minLat: loc.latitude - delta / 2,
+                    maxLat: loc.latitude + delta / 2,
+                    minLng: loc.longitude - delta / 2,
+                    maxLng: loc.longitude + delta / 2,
+                });
+                setCurrentZoom(Math.log2(360 / delta));
 
-             let { status } = await Location.requestForegroundPermissionsAsync();
+                // A web, el ref del mapa pot no estar llest exactament en aquest tick.
+                // Reintentem uns cops perquè el primer paint quedi centrat en l'usuari.
+                const region = {
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    latitudeDelta: delta,
+                    longitudeDelta: delta,
+                };
+                [0, 80, 220, 500, 900].forEach((ms) => {
+                    setTimeout(() => {
+                        mapRefNative.current?.animateToRegion(region, 0);
+                    }, ms);
+                });
+            };
 
-             if (status !== 'granted') {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
 
-                 console.warn('Permís de localització denegat');
+                if (status !== 'granted') {
+                    console.warn('Permís de localització denegat');
+                    const fallback = { latitude: 41.3874, longitude: 2.1686 };
+                    setUserLocation({
+                        coords: { ...fallback, altitude: 0, accuracy: 0, altitudeAccuracy: 0, heading: 0, speed: 0 },
+                        timestamp: Date.now(),
+                    });
+                    applyInitialRegion(fallback);
+                    return;
+                }
 
-                 const fallback = { latitude: 41.3874, longitude: 2.1686 };
-
-                 setUserLocation({ coords: { ...fallback, altitude: 0, accuracy: 0, altitudeAccuracy: 0, heading: 0, speed: 0 }, timestamp: Date.now() });
-
-                 setCenterLocation(fallback);
-
-                 return;
-
-             }
-
-             let location = await Location.getCurrentPositionAsync({});
-
-             setUserLocation(location);
-
-             setCenterLocation({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+                const location = await Location.getCurrentPositionAsync({});
+                setUserLocation(location);
+                applyInitialRegion({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+            } catch (e) {
+                console.warn('No s\'ha pogut obtenir la ubicació. Usem Barcelona per defecte.', e);
+                applyInitialRegion({ latitude: 41.3874, longitude: 2.1686 });
+            }
 
         })();
 
@@ -507,6 +549,7 @@ const MapScreen = () => {
     // (useFocusEffect no es dispara perquè ReportBar és un transparentModal)
     useEffect(() => {
         if (refreshParam) {
+            shouldRestoreAfterReportRef.current = true;
             loadBars();
         }
     }, [refreshParam]);
@@ -551,6 +594,7 @@ const MapScreen = () => {
 
     // Navegar a ReportBar centrant el mapa sobre el bar
     const navigateToReportBar = useCallback((osmBar: any) => {
+        shouldRestoreAfterReportRef.current = false;
         // Guardar posici\u00f3 actual del mapa (per restaurar-la quan tornem)
         if (mapRefNative.current) {
             preReportPositionRef.current = {
@@ -574,6 +618,10 @@ const MapScreen = () => {
             if (!hasReportBar && preReportPositionRef.current) {
                 const saved = preReportPositionRef.current;
                 preReportPositionRef.current = null;
+                if (!shouldRestoreAfterReportRef.current) {
+                    return;
+                }
+                shouldRestoreAfterReportRef.current = false;
                 // Restaurar posició amb un petit retard per permetre l'animació de tancament
                 setTimeout(() => {
                     if (mapRefNative.current) {
@@ -916,7 +964,7 @@ const MapScreen = () => {
             // Avisar de la convenció de marcadors grisos abans/durant la cerca
             showAlert({
                 tone: 'info',
-                eyebrow: 'Avis',
+                eyebrow: 'Avís',
                 message: "En gris trobar\u00e0s bars sense confirmar. Clica'ls per avisar si donen el partit!",
                 duration: 5000,
             });
@@ -1155,9 +1203,6 @@ const MapScreen = () => {
 
              // Obtenir info de ruta (distància / temps caminant)
              fetchRoute(selectedBar);
-         } else {
-             setRouteInfo(null);
-             setRouteCoords(null);
          }
 
 
@@ -1426,10 +1471,12 @@ const MapScreen = () => {
         // URLs per a cada app
 
         const googleUrl = (() => {
+            const destinationQuery = encodeURIComponent(
+                `${getCleanBarName(bar.name)}, ${bar.address || ''}`
+            );
+            let u = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}&travelmode=walking`;
 
-            let u = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`;
-
-            if (bar.googlePlaceId) u += `&destination_place_id=${bar.googlePlaceId}`;
+            if (bar.googlePlaceId) u += `&destination_place_id=${encodeURIComponent(bar.googlePlaceId)}`;
 
             if (originLat != null && originLng != null) u += `&origin=${originLat},${originLng}`;
 
@@ -1529,6 +1576,15 @@ const MapScreen = () => {
 
     };
 
+    const handleSelectBar = useCallback((bar: Bar) => {
+        if (selectedBar?.id !== bar.id) {
+            // Si canviem de bar, esborrem la ruta anterior immediatament.
+            setRouteInfo(null);
+            setRouteCoords(null);
+        }
+        setSelectedBar(bar);
+    }, [selectedBar?.id]);
+
 
 
     const closeBarBubble = () => {
@@ -1566,15 +1622,18 @@ const MapScreen = () => {
             setShowBarProfile(false);
 
         });
-        // Esborrar ruta del mapa
-        // -- Aquí el timeout del renderSearchSettingsOverlay --
-        setRouteInfo(null);
-        setRouteCoords(null);
         // Tancar desplegables de cerca/filtres
         setShowFiltersPanel(false);
         setGeoSuggestions([]);
 
     };
+
+    const handleMapPress = useCallback(() => {
+        // Amb un toc explícit al mapa fora d'un bar: netegem selecció i ruta.
+        closeBarBubble();
+        setRouteInfo(null);
+        setRouteCoords(null);
+    }, [closeBarBubble]);
 
 
 
@@ -1696,7 +1755,7 @@ const MapScreen = () => {
 
                                 distanceKm={getDistanceFromLatLonInKm(centerLocation!.latitude, centerLocation!.longitude, bar.latitude, bar.longitude)}
 
-                                onPress={() => setSelectedBar(bar)}
+                                onPress={() => handleSelectBar(bar)}
 
                                 imageError={!!failedImages[bar.id]}
 
@@ -2122,65 +2181,38 @@ const MapScreen = () => {
 
              <View style={styles.mapContainer}>
 
-                <MapView
-
+                    <MapView
                         ref={mapRefNative}
-
                         provider={PROVIDER_GOOGLE}
-
                         style={styles.map}
-
                         customMapStyle={CUSTOM_MAP_STYLE}
-
                         initialRegion={{
-
-                            latitude: centerLocation!.latitude,
-
-                            longitude: centerLocation!.longitude,
-
+                            latitude: centerLocation?.latitude ?? 41.3851,
+                            longitude: centerLocation?.longitude ?? 2.1734,
                             latitudeDelta: radiusToLatDelta(searchRadiusKm),
-
                             longitudeDelta: radiusToLatDelta(searchRadiusKm),
-
                         }}
-
                         showsUserLocation={true}
-
                         showsMyLocationButton={false}
-
                         toolbarEnabled={false}
-
-                        onPress={() => closeBarBubble()}
-
+                        onPress={handleMapPress}
                         onRegionChangeComplete={(region: any) => {
-
-                             setCenterLocation({ latitude: region.latitude, longitude: region.longitude });
-
-                             setVisibleBounds({
-
-                                 minLat: region.latitude - region.latitudeDelta / 2,
-
-                                 maxLat: region.latitude + region.latitudeDelta / 2,
-
-                                 minLng: region.longitude - region.longitudeDelta / 2,
-
-                                 maxLng: region.longitude + region.longitudeDelta / 2
-
-                             });
-
-                             // Zoom aproximat a partir de latitudeDelta
-
-                             const approxZoom = Math.log2(360 / region.latitudeDelta);
-
-                             setCurrentZoom(approxZoom);
-
+                            setCenterLocation({ latitude: region.latitude, longitude: region.longitude });
+                            setVisibleBounds({
+                                minLat: region.latitude - region.latitudeDelta / 2,
+                                maxLat: region.latitude + region.latitudeDelta / 2,
+                                minLng: region.longitude - region.longitudeDelta / 2,
+                                maxLng: region.longitude + region.longitudeDelta / 2,
+                            });
+                            // Zoom aproximat a partir de latitudeDelta
+                            const approxZoom = Math.log2(360 / region.latitudeDelta);
+                            setCurrentZoom(approxZoom);
                         }}
-
                     >
 
-                         {/* Marcador d'ubicació de l'usuari — personalitzat */}
+                        {/* Marcador d'ubicació de l'usuari — personalitzat */}
 
-                         {userLocation && (
+                        {userLocation && (
 
                             <Marker
 
@@ -2322,7 +2354,7 @@ const MapScreen = () => {
                                     coordinate={{ latitude: bar.latitude, longitude: bar.longitude }}
                                     title={getCleanBarName(bar.name)}
                                     anchor={{ x: 0.5, y: 1.0 }}
-                                    onPress={() => setSelectedBar(bar)}
+                                    onPress={() => handleSelectBar(bar)}
 
                                     zIndex={isPremium ? 100 : 1}
 

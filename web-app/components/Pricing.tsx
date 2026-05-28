@@ -67,7 +67,7 @@ export default function Pricing() {
                 border: 'none',
                 background: 'transparent',
                 color: active ? 'var(--paper)' : 'var(--paper-faint)',
-                fontFamily: 'Lora, serif',
+                fontFamily: 'var(--font-ui)',
                 fontStyle: active ? 'normal' : 'italic',
                 fontWeight: active ? 700 : 400,
                 fontSize: 15,
@@ -82,7 +82,7 @@ export default function Pricing() {
                 <span style={{
                   display: 'block', fontSize: 11, marginTop: 4,
                   color: active ? 'var(--gold)' : 'var(--paper-faint)',
-                  fontStyle: 'italic', fontWeight: 500,
+                  fontWeight: 500,
                   letterSpacing: 0.5,
                 }}>
                   estalvia {c.saveYear}€/any
@@ -105,7 +105,7 @@ export default function Pricing() {
         {sel.savePct && (
           <span style={{
             position: 'absolute', top: 20, right: 20,
-            fontFamily: 'Lora, serif', fontStyle: 'italic',
+            fontFamily: 'var(--font-ui)',
             fontSize: 13, color: 'var(--gold)',
             letterSpacing: 1,
           }}>
@@ -118,32 +118,32 @@ export default function Pricing() {
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
             {sel.price < monthlyCost && (
               <span style={{
-                fontFamily: 'Lora, serif', fontSize: 22,
+                fontFamily: 'var(--font-ui)', fontSize: 22,
                 color: 'var(--paper-faint)',
                 textDecoration: 'line-through',
                 marginRight: 6,
               }}>{monthlyCost}€</span>
             )}
             <span style={{
-              fontFamily: 'Lora, serif', fontSize: 82,
+              fontFamily: 'var(--font-ui)', fontSize: 82,
               fontWeight: 700, lineHeight: 1,
               color: 'var(--paper)', letterSpacing: -2,
             }}>{sel.price}€</span>
             <span style={{
-              fontFamily: 'Lora, serif', fontStyle: 'italic',
+              fontFamily: 'var(--font-ui)',
               fontSize: 18, color: 'var(--paper-mute)',
             }}>/mes</span>
           </div>
           <p style={{
             fontSize: 13, marginTop: 12,
-            color: 'var(--paper-faint)', fontStyle: 'italic',
+            color: 'var(--paper-faint)',
           }}>
             facturat com {totalLabel}
           </p>
           {yearlySaving > 0 && (
             <p style={{
               fontSize: 14, marginTop: 6,
-              color: 'var(--gold)', fontStyle: 'italic',
+              color: 'var(--gold)',
             }}>
               t&apos;estalvies {yearlySaving}€ l&apos;any
             </p>
@@ -164,7 +164,7 @@ export default function Pricing() {
 
         <p style={{
           textAlign: 'center', fontSize: 13, marginTop: 14,
-          color: 'var(--paper-faint)', fontStyle: 'italic',
+          color: 'var(--paper-faint)',
         }}>
           Cancel·la quan vulguis. Sense compromís.
         </p>
@@ -178,7 +178,7 @@ export default function Pricing() {
       }}>
         <h4 style={{
           textAlign: 'center', marginBottom: 28,
-          fontStyle: 'italic', fontWeight: 500, fontSize: 18,
+          fontWeight: 500, fontSize: 18,
         }}>
           Compensa des del primer dia de partit
         </h4>
@@ -188,10 +188,10 @@ export default function Pricing() {
             <span className="eyebrow" style={{ fontSize: 11, marginBottom: 8 }}>
               La teva inversió
             </span>
-            <div style={{ fontFamily: 'Lora, serif', fontWeight: 700, fontSize: 32, color: 'var(--paper)' }}>
-              ~1€<span style={{ fontSize: 14, fontStyle: 'italic', color: 'var(--paper-faint)' }}>/dia</span>
+            <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 32, color: 'var(--paper)' }}>
+              ~1€<span style={{ fontSize: 14, color: 'var(--paper-faint)' }}>/dia</span>
             </div>
-            <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4, fontStyle: 'italic' }}>
+            <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4 }}>
               amb el pla trimestral
             </p>
           </div>
@@ -199,10 +199,10 @@ export default function Pricing() {
             <span className="eyebrow" style={{ fontSize: 11, marginBottom: 8 }}>
               Potencial per partit
             </span>
-            <div style={{ fontFamily: 'Lora, serif', fontWeight: 700, fontSize: 32, color: 'var(--gold)' }}>
+            <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 32, color: 'var(--gold)' }}>
               +200€
             </div>
-            <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4, fontStyle: 'italic' }}>
+            <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4 }}>
               amb 20 culers extres
             </p>
           </div>
