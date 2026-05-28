@@ -60,15 +60,6 @@ export default function Home() {
         {/* ── Característiques ── */}
         <section id="caracteristiques" style={{ padding: '80px 24px 100px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: 64 }}>
-              <span className="eyebrow">Característiques</span>
-              <h2 style={{ marginBottom: 16 }}>
-                Per què <em style={{ color: 'var(--gold)', fontWeight: 500 }}>troBar</em>?
-              </h2>
-              <p style={{ maxWidth: 460, margin: '0 auto', fontSize: 17 }}>
-                Tot el que necessites per viure el Barça fora de casa.
-              </p>
-            </div>
             <Features />
           </div>
         </section>

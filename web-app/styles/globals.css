@@ -14,12 +14,9 @@
   --paper-faint: rgba(246,239,228,0.5);
   --hairline: rgba(246,239,228,0.16);
   --max-width: 1100px;
-
-  /* UNA SOLA FAMÍLIA: tota la landing comparteix Inter per llegibilitat
-     i coherència visual. Sense barreja de serif/sans-serif. */
   --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif;
 
-  /* Compatibilitat enrere amb components antics (ContactForm) */
+  /* Compatibilitat enrere amb components antics */
   --text: var(--paper);
   --muted: var(--paper-mute);
   --accent: var(--grana);
@@ -39,7 +36,7 @@
 html, body, #__next { height: 100%; }
 html { scroll-behavior: smooth; }
 
-/* ── Fons únic continu per a TOTES les pàgines. ── */
+/* ── Base: color sòlid fosc. L'animació "fum" va sobre. ── */
 body {
   margin: 0;
   font-family: var(--font-ui);
@@ -48,22 +45,65 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-size: 17px;
   line-height: 1.65;
-  background:
-    radial-gradient(ellipse 70% 50% at 15% 8%,  rgba(165,0,68,0.55) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 45% at 85% 35%, rgba(0,77,152,0.55) 0%, transparent 60%),
-    radial-gradient(ellipse 80% 60% at 50% 95%, rgba(13,27,42,0.95) 0%, transparent 70%),
-    linear-gradient(168deg,
-      #6d0030 0%,
-      #a50044 18%,
-      #6c0a4c 36%,
-      #1a3c7a 55%,
-      #004d98 72%,
-      #0d2647 88%,
-      #0d1b2a 100%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background-color: var(--ink);
   min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ── Capa d'animació tipus "fum" / lava-lamp.
+   Tres taques de color grans i molt difuminades que es mouen
+   lentament i creen un fons sempre canviant. ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(80px) saturate(1.1);
+  background:
+    radial-gradient(circle at 20% 20%, var(--grana) 0%, transparent 35%),
+    radial-gradient(circle at 75% 30%, var(--blau) 0%, transparent 38%),
+    radial-gradient(circle at 50% 80%, var(--grana-deep) 0%, transparent 40%),
+    radial-gradient(circle at 85% 75%, var(--blau-deep) 0%, transparent 35%);
+  animation: smokeDrift 28s ease-in-out infinite alternate;
+  opacity: 0.85;
+}
+
+@keyframes smokeDrift {
+  0% {
+    background-position: 0% 0%, 100% 0%, 50% 100%, 100% 100%;
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    background-position: 30% 20%, 60% 40%, 70% 70%, 20% 90%;
+    transform: translate(-2%, 1%) scale(1.05);
+  }
+  50% {
+    background-position: 60% 50%, 20% 60%, 40% 30%, 80% 20%;
+    transform: translate(2%, -1%) scale(1.08);
+  }
+  75% {
+    background-position: 10% 70%, 80% 80%, 30% 20%, 50% 40%;
+    transform: translate(-1%, 2%) scale(1.04);
+  }
+  100% {
+    background-position: 50% 30%, 30% 70%, 90% 50%, 10% 60%;
+    transform: translate(1%, -2%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after { animation: none; }
 }
 
 a { color: var(--gold); text-decoration: none; transition: opacity .2s; }
@@ -102,8 +142,7 @@ section[id], div[id] { scroll-margin-top: 100px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 .fade-up { animation: fadeUp 0.7s ease-out both; }
 
-/* ── Botons editorials (només per CTAs de text — els d'app store
-       són badges oficials a StoreBadges.tsx). ── */
+/* ── Botons editorials ── */
 .btn-slab {
   display: inline-block;
   padding: 14px 26px;

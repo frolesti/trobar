@@ -1,6 +1,10 @@
-import Brand from './Brand'
 import StoreBadges from './StoreBadges'
 
+/**
+ * Hero amb fons granat sòlid (mateix to que el cercle del logo)
+ * perquè el logo es vegi "sense fons", integrat al panell superior.
+ * No repeteix el wordmark (ja el porta el Header).
+ */
 export default function Hero() {
   return (
     <section
@@ -12,17 +16,35 @@ export default function Hero() {
         display: 'flex',
         alignItems: 'center',
         padding: '140px 0 80px',
+        // Fons granat opac que tapa l'animació de fum
+        background: 'var(--grana)',
       }}
     >
-      <div style={{
-        maxWidth: 1200, margin: '0 auto', padding: '0 24px',
-        display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 60,
-        alignItems: 'center', width: '100%',
-      }} className="hero-grid">
+      <div
+        className="hero-grid"
+        style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          padding: '0 24px',
+          display: 'grid',
+          gridTemplateColumns: '1.2fr 1fr',
+          gap: 60,
+          alignItems: 'center',
+          width: '100%',
+        }}
+      >
         <div className="fade-up">
-          <div style={{ marginBottom: 28 }}>
-            <Brand size={64} href={null} />
+          {/* Logo gran, sense wordmark — el cercle granat es fon amb el fons */}
+          <div style={{ marginBottom: 36 }}>
+            <img
+              src="/trobar-logo-round.png"
+              alt="troBar"
+              width={180}
+              height={180}
+              style={{ display: 'block', width: 180, height: 180 }}
+            />
           </div>
+
           <h1 style={{ marginBottom: 24 }}>
             Troba <span style={{ color: 'var(--gold)' }}>on veure</span> el Barça
           </h1>
@@ -34,15 +56,20 @@ export default function Hero() {
           <StoreBadges />
         </div>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+          }}
+        >
           <img
             src="/mockup.png"
             alt="troBar mostrant un mapa de bars amb el partit del Barça"
             style={{
-              width: '100%', maxWidth: 340,
+              width: '100%',
+              maxWidth: 340,
               filter: 'drop-shadow(0 30px 70px rgba(0,0,0,0.55))',
               animation: 'fadeUp 1s ease-out both',
             }}
