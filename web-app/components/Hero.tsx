@@ -20,6 +20,20 @@ export default function Hero() {
         background: 'var(--grana)',
       }}
     >
+      {/* Gradient de transició cap al fons animat */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '200px',
+          background: 'linear-gradient(to bottom, transparent 0%, rgba(13,27,42,0.4) 100%)',
+          pointerEvents: 'none',
+          zIndex: 1,
+        }}
+        aria-hidden="true"
+      />
       <div
         className="hero-grid"
         style={{
@@ -31,6 +45,8 @@ export default function Hero() {
           gap: 60,
           alignItems: 'center',
           width: '100%',
+          position: 'relative',
+          zIndex: 2,
         }}
       >
         <div className="fade-up">
