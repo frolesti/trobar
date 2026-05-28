@@ -27,7 +27,8 @@
     "next-env.d.ts",
     "**/*.mts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "../app/src/data/legalContent.ts"
   ],
   "exclude": [
     "node_modules"
