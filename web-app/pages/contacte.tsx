@@ -11,7 +11,6 @@ export default function Contacte() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setSending(true)
-    // TODO: connect to backend / email API
     await new Promise(r => setTimeout(r, 800))
     setSent(true)
     setSending(false)
@@ -25,128 +24,78 @@ export default function Contacte() {
       </Head>
       <Header />
 
-      <main style={{ maxWidth: 640, margin: '0 auto', padding: '140px 24px 80px' }}>
-        <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 800, color: 'var(--text)', marginBottom: 12, textAlign: 'center', fontFamily: 'Lora, serif' }}>
-          Parla amb nosaltres
-        </h1>
-        <p style={{ fontSize: 17, color: 'var(--muted)', textAlign: 'center', maxWidth: 480, margin: '0 auto 48px', lineHeight: 1.6 }}>
-          Tens algun dubte, suggeriment o vols col·laborar? Escriu-nos i et respondrem el més aviat possible.
-        </p>
+      <main style={{ maxWidth: 620, margin: '0 auto', padding: '160px 24px 100px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+          <span className="eyebrow">Contacte</span>
+          <h1 style={{ marginBottom: 16 }}>
+            Parla amb <em style={{ color: 'var(--gold)', fontWeight: 500 }}>nosaltres</em>
+          </h1>
+          <p style={{ maxWidth: 480, margin: '0 auto', fontSize: 17 }}>
+            Tens algun dubte, suggeriment o vols col·laborar? Escriu-nos i et respondrem el més aviat possible.
+          </p>
+        </div>
 
         {sent ? (
           <div style={{
-            background: 'var(--card)',
-            borderRadius: 20,
-            padding: '56px 32px',
+            padding: '64px 32px',
             textAlign: 'center',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow)',
+            borderTop: '1px solid var(--hairline)',
+            borderBottom: '1px solid var(--hairline)',
           }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: 'rgba(46,204,113,0.15)', margin: '0 auto 20px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 28, color: '#2ecc71',
-            }}>✓</div>
-            <h2 style={{ fontSize: 24, color: 'var(--text)', marginBottom: 12, fontFamily: 'Lora, serif' }}>Missatge enviat!</h2>
-            <p style={{ color: 'var(--muted)', fontSize: 16, lineHeight: 1.6 }}>
+            <span className="eyebrow" style={{ color: 'var(--gold)' }}>Rebut</span>
+            <h2 style={{ marginBottom: 12 }}>Missatge enviat</h2>
+            <p style={{ margin: 0, fontSize: 16 }}>
               Gràcies per contactar-nos. Et respondrem el més aviat possible.
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{
-            background: 'var(--card)',
-            borderRadius: 20,
-            padding: '36px 32px',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 20,
+            display: 'flex', flexDirection: 'column', gap: 32,
           }}>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Nom</label>
+              <label className="field-label">Nom</label>
               <input
                 type="text"
                 required
                 value={form.nom}
                 onChange={e => setForm({ ...form, nom: e.target.value })}
                 placeholder="El teu nom"
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: 12,
-                  border: '1px solid var(--border)',
-                  fontSize: 16,
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                }}
+                className="field-input"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Correu electrònic</label>
+              <label className="field-label">Correu electrònic</label>
               <input
                 type="email"
                 required
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
                 placeholder="nom@exemple.com"
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: 12,
-                  border: '1px solid var(--border)',
-                  fontSize: 16,
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                }}
+                className="field-input"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Missatge</label>
+              <label className="field-label">Missatge</label>
               <textarea
                 required
                 rows={5}
                 value={form.missatge}
                 onChange={e => setForm({ ...form, missatge: e.target.value })}
                 placeholder="Escriu el teu missatge..."
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: 12,
-                  border: '1px solid var(--border)',
-                  fontSize: 16,
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  resize: 'vertical',
-                  background: 'var(--bg)',
-                  color: 'var(--text)',
-                }}
+                className="field-input"
               />
             </div>
 
             <button
               type="submit"
               disabled={sending}
+              className="btn-slab"
               style={{
-                background: 'var(--gold)',
-                color: '#1A1A2E',
-                border: 'none',
-                padding: '16px',
-                borderRadius: 14,
-                fontSize: 16,
-                fontWeight: 700,
                 cursor: sending ? 'wait' : 'pointer',
                 opacity: sending ? 0.7 : 1,
-                transition: 'all 0.2s',
-                fontFamily: 'inherit',
-                marginTop: 4,
+                marginTop: 8,
               }}
             >
               {sending ? 'Enviant...' : 'Enviar missatge'}
@@ -155,15 +104,12 @@ export default function Contacte() {
         )}
 
         <div style={{
-          marginTop: 48,
-          textAlign: 'center',
-          color: 'var(--muted)',
-          fontSize: 15,
-          lineHeight: 1.8,
+          marginTop: 64, textAlign: 'center',
+          fontSize: 15, color: 'var(--paper-mute)', fontStyle: 'italic',
         }}>
           <p>O escriu-nos directament a</p>
-          <a href="mailto:hola@trobar.app" style={{ color: 'var(--blue)', fontWeight: 600, fontSize: 17 }}>
-            hola@trobar.app
+          <a href="mailto:hola@trobar-app.cat" style={{ color: 'var(--gold)', fontStyle: 'normal' }}>
+            hola@trobar-app.cat
           </a>
         </div>
       </main>
