@@ -24,3 +24,8 @@ web-app/tsconfig.tsbuildinfo
 # Firebase Functions compiled output
 functions/lib/
 
+# Asset junctions (canonical files live in /assets, recreated by
+# scripts/setup-asset-junctions.ps1). Only /assets is committed.
+app/assets
+web-app/public/assets
+

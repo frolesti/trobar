@@ -28,7 +28,7 @@ const StartupScreen = ({ navigation }: Props) => {
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image
-          source={require('../../../assets/img/logo-nav.jpg')}
+          source={require('../../../assets/img/logo/logo-nav.jpg')}
           style={styles.logo}
           resizeMode="cover"
         />

@@ -1,0 +1,11 @@
+{
+  // The folders app/assets and web-app/public/assets are filesystem junctions
+  // that point to the canonical /assets folder at the repo root. They contain
+  // no real files; hiding them keeps the file explorer focused on the single
+  // source of truth at /assets. Recreate them anytime with:
+  //   powershell -ExecutionPolicy Bypass -File scripts/setup-asset-junctions.ps1
+  "files.exclude": {
+    "app/assets": true,
+    "web-app/public/assets": true
+  }
+}

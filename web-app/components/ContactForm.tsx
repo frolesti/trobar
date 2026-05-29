@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, fetchSignInMethodsForEmail, deleteUser } from 'firebase/auth'
 import { httpsCallable } from 'firebase/functions'
 import { auth, functions } from '../lib/firebase'
+import Logo from './Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ContactForm — Flux de registre en 6 passos
@@ -78,7 +79,61 @@ interface ContactFormProps {
   onOpenLegal?: (type: 'privacy' | 'terms') => void
 }
 
+interface PasswordChecks {
+  minLength: boolean
+  hasLower: boolean
+  hasUpper: boolean
+  hasNumber: boolean
+  hasSymbol: boolean
+}
+
+function getPasswordChecks(password: string): PasswordChecks {
+  return {
+    minLength: password.length >= 8,
+    hasLower: /[a-z]/.test(password),
+    hasUpper: /[A-Z]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSymbol: /[^A-Za-z0-9]/.test(password),
+  }
+}
+
+function getPasswordStrength(password: string): { score: number; label: string } {
+  const checks = getPasswordChecks(password)
+  const score = Object.values(checks).filter(Boolean).length
+  if (!password) return { score: 0, label: 'Introdueix una contrasenya' }
+  if (score <= 2) return { score, label: 'Feble' }
+  if (score <= 4) return { score, label: 'Acceptable' }
+  return { score, label: 'Forta' }
+}
+
+function getFriendlyAuthError(err: unknown): string {
+  const fbErr = err as { code?: string; message?: string }
+  switch (fbErr.code) {
+    case 'auth/email-already-in-use':
+      return 'Aquest email ja està registrat. Si és teu, prova la contrasenya correcta o recupera-la des de l\'app.'
+    case 'auth/invalid-email':
+      return "Format d'email invàlid"
+    case 'auth/weak-password':
+      return 'Contrasenya massa feble. Fes-la més robusta (8+ caràcters, majúscula, número i símbol).'
+    case 'auth/operation-not-allowed':
+      return 'El registre amb email/contrasenya no està habilitat al projecte Firebase.'
+    case 'auth/too-many-requests':
+      return 'Massa intents seguits. Espera uns minuts i torna-ho a provar.'
+    case 'auth/network-request-failed':
+      return 'Error de connexió. Comprova internet i torna-ho a provar.'
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+      return 'Contrasenya incorrecta per aquest email.'
+    default:
+      return fbErr.message || 'No s\'ha pogut completar el registre ara mateix.'
+  }
+}
+
 /* ── Estils constants ─────────────────────────────────────────────────── */
+const formAccent = 'var(--gold)'
+const formAccentSoft = 'rgba(201,171,114,0.10)'
+const formAccentBorder = 'rgba(201,171,114,0.28)'
+
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '12px 14px', marginTop: 6, borderRadius: 12,
   border: '2px solid var(--border)', fontSize: 16, fontFamily: 'inherit',
@@ -91,16 +146,16 @@ const labelStyle: React.CSSProperties = {
 }
 
 const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 14, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase',
+  fontSize: 14, fontWeight: 700, color: formAccent, textTransform: 'uppercase',
   letterSpacing: 1, marginBottom: 16, marginTop: 8,
 }
 
 const buttonPrimary: React.CSSProperties = {
   width: '100%', padding: 16, borderRadius: 14,
-  background: 'var(--accent)', color: '#fff',
+  background: formAccent, color: 'var(--black)',
   fontWeight: 'bold', fontSize: 16, border: 'none',
   cursor: 'pointer', transition: 'all 0.2s',
-  boxShadow: '0 8px 24px rgba(165,0,68,0.15)',
+  boxShadow: '0 8px 24px rgba(201,171,114,0.15)',
 }
 
 const buttonSecondary: React.CSSProperties = {
@@ -111,12 +166,9 @@ const buttonSecondary: React.CSSProperties = {
 }
 
 const stepBadge: React.CSSProperties = {
-  width: 46,
-  height: 46,
+  width: 64,
+  height: 64,
   margin: '0 auto 12px',
-  borderRadius: 999,
-  border: '1px solid var(--hairline)',
-  background: 'rgba(12,12,12,0.5)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -131,6 +183,47 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [cooldown, setCooldown] = useState(0)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showPasswordTips, setShowPasswordTips] = useState(false)
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [existingAccount, setExistingAccount] = useState<null | 'password' | 'google.com' | 'apple.com' | 'other'>(null)
+  const [checkingEmail, setCheckingEmail] = useState(false)
+
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
+  const emailError = (emailTouched || email.trim().length >= 6) && email.trim() !== '' && !isValidEmail(email)
+
+  const checkEmailExists = async (rawEmail: string) => {
+    const value = rawEmail.trim().toLowerCase()
+    if (!isValidEmail(value)) return
+    setCheckingEmail(true)
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, value)
+      if (methods.includes('password')) setExistingAccount('password')
+      else if (methods.includes('google.com')) setExistingAccount('google.com')
+      else if (methods.includes('apple.com')) setExistingAccount('apple.com')
+      else if (methods.length > 0) setExistingAccount('other')
+      else setExistingAccount(null)
+    } catch {
+      // Si Firebase té protecció anti-enumeration, ho detectarem en el submit.
+    } finally {
+      setCheckingEmail(false)
+    }
+  }
+
+  const existingAccountMessage = (() => {
+    switch (existingAccount) {
+      case 'password':
+        return 'Ja existeix un compte amb aquest email. Fes servir un altre email per registrar el bar.'
+      case 'google.com':
+        return 'Aquest email ja està vinculat a un compte Google. Fes servir un altre email per registrar el bar.'
+      case 'apple.com':
+        return 'Aquest email ja està vinculat a un compte Apple. Fes servir un altre email per registrar el bar.'
+      case 'other':
+        return 'Aquest email ja té un compte. Fes servir un altre email per registrar el bar.'
+      default:
+        return null
+    }
+  })()
 
   /* ── Cerca de bar ──────────────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('')
@@ -147,6 +240,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setState(s => ({ ...s, [key]: (e.target as HTMLInputElement).type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }))
 
+  const passwordChecks = getPasswordChecks(state.password)
+  const passwordStrength = getPasswordStrength(state.password)
+
   /* ── PAS 1: Crear compte Firebase Auth + enviar verificació ──────────── */
   const handleCreateAccount = async () => {
     const normalizedEmail = email.trim().toLowerCase()
@@ -157,8 +253,11 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       setStatus('Omple tots els camps')
       return
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setStatus("Format d'email invàlid")
+    if (!isValidEmail(normalizedEmail)) {
+      setEmailTouched(true)
+      return
+    }
+    if (existingAccount) {
       return
     }
     if (pwd.length < 8) {
@@ -170,21 +269,28 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     setStatus(null)
 
     try {
-      // 1. Comprovar si l'email ja existeix i amb quin proveïdor
+      // 1. Comprovar si l'email ja existeix
       let methods: string[] = []
       try {
         methods = await fetchSignInMethodsForEmail(auth, normalizedEmail)
       } catch {
-        // Si falla, continuem (pot ser que el projecte tingui email enumeration protection activat)
+        // Si Firebase té protecció anti-enumeration ho captarem al createUser.
       }
 
-      // Si l'email ja està registrat amb Google (o Apple), no podem crear un compte email/password
+      if (methods.includes('password')) {
+        setExistingAccount('password')
+        return
+      }
       if (methods.includes('google.com')) {
-        setStatus('Aquest email ja té un compte amb Google. Utilitza un email diferent per registrar el bar, o inicia sessió amb Google des de l\'app.')
+        setExistingAccount('google.com')
         return
       }
       if (methods.includes('apple.com')) {
-        setStatus('Aquest email ja té un compte amb Apple. Utilitza un email diferent per registrar el bar.')
+        setExistingAccount('apple.com')
+        return
+      }
+      if (methods.length > 0) {
+        setExistingAccount('other')
         return
       }
 
@@ -194,24 +300,13 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       } catch (err: unknown) {
         const fbErr = err as { code?: string; message?: string }
         if (fbErr.code === 'auth/email-already-in-use') {
-          // L'email ja existeix amb email/password — intentar fer login
-          try {
-            userCred = await signInWithEmailAndPassword(auth, normalizedEmail, pwd)
-            if (userCred.user.emailVerified) {
-              // Ja verificat, saltar directament al pas 3
-              setStep(3)
-              return
-            }
-            // No verificat, reenviar email de verificació
-          } catch {
-            setStatus('Ja existeix un compte amb aquest email. Comprova la contrasenya.')
-            return
-          }
+          setExistingAccount('password')
+          return
         } else if (fbErr.code === 'auth/weak-password') {
           setStatus('La contrasenya és massa feble')
           return
         } else if (fbErr.code === 'auth/invalid-email') {
-          setStatus("Format d'email invàlid")
+          setEmailTouched(true)
           return
         } else {
           throw err
@@ -227,8 +322,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       setCooldown(60)
       setStatus(null)
     } catch (err: unknown) {
-      const message = (err as { message?: string })?.message || 'Error creant el compte'
-      setStatus(message)
+      setStatus(getFriendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -354,7 +448,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           key={s}
           style={{
             flex: 1, height: 4, borderRadius: 2,
-            background: s <= progressSegment ? 'var(--accent)' : 'var(--border)',
+            background: s <= progressSegment ? formAccent : 'var(--border)',
             transition: 'background 0.3s',
           }}
         />
@@ -365,7 +459,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const isError = status ? /error|inv[àa]lid|feble|incorrecte|obligatoris|acceptar|existeix|ja t[eé]/i.test(status) : false
   const statusMessage = status && (
     <div style={{
-      color: isError ? 'var(--danger)' : 'var(--accent)',
+      color: isError ? '#d97a7a' : formAccent,
       fontWeight: 600, marginTop: 16, textAlign: 'center', fontSize: 14,
     }}>
       {status}
@@ -374,15 +468,15 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   /* ── PAS 1: Crear compte ──────────────────────────────────────────── */
   if (step === 1) {
-    const canSubmit = email.trim() && state.contactName.trim() && state.password.length >= 8
+    const canSubmit = email.trim() && isValidEmail(email) && !existingAccount && state.contactName.trim() && state.password.length >= 8
     return (
       <div style={cardStyle}>
         {progressBar}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={stepBadge}>
-            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+        <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
+          <div style={{ ...stepBadge, width: 84, height: 84, marginBottom: 18 }}>
+            <Logo size={84} variant="white" visualScale={1.65} maskCircle={false} />
           </div>
-          <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Crea el teu compte
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 15, marginTop: 8, lineHeight: 1.5 }}>
@@ -406,23 +500,145 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             <input
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={inputStyle}
+              onChange={e => {
+                setEmail(e.target.value)
+                if (status) setStatus(null)
+                if (existingAccount) setExistingAccount(null)
+              }}
+              onBlur={() => { setEmailTouched(true); checkEmailExists(email) }}
+              style={{
+                ...inputStyle,
+                borderColor: (emailError || existingAccount) ? '#d97a7a' : 'var(--border)',
+                boxShadow: (emailError || existingAccount) ? '0 0 0 3px rgba(217,122,122,0.12)' : undefined,
+              }}
               placeholder="joan@barcanpunyetes.cat"
+              autoComplete="email"
             />
+            {emailError && (
+              <span style={{ fontSize: 12, color: '#d97a7a', marginTop: 6, display: 'block' }}>
+                Introdueix un email vàlid (p. ex. nom@domini.cat)
+              </span>
+            )}
+            {!emailError && checkingEmail && (
+              <span style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6, display: 'block' }}>
+                Comprovant disponibilitat…
+              </span>
+            )}
+            {!emailError && existingAccountMessage && (
+              <span style={{ fontSize: 12, color: '#d97a7a', marginTop: 6, display: 'block', lineHeight: 1.4 }}>
+                {existingAccountMessage}
+              </span>
+            )}
           </label>
           <label style={labelStyle}>
             Contrasenya *
-            <input
-              type="password"
-              value={state.password}
-              onChange={set('password')}
-              style={inputStyle}
-              placeholder="Mínim 8 caràcters"
-              minLength={8}
-              onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreateAccount()}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={state.password}
+                onChange={set('password')}
+                style={{ ...inputStyle, paddingRight: 54 }}
+                placeholder="Escriu la teva contrasenya"
+                autoComplete="new-password"
+                onKeyDown={e => e.key === 'Enter' && canSubmit && handleCreateAccount()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: 11,
+                  border: 'none',
+                  background: 'transparent',
+                  color: formAccent,
+                  cursor: 'pointer',
+                  padding: 2,
+                  width: 28,
+                  height: 28,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label={showPassword ? 'Amagar contrasenya' : 'Mostrar contrasenya'}
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 3l18 18" />
+                    <path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2" />
+                    <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5.2 0 9.4 3.5 10.8 8-0.5 1.6-1.5 3.1-2.8 4.3" />
+                    <path d="M6.2 6.2C4.6 7.5 3.4 9.1 2.8 12c1.4 4.5 5.6 8 10.8 8 2 0 3.9-0.5 5.5-1.4" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </label>
+          <div style={{ marginTop: -4, position: 'relative' }}>
+            <div style={{
+              width: '100%',
+              height: 8,
+              borderRadius: 999,
+              background: 'rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+              border: '1px solid var(--hairline)',
+              cursor: 'help',
+            }}
+              onMouseEnter={() => setShowPasswordTips(true)}
+              onMouseLeave={() => setShowPasswordTips(false)}
+              onFocus={() => setShowPasswordTips(true)}
+              onBlur={() => setShowPasswordTips(false)}
+              tabIndex={0}
+            >
+              <div
+                style={{
+                  width: `${(passwordStrength.score / 5) * 100}%`,
+                  height: '100%',
+                  transition: 'width 0.25s ease',
+                  background: 'linear-gradient(90deg, #5f5336 0%, #9e8754 55%, #c9ab72 100%)',
+                }}
+              />
+            </div>
+            {state.password && (
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+                Seguretat: <strong style={{ color: formAccent }}>{passwordStrength.label}</strong>
+              </p>
+            )}
+            {showPasswordTips && (
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 20,
+                zIndex: 5,
+                background: 'rgba(17,17,17,0.96)',
+                border: `1px solid ${formAccentBorder}`,
+                borderRadius: 10,
+                padding: '10px 12px',
+                fontSize: 12,
+                lineHeight: 1.55,
+                boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+              }}>
+                <p style={{ margin: 0, color: 'var(--muted)' }}>
+                  {'Tria una contrasenya de com a mínim '}
+                  <strong style={{ color: passwordChecks.minLength ? formAccent : 'var(--text)' }}>8 caràcters</strong>
+                  {' i, si pot ser, combina '}
+                  <strong style={{ color: passwordChecks.hasUpper ? formAccent : 'var(--text)' }}>majúscules</strong>
+                  {', '}
+                  <strong style={{ color: passwordChecks.hasLower ? formAccent : 'var(--text)' }}>minúscules</strong>
+                  {', '}
+                  <strong style={{ color: passwordChecks.hasNumber ? formAccent : 'var(--text)' }}>números</strong>
+                  {' i '}
+                  <strong style={{ color: passwordChecks.hasSymbol ? formAccent : 'var(--text)' }}>símbols</strong>
+                  {' per fer-la més segura.'}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <button
@@ -453,7 +669,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={stepBadge}>
-            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+            <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
           </div>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Verifica el teu email
@@ -468,7 +684,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             display: 'inline-block', width: 48, height: 48, borderRadius: '50%',
-            border: '3px solid var(--border)', borderTopColor: 'var(--accent)',
+            border: '3px solid var(--border)', borderTopColor: formAccent,
             animation: 'spin 1s linear infinite',
           }} />
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 12 }}>
@@ -492,7 +708,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             <button
               onClick={handleResendVerification}
               style={{
-                background: 'none', border: 'none', color: 'var(--accent)',
+                background: 'none', border: 'none', color: formAccent,
                 cursor: 'pointer', fontSize: 14, fontWeight: 600,
                 textDecoration: 'underline', fontFamily: 'inherit',
               }}
@@ -525,7 +741,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={stepBadge}>
-            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+            <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
           </div>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Troba el teu bar
@@ -554,7 +770,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             disabled={searching || !searchQuery.trim()}
             style={{
               padding: '14px 24px', borderRadius: 12,
-              background: 'var(--accent)', color: '#fff',
+              background: formAccent, color: 'var(--black)',
               fontWeight: 700, fontSize: 14, border: 'none',
               cursor: searching || !searchQuery.trim() ? 'not-allowed' : 'pointer',
               opacity: searching || !searchQuery.trim() ? 0.5 : 1,
@@ -592,7 +808,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
                     cursor: 'pointer', textAlign: 'left',
                     fontFamily: 'inherit', transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => { (e.target as HTMLElement).style.background = 'rgba(165,0,68,0.04)' }}
+                  onMouseEnter={e => { (e.target as HTMLElement).style.background = formAccentSoft }}
                   onMouseLeave={e => { (e.target as HTMLElement).style.background = 'transparent' }}
                 >
                   <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', marginBottom: 2 }}>
@@ -770,15 +986,15 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
                 onClick={() => setState(s => ({ ...s, billing: key }))}
                 style={{
                   flex: 1, padding: '14px 8px', borderRadius: 12,
-                  border: active ? '2px solid var(--accent)' : '2px solid var(--border)',
-                  background: active ? 'rgba(165,0,68,0.04)' : 'transparent',
+                  border: active ? `2px solid ${formAccent}` : '2px solid var(--border)',
+                  background: active ? formAccentSoft : 'transparent',
                   cursor: 'pointer', fontFamily: 'inherit',
                   transition: 'all 0.2s',
                 }}
               >
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{c.label}</div>
                 <div style={{ fontWeight: 800, fontSize: 20, color: 'var(--text)', marginTop: 4 }}>{c.price}€<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>/mes</span></div>
-                {c.saveYear && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginTop: 4 }}>Estalvia {c.saveYear}€/any</div>}
+                {c.saveYear && <div style={{ fontSize: 11, fontWeight: 700, color: formAccent, marginTop: 4 }}>Estalvia {c.saveYear}€/any</div>}
               </button>
             )
           })}
@@ -796,17 +1012,17 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           <input
             type="checkbox" checked={state.acceptTerms}
             onChange={set('acceptTerms') as unknown as React.ChangeEventHandler<HTMLInputElement>}
-            style={{ marginTop: 2, width: 18, height: 18, accentColor: 'var(--accent)' } as React.CSSProperties}
+            style={{ marginTop: 2, width: 18, height: 18, accentColor: formAccent } as React.CSSProperties}
           />
           <span>
             He llegit i accepto les{' '}
             <button type="button" onClick={() => onOpenLegal?.('terms')} style={{
-              color: 'var(--accent)', textDecoration: 'underline', background: 'none',
+              color: formAccent, textDecoration: 'underline', background: 'none',
               border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0,
             }}>Condicions del Servei</button>
             {' '}i la{' '}
             <button type="button" onClick={() => onOpenLegal?.('privacy')} style={{
-              color: 'var(--accent)', textDecoration: 'underline', background: 'none',
+              color: formAccent, textDecoration: 'underline', background: 'none',
               border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0,
             }}>Política de Privacitat</button>.
           </span>
@@ -856,7 +1072,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     <div style={cardStyle}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
         <div style={stepBadge}>
-          <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+          <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
         </div>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
           Benvingut a troBar!
@@ -870,7 +1086,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
         <div style={{
           marginTop: 28, padding: 20, borderRadius: 14,
-          background: 'rgba(165,0,68,0.04)', border: '1px solid rgba(165,0,68,0.1)',
+          background: formAccentSoft, border: `1px solid ${formAccentBorder}`,
         }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>
             Descarrega l&apos;app per gestionar el teu bar

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Header from '../components/Header'
 import Pricing from '../components/Pricing'
 import Footer from '../components/Footer'
+import FloatingLogos from '../components/FloatingLogos'
 
 export default function PerABars() {
   const benefits = [
@@ -26,7 +27,7 @@ export default function PerABars() {
       strokeWidth: 1.9,
       strokeLinecap: 'round' as const,
       strokeLinejoin: 'round' as const,
-      ariaHidden: true,
+      'aria-hidden': true,
     }
 
     if (kind === 'map') {
@@ -73,10 +74,12 @@ export default function PerABars() {
       </Head>
       <Header />
 
-      <main>
+      <main style={{ position: 'relative', overflow: 'hidden' }}>
+        <FloatingLogos count={12} opacity={0.32} fixed zIndex={0} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Hero per a bars */}
-        <section style={{ padding: '160px 24px 80px', textAlign: 'center' }}>
-          <div style={{ maxWidth: 720, margin: '0 auto' }} className="fade-up">
+        <section style={{ padding: '160px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ maxWidth: 720, margin: '0 auto', position: 'relative', zIndex: 1 }} className="fade-up">
             <span className="eyebrow">Per a bars i restaurants</span>
             <h1 style={{ marginBottom: 24 }}>
               Converteix cada partit <em style={{ color: 'var(--gold)', fontWeight: 500 }}>en clients</em>
@@ -160,6 +163,7 @@ export default function PerABars() {
             </Link>
           </div>
         </section>
+        </div>
       </main>
 
       <Footer />
