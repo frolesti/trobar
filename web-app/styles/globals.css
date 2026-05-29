@@ -249,8 +249,15 @@ ul.legal li::before {
   .site-header-nav {
     gap: 10px !important;
     row-gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    white-space: nowrap;
     justify-content: flex-end !important;
+    scrollbar-width: none;
+  }
+
+  .site-header-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .site-header nav a,
@@ -340,7 +347,8 @@ ul.legal li::before {
   }
 
   .per-a-bars-page .per-a-bars-floats {
-    display: none !important;
+    opacity: 0.18 !important;
+    display: block !important;
   }
 
   .per-a-bars-hero {
@@ -424,15 +432,17 @@ ul.legal li::before {
 }
 
 @media (max-width: 560px) {
-  .site-header nav a:not(.site-header-cta) {
-    display: none !important;
-  }
-
   .site-header {
     align-items: center !important;
   }
 
   .site-header-nav {
     max-width: none;
+  }
+
+  .site-header nav a {
+    font-size: 8px !important;
+    letter-spacing: 1.8px !important;
+    padding: 8px 11px !important;
   }
 }

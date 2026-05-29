@@ -51,7 +51,7 @@ export default function Hero() {
       {/* Contingut */}
       <div className="fade-up" style={{ position: 'relative', zIndex: 3, maxWidth: 860, width: '100%' }}>
         <div className="hero-logo-wrap" style={{ margin: '0 auto 26px', width: 'fit-content' }}>
-          <Logo size={220} visualScale={1.08} variant="white" maskCircle={false} />
+          <Logo size={220} visualScale={1.08} variant="white" maskCircle={false} animated />
         </div>
 
         <h1 className="hero-title" style={{ marginBottom: 20, fontSize: 'clamp(48px, 10vw, 112px)' }}>

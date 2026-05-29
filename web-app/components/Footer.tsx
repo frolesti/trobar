@@ -4,17 +4,17 @@ export default function Footer() {
   return (
     <footer style={{
       borderTop: '1px solid var(--hairline)',
-      padding: '72px 48px 48px',
+      padding: '56px 48px 32px',
       background: 'var(--black)',
     }}>
-      <div style={{
+      <div className="footer-top" style={{
         maxWidth: 1160,
         margin: '0 auto',
         display: 'grid',
         gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
-        gap: 48,
-        marginBottom: 64,
-      }} className="footer-grid">
+        gap: 40,
+        marginBottom: 44,
+      }}>
         {/* Marca */}
         <div>
           <p style={{
@@ -67,7 +67,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+      <div className="footer-bottom" style={{ borderTop: '1px solid var(--hairline)', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <span style={{ fontSize: 12, color: 'var(--cream-40)' }}>
           © {new Date().getFullYear()} troBar · Producte de{' '}
           <a href="https://frolesti.cat" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', fontWeight: 600 }}>
@@ -80,14 +80,36 @@ export default function Footer() {
       </div>
 
       <style jsx>{`
+        @media (max-width: 900px) {
+          :global(.footer-top) {
+            gap: 28px !important;
+            margin-bottom: 32px !important;
+          }
+        }
         @media (max-width: 768px) {
+          footer {
+            padding: 44px 20px 24px !important;
+          }
           :global(.footer-grid) {
             grid-template-columns: 1fr 1fr !important;
           }
+          :global(.footer-bottom) {
+            padding-top: 16px !important;
+          }
         }
         @media (max-width: 480px) {
+          footer {
+            padding: 40px 18px 22px !important;
+          }
           :global(.footer-grid) {
             grid-template-columns: 1fr !important;
+          }
+          :global(.footer-top) {
+            margin-bottom: 24px !important;
+          }
+          :global(.footer-bottom) {
+            flex-direction: column !important;
+            align-items: flex-start !important;
           }
         }
       `}</style>

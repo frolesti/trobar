@@ -8,6 +8,7 @@ interface LogoProps {
   visualScale?: number;
   variant?: 'red' | 'white';
   maskCircle?: boolean;
+  animated?: boolean;
 }
 
 export default function Logo({
@@ -15,8 +16,10 @@ export default function Logo({
   visualScale = 1.42,
   variant = 'red',
   maskCircle,
+  animated = false,
 }: LogoProps) {
   const src = variant === 'white' ? '/assets/logos/logo-white.png' : '/assets/logos/logo-red.png'
+  const animatedSrc = '/assets/gif/trobar.gif'
   const useMask = maskCircle ?? (variant === 'red')
 
   return (
@@ -32,7 +35,7 @@ export default function Logo({
       }}
     >
       <img
-        src={src}
+        src={animated ? animatedSrc : src}
         alt="troBar"
         width={size}
         height={size}

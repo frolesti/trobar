@@ -108,7 +108,21 @@ export default function Home() {
             minHeight: '90vh',
           }} className="split-grid">
 
-            {/* Esquerra — text */}
+            {/* Esquerra — video */}
+            <div style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
+              <video
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              >
+                <source src="/assets/videos/community.mp4" type="video/mp4" />
+              </video>
+            </div>
+
+            {/* Dreta — text */}
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -128,20 +142,6 @@ export default function Home() {
               <p style={{ fontSize: 17 }}>
                 Com més culers hi participen, millor és el mapa per a tothom.
               </p>
-            </div>
-
-            {/* Dreta — placeholder foto */}
-            <div style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              >
-                <source src="/assets/videos/community.mp4" type="video/mp4" />
-              </video>
             </div>
           </div>
         </section>
