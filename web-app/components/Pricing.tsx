@@ -27,6 +27,8 @@ export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>('quarterly')
 
   const sel = CYCLES[cycle]
+  const avgTicket = 10
+  const extraFans = 20
   const totalLabel = cycle === 'monthly'
     ? `${sel.price}€ cada mes`
     : cycle === 'quarterly'
@@ -35,6 +37,9 @@ export default function Pricing() {
 
   const monthlyCost = CYCLES.monthly.price
   const yearlySaving = (monthlyCost - sel.price) * 12
+  const dailyInvestment = sel.price / 30
+  const potentialPerMatch = avgTicket * extraFans
+  const clientsToBreakEven = Math.max(1, Math.ceil(sel.price / avgTicket))
 
   return (
     <section id="preus">
@@ -189,10 +194,10 @@ export default function Pricing() {
               La teva inversió
             </span>
             <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 32, color: 'var(--paper)' }}>
-              ~1€<span style={{ fontSize: 14, color: 'var(--paper-faint)' }}>/dia</span>
+              ~{dailyInvestment.toFixed(2)}€<span style={{ fontSize: 14, color: 'var(--paper-faint)' }}>/dia</span>
             </div>
             <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4 }}>
-              amb el pla trimestral
+              amb el pla {sel.label.toLowerCase()}
             </p>
           </div>
           <div style={{ flex: 1, borderLeft: '1px solid var(--hairline)' }}>
@@ -200,17 +205,18 @@ export default function Pricing() {
               Potencial per partit
             </span>
             <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 32, color: 'var(--gold)' }}>
-              +200€
+              +{potentialPerMatch}€
             </div>
             <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4 }}>
-              amb 20 culers extres
+              amb {extraFans} culers extres
             </p>
           </div>
         </div>
 
         <p style={{ fontSize: 14, textAlign: 'center', lineHeight: 1.7, margin: 0, color: 'var(--paper-mute)' }}>
-          Un bar factura de mitjana <strong style={{ color: 'var(--paper)' }}>10€ per client</strong> en un dia de partit.
-          Amb només <strong style={{ color: 'var(--paper)' }}>2 clients nous al mes</strong> ja has cobert la subscripció.
+          Amb una despesa mitjana de <strong style={{ color: 'var(--paper)' }}>{avgTicket}€ per client</strong>,
+          només necessites <strong style={{ color: 'var(--paper)' }}>{clientsToBreakEven} clients nous al mes</strong>
+          per cobrir la subscripció.
         </p>
       </div>
     </section>

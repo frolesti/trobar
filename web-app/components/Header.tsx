@@ -1,21 +1,13 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import Logo from './Logo'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
-  const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 40)
-      const footer = document.querySelector('footer')
-      if (footer) {
-        const rect = footer.getBoundingClientRect()
-        setHidden(rect.top < window.innerHeight - 80)
-      }
-    }
+    const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
@@ -23,34 +15,66 @@ export default function Header() {
     <header style={{
       position: 'fixed',
       top: 0, left: 0, right: 0,
-      zIndex: 1200,
-      padding: '18px 24px',
-      background: scrolled
-        ? 'linear-gradient(180deg, rgba(13,27,42,0.55) 0%, rgba(13,27,42,0.0) 100%)'
-        : 'transparent',
-      backdropFilter: scrolled ? 'blur(14px) saturate(1.2)' : 'none',
-      WebkitBackdropFilter: scrolled ? 'blur(14px) saturate(1.2)' : 'none',
-      transition: 'all 0.4s ease',
-      opacity: hidden ? 0 : 1,
-      pointerEvents: hidden ? 'none' : 'auto',
+      zIndex: 1000,
+      padding: '20px 48px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      background: scrolled ? 'rgba(12,12,12,0.92)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(14px)' : 'none',
+      WebkitBackdropFilter: scrolled ? 'blur(14px)' : 'none',
+      borderBottom: scrolled ? '1px solid var(--hairline)' : '1px solid transparent',
+      transition: 'background .4s ease, border-color .4s ease',
     }}>
-      <div style={{
-        maxWidth: 1200, margin: '0 auto',
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-        gap: 16,
-      }}>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          <Link href="/#com-funciona" style={{
-            color: 'var(--paper-mute)', fontSize: 14,
-            letterSpacing: 0.5,
-          }}>
-            Com funciona
-          </Link>
-          <Link href="/per-a-bars" className="btn-ghost" style={{ padding: '10px 22px', fontSize: 14 }}>
-            Ets un bar?
-          </Link>
-        </nav>
-      </div>
+      <Link href="/" aria-label="troBar — inici" style={{ display: 'flex' }}>
+        <Logo size={38} variant="red" />
+      </Link>
+
+      <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+        <Link href="/#qui-som" style={{
+          color: 'var(--cream-70)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '3px',
+          textTransform: 'uppercase',
+        }}>
+          Qui som
+        </Link>
+        <Link href="/#com-funciona" style={{
+          color: 'var(--cream-70)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '3px',
+          textTransform: 'uppercase',
+        }}>
+          Com funciona
+        </Link>
+        <Link href="/#caracteristiques" style={{
+          color: 'var(--cream-70)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '3px',
+          textTransform: 'uppercase',
+        }}>
+          Funcions
+        </Link>
+        <Link href="/#descarrega" style={{
+          color: 'var(--cream-70)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: '3px',
+          textTransform: 'uppercase',
+        }}>
+          Descarrega
+        </Link>
+        <Link href="/per-a-bars" className="btn" style={{ padding: '10px 24px' }}>
+          Ets un bar?
+        </Link>
+      </nav>
     </header>
   )
 }

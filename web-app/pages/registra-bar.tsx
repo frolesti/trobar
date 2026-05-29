@@ -1,11 +1,9 @@
 ﻿import Head from 'next/head'
 import Header from '../components/Header'
-import dynamic from 'next/dynamic'
+import ContactForm from '../components/ContactForm'
 import Footer from '../components/Footer'
 import LegalModal from '../components/LegalModal'
 import { useState } from 'react'
-
-const ContactForm = dynamic(() => import('../components/ContactForm'), { ssr: false })
 
 type LegalType = 'privacy' | 'terms'
 

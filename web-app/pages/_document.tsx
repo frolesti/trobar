@@ -5,8 +5,8 @@ export default function Document() {
     <Html lang="ca">
       <Head>
         {/* Favicon i icona iOS amb el logo real de troBar */}
-        <link rel="icon" type="image/png" href="/favicon.png" />
-        <link rel="apple-touch-icon" href="/trobar-logo-round.png" />
+        <link rel="icon" type="image/png" href="/assets/logos/logo-red.png" />
+        <link rel="apple-touch-icon" href="/assets/logos/logo-red.png" />
         <meta name="theme-color" content="#a50044" />
       </Head>
       <body>

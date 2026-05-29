@@ -1,103 +1,76 @@
 import StoreBadges from './StoreBadges'
+import Logo from './Logo'
 
-/**
- * Hero amb fons granat sòlid (mateix to que el cercle del logo)
- * perquè el logo es vegi "sense fons", integrat al panell superior.
- * No repeteix el wordmark (ja el porta el Header).
- */
 export default function Hero() {
   return (
     <section
       id="intro"
-      aria-label="Hero"
       style={{
         position: 'relative',
         minHeight: '100vh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        padding: '140px 0 80px',
-        // Transicio integrada al propi hero per evitar qualsevol tall visible
-        background:
-          'linear-gradient(to bottom, var(--grana) 0%, var(--grana) 56%, rgba(165,0,68,0.88) 72%, rgba(13,27,42,0) 100%)',
+        justifyContent: 'flex-start',
+        textAlign: 'center',
+        overflow: 'hidden',
+        padding: '132px 24px 48px',
       }}
     >
+      {/* ── Fons: substituir per foto/vídeo ── */}
       <div
-        className="hero-grid"
-        style={{
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '0 24px',
-          display: 'grid',
-          gridTemplateColumns: '1.2fr 1fr',
-          gap: 60,
-          alignItems: 'center',
-          width: '100%',
-          position: 'relative',
-          zIndex: 2,
-        }}
+        style={{ position: 'absolute', inset: 0, zIndex: 0 }}
+        aria-hidden="true"
       >
-        <div className="fade-up">
-          {/* Logo gran, sense wordmark — el cercle granat es fon amb el fons */}
-          <div style={{ marginBottom: 36 }}>
-            <img
-              src="/trobar-logo-round.png"
-              alt="troBar"
-              width={260}
-              height={260}
-              style={{
-                display: 'block',
-                width: 'clamp(220px, 26vw, 300px)',
-                height: 'auto',
-              }}
-            />
-          </div>
-
-          <h1 style={{ marginBottom: 24 }}>
-            Troba <span style={{ color: 'var(--gold)' }}>on veure</span> el Barça
-          </h1>
-          <p style={{ fontSize: 19, maxWidth: 520, marginBottom: 40 }}>
-            Mapa col·laboratiu de bars on els culers veuen els partits del Barça.
-            La comunitat afegeix bars, valora-hi l&apos;ambient i confirma quins emeten cada jornada.
-          </p>
-
-          <StoreBadges />
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-          }}
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         >
-          <img
-            src="/mockup.png"
-            alt="troBar mostrant un mapa de bars amb el partit del Barça"
-            style={{
-              width: '100%',
-              maxWidth: 340,
-              filter: 'drop-shadow(0 30px 70px rgba(0,0,0,0.55))',
-              animation: 'fadeUp 1s ease-out both',
-            }}
-          />
-        </div>
+          <source src="/assets/videos/canopy.mp4" type="video/mp4" />
+        </video>
       </div>
 
-      <style jsx>{`
-        @media (max-width: 900px) {
-          :global(.hero-grid) {
-            grid-template-columns: 1fr !important;
-            text-align: center;
-            gap: 40px !important;
-          }
-          :global(.hero-grid h1 br) { display: none; }
-          :global(.hero-grid > div:first-child > div:first-child) {
-            display: flex;
-            justify-content: center;
-          }
-        }
-      `}</style>
+      {/* Overlay fosc per llegibilitat */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: 'rgba(12,12,12,0.62)',
+      }} aria-hidden="true" />
+
+      {/* Gradient inferior de transició */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: 220, zIndex: 2, pointerEvents: 'none',
+        background: 'linear-gradient(to bottom, transparent 0%, var(--black) 100%)',
+      }} aria-hidden="true" />
+
+      {/* Contingut */}
+      <div className="fade-up" style={{ position: 'relative', zIndex: 3, maxWidth: 860, width: '100%' }}>
+        <div style={{ margin: '0 auto 26px', width: 'fit-content' }}>
+          <Logo size={220} visualScale={1.08} variant="white" maskCircle={false} />
+        </div>
+
+        <h1 style={{ marginBottom: 20, fontSize: 'clamp(48px, 10vw, 112px)' }}>
+          Troba on veure<br />el Barça
+        </h1>
+
+        <p style={{
+          fontSize: 18,
+          maxWidth: 480,
+          margin: '0 auto 52px',
+          color: 'var(--cream-70)',
+        }}>
+          El mapa col·laboratiu dels culers. Descobreix on emeten el partit,
+          valora l&apos;ambient i no et perdis cap jugada.
+        </p>
+
+        <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+          <StoreBadges center />
+        </div>
+      </div>
     </section>
   )
 }

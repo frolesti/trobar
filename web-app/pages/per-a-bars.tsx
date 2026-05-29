@@ -6,15 +6,63 @@ import Footer from '../components/Footer'
 
 export default function PerABars() {
   const benefits = [
-    { mark: 'V', title: 'Visibilitat al mapa',
+    { icon: 'map', title: 'Visibilitat al mapa',
       desc: 'El teu bar apareix destacat quan milers de culers busquen on veure el partit.' },
-    { mark: 'P', title: 'Perfil verificat',
+    { icon: 'shield', title: 'Perfil verificat',
       desc: 'Insígnia verificada amb fotos, horaris reals i equipament confirmat.' },
-    { mark: 'A', title: 'Anuncia partits',
+    { icon: 'megaphone', title: 'Anuncia partits',
       desc: 'Confirma quins partits emets i els culers propers ho veuran al moment.' },
-    { mark: 'G', title: 'Galeria i equipament',
+    { icon: 'gallery', title: 'Galeria i equipament',
       desc: 'Publica fins a 10 fotos del local i destaca pantalles, projector i terrassa.' },
   ]
+
+  const BenefitIcon = ({ kind }: { kind: string }) => {
+    const base = {
+      width: 52,
+      height: 52,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'var(--gold)',
+      strokeWidth: 1.9,
+      strokeLinecap: 'round' as const,
+      strokeLinejoin: 'round' as const,
+      ariaHidden: true,
+    }
+
+    if (kind === 'map') {
+      return (
+        <svg {...base}>
+          <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" />
+          <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      )
+    }
+
+    if (kind === 'shield') {
+      return (
+        <svg {...base}>
+          <path d="M12 3l7 3v5c0 5-3.4 8.4-7 10-3.6-1.6-7-5-7-10V6l7-3Z" />
+          <path d="m9.5 12 1.8 1.9L14.8 10" />
+        </svg>
+      )
+    }
+
+    if (kind === 'megaphone') {
+      return (
+        <svg {...base}>
+          <path d="M3 11v2a2 2 0 0 0 2 2h2l2 5h2l-1.5-5H13l7-3V8l-7-3H5a2 2 0 0 0-2 2v4Z" />
+        </svg>
+      )
+    }
+
+    return (
+      <svg {...base}>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="9" cy="10" r="1.5" />
+        <path d="m21 16-5-4-3 3-2-2-4 3" />
+      </svg>
+    )
+  }
 
   return (
     <>
@@ -68,13 +116,19 @@ export default function PerABars() {
                   background: 'rgba(13,27,42,0.18)',
                   backdropFilter: 'blur(6px)',
                 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-ui)', fontWeight: 500,
-                    fontSize: 72, lineHeight: 0.8, color: 'var(--gold)',
-                    flexShrink: 0, marginTop: 4,
-                  }} aria-hidden>
-                    {b.mark}
-                  </span>
+                  <div style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 999,
+                    border: '1px solid var(--hairline)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }}>
+                    <BenefitIcon kind={b.icon} />
+                  </div>
                   <div>
                     <h3 style={{ marginBottom: 8 }}>{b.title}</h3>
                     <p style={{ margin: 0, fontSize: 15 }}>{b.desc}</p>

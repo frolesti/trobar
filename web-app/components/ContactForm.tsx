@@ -110,6 +110,18 @@ const buttonSecondary: React.CSSProperties = {
   cursor: 'pointer', transition: 'all 0.2s', marginTop: 12,
 }
 
+const stepBadge: React.CSSProperties = {
+  width: 46,
+  height: 46,
+  margin: '0 auto 12px',
+  borderRadius: 999,
+  border: '1px solid var(--hairline)',
+  background: 'rgba(12,12,12,0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function ContactForm({ onOpenLegal }: ContactFormProps) {
@@ -328,6 +340,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
     maxWidth: 480, margin: '0 auto', width: '100%',
     position: 'relative',
+    border: '1px solid var(--hairline)',
   }
 
   /* Barra de progrés: 4 segments
@@ -366,7 +379,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📧</div>
+          <div style={stepBadge}>
+            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+          </div>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Crea el teu compte
           </h2>
@@ -437,7 +452,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+          <div style={stepBadge}>
+            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+          </div>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Verifica el teu email
           </h2>
@@ -507,7 +524,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={{ ...cardStyle, maxWidth: 560 }}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📍</div>
+          <div style={stepBadge}>
+            <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+          </div>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Troba el teu bar
           </h2>
@@ -836,7 +855,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   return (
     <div style={cardStyle}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
+        <div style={stepBadge}>
+          <img src="/assets/logos/logo-white.png" alt="troBar" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+        </div>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
           Benvingut a troBar!
         </h2>

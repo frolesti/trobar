@@ -1,33 +1,50 @@
-/**
- * Característiques: només títol + descripció. Sense lletres decoratives
- * ni icones inventades — la tipografia única ja porta tot el pes visual.
- */
-export default function Features() {
-  const items = [
-    { title: 'Mapa interactiu',
-      desc: 'Visualitza tots els bars propers que emeten el partit en un mapa en temps real.' },
-    { title: 'Locals verificats',
-      desc: 'Horaris reals, fotos del local i equipament confirmat. Sense sorpreses.' },
-    { title: 'Partits i horaris',
-      desc: 'Calendari complet del Barça. Descobreix quins bars emeten cada partit.' },
-    { title: 'Comunitat culer',
-      desc: 'Afegeix bars nous i fes créixer el mapa. Cada culer compta.' },
-  ]
+const items = [
+  {
+    title: 'Mapa en temps real',
+    desc:  'Veu quins bars propers emeten el partit avui. Filtrat per zona i actualitzat per la comunitat.',
+  },
+  {
+    title: 'Confirmat per culers',
+    desc:  'Cada barra és afegida i verificada per usuaris reals. Sense sorpreses el dia del partit.',
+  },
+  {
+    title: 'Calendari del Barça',
+    desc:  'Tots els partits de la temporada integrats. Saps quan i on mirar sense buscar res.',
+  },
+  {
+    title: 'Comunitat activa',
+    desc:  'Afegeix bars nous, confirma horaris i fes créixer el mapa. Cada culer hi contribueix.',
+  },
+]
 
+export default function Features() {
   return (
-    <div className="two-col-grid" style={{
-      display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1,
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: '1px',
       background: 'var(--hairline)',
       border: '1px solid var(--hairline)',
-    }}>
+    }} className="split-grid">
       {items.map((it, i) => (
         <div key={i} style={{
-          padding: '44px 36px',
-          background: 'rgba(13,27,42,0.28)',
-          backdropFilter: 'blur(6px)',
+          padding: '52px 48px',
+          background: 'var(--dark)',
         }}>
-          <h3 style={{ marginBottom: 10 }}>{it.title}</h3>
-          <p style={{ margin: 0, fontSize: 16 }}>{it.desc}</p>
+          <p style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 10,
+            letterSpacing: '3px',
+            textTransform: 'uppercase',
+            color: 'var(--gold)',
+            margin: '0 0 20px',
+          }}>
+            {String(i + 1).padStart(2, '0')}
+          </p>
+          <h3 style={{ marginBottom: 16, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22 }}>
+            {it.title}
+          </h3>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7 }}>{it.desc}</p>
         </div>
       ))}
     </div>
