@@ -19,13 +19,13 @@ const items = [
 
 export default function Features() {
   return (
-    <div style={{
+    <div className="features-grid" style={{
       display: 'grid',
       gridTemplateColumns: 'repeat(2, 1fr)',
       gap: '1px',
       background: 'var(--hairline)',
       border: '1px solid var(--hairline)',
-    }} className="split-grid">
+    }}>
       {items.map((it, i) => (
         <div key={i} style={{
           padding: '52px 48px',

@@ -60,7 +60,7 @@ export default function StoreBadges({ center = false }: { center?: boolean }) {
   }
 
   return (
-    <div style={{
+    <div className="store-badges" style={{
       display: 'flex',
       gap: 16,
       flexWrap: 'wrap',

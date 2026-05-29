@@ -14,6 +14,7 @@ interface FloatingLogosProps {
   staticImage?: boolean
   fixed?: boolean
   zIndex?: number
+  className?: string
 }
 
 interface Point {
@@ -144,6 +145,7 @@ export default function FloatingLogos({
   staticImage = false,
   fixed = false,
   zIndex = 0,
+  className,
 }: FloatingLogosProps) {
   const { specs } = useRandomSpecs(count, opacity)
 
@@ -153,6 +155,7 @@ export default function FloatingLogos({
   return (
     <div
       aria-hidden="true"
+      className={className}
       style={{
         position: fixed ? 'fixed' : 'absolute',
         inset: 0,

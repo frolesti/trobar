@@ -5,6 +5,7 @@ export default function Hero() {
   return (
     <section
       id="intro"
+      className="hero-section"
       style={{
         position: 'relative',
         minHeight: '100vh',
@@ -49,15 +50,15 @@ export default function Hero() {
 
       {/* Contingut */}
       <div className="fade-up" style={{ position: 'relative', zIndex: 3, maxWidth: 860, width: '100%' }}>
-        <div style={{ margin: '0 auto 26px', width: 'fit-content' }}>
+        <div className="hero-logo-wrap" style={{ margin: '0 auto 26px', width: 'fit-content' }}>
           <Logo size={220} visualScale={1.08} variant="white" maskCircle={false} />
         </div>
 
-        <h1 style={{ marginBottom: 20, fontSize: 'clamp(48px, 10vw, 112px)' }}>
+        <h1 className="hero-title" style={{ marginBottom: 20, fontSize: 'clamp(48px, 10vw, 112px)' }}>
           Troba on veure<br />el Barça
         </h1>
 
-        <p style={{
+        <p className="hero-copy" style={{
           fontSize: 18,
           maxWidth: 480,
           margin: '0 auto 52px',
@@ -67,7 +68,7 @@ export default function Hero() {
           valora l&apos;ambient i no et perdis cap jugada.
         </p>
 
-        <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <div className="hero-cta" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
           <StoreBadges center />
         </div>
       </div>

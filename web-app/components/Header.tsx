@@ -12,7 +12,7 @@ export default function Header() {
   }, [])
 
   return (
-    <header style={{
+    <header className="site-header" style={{
       position: 'fixed',
       top: 0, left: 0, right: 0,
       zIndex: 1000,
@@ -31,7 +31,7 @@ export default function Header() {
         <Logo size={38} variant="red" />
       </Link>
 
-      <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+      <nav className="site-header-nav" style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <Link href="/#qui-som" style={{
           color: 'var(--cream-70)',
           fontFamily: 'var(--font-body)',
@@ -72,7 +72,7 @@ export default function Header() {
         }}>
           Descarrega
         </Link>
-        <Link href="/per-a-bars" className="btn" style={{ padding: '10px 24px' }}>
+        <Link href="/per-a-bars" className="btn site-header-cta" style={{ padding: '10px 24px' }}>
           Ets un bar?
         </Link>
       </nav>

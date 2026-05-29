@@ -470,7 +470,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   if (step === 1) {
     const canSubmit = email.trim() && isValidEmail(email) && !existingAccount && state.contactName.trim() && state.password.length >= 8
     return (
-      <div style={cardStyle}>
+      <div className="contact-form-card" style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
           <div style={{ ...stepBadge, width: 84, height: 84, marginBottom: 18 }}>
@@ -755,7 +755,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         {/* Search input */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <div className="contact-search-row" style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
           <input
             type="text"
             value={searchQuery}
@@ -856,7 +856,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         <p style={sectionTitleStyle}>Dades del local</p>
-        <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
+        <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
             Nom del local *
             <input required value={state.businessName} onChange={set('businessName')} style={inputStyle} placeholder="Bar Can Punyetes" />
@@ -884,7 +884,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Dades legals</p>
-        <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
+        <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
             NIF / CIF *
             <input required value={state.nif} onChange={set('nif')} style={inputStyle} placeholder="B12345678" />
@@ -896,7 +896,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Persona de contacte</p>
-        <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
+        <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
             Nom
             <input disabled value={state.contactName} style={{ ...inputStyle, background: 'var(--bg)', color: 'var(--muted)' }} />
@@ -908,7 +908,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Detalls del local</p>
-        <div style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
+        <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
             Aforament (persones)
             <input value={state.capacity} onChange={set('capacity')} style={inputStyle} placeholder="80" type="number" min={1} />
@@ -927,7 +927,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
+        <div className="contact-actions" style={{ display: 'flex', gap: 12, marginTop: 28 }}>
           <button
             onClick={() => { setStep(3); setStatus(null) }}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
@@ -976,7 +976,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         {/* Billing cycle selector */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+        <div className="contact-billing-row" style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
           {(Object.keys(CYCLES) as BillingCycle[]).map(key => {
             const c = CYCLES[key]
             const active = state.billing === key
@@ -1043,7 +1043,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div className="contact-actions" style={{ display: 'flex', gap: 12 }}>
           <button
             onClick={() => setStep(4)}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}

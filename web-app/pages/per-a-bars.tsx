@@ -74,12 +74,12 @@ export default function PerABars() {
       </Head>
       <Header />
 
-      <main style={{ position: 'relative', overflow: 'hidden' }}>
-        <FloatingLogos count={12} opacity={0.32} fixed zIndex={0} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
+      <main className="per-a-bars-page" style={{ position: 'relative', overflow: 'hidden' }}>
+        <FloatingLogos className="per-a-bars-floats" count={12} opacity={0.32} fixed zIndex={0} />
+        <div className="per-a-bars-content" style={{ position: 'relative', zIndex: 1 }}>
         {/* Hero per a bars */}
-        <section style={{ padding: '160px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ maxWidth: 720, margin: '0 auto', position: 'relative', zIndex: 1 }} className="fade-up">
+        <section className="per-a-bars-hero" style={{ padding: '160px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ maxWidth: 720, margin: '0 auto', position: 'relative', zIndex: 1 }} className="fade-up per-a-bars-hero-inner">
             <span className="eyebrow">Per a bars i restaurants</span>
             <h1 style={{ marginBottom: 24 }}>
               Converteix cada partit <em style={{ color: 'var(--gold)', fontWeight: 500 }}>en clients</em>
@@ -95,7 +95,7 @@ export default function PerABars() {
         </section>
 
         {/* Beneficis */}
-        <section style={{ padding: '100px 24px 60px' }}>
+        <section className="per-a-bars-benefits" style={{ padding: '100px 24px 60px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 64 }}>
               <span className="eyebrow">Què inclou</span>
@@ -107,7 +107,7 @@ export default function PerABars() {
               </p>
             </div>
 
-            <div className="two-col-grid" style={{
+            <div className="two-col-grid per-a-bars-benefits-grid" style={{
               display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1,
               background: 'var(--hairline)',
               border: '1px solid var(--hairline)',
@@ -143,14 +143,14 @@ export default function PerABars() {
         </section>
 
         {/* Preus */}
-        <section style={{ padding: '80px 24px' }}>
+        <section className="per-a-bars-preus" style={{ padding: '80px 24px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <Pricing />
           </div>
         </section>
 
         {/* CTA final */}
-        <section style={{ textAlign: 'center', padding: '80px 24px 140px' }}>
+        <section className="per-a-bars-cta" style={{ textAlign: 'center', padding: '80px 24px 140px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <h2 style={{ marginBottom: 20 }}>
               Comença <em style={{ color: 'var(--gold)', fontWeight: 500 }}>avui</em>

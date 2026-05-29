@@ -42,7 +42,7 @@ export default function Pricing() {
   const clientsToBreakEven = Math.max(1, Math.ceil(sel.price / avgTicket))
 
   return (
-    <section id="preus">
+    <section id="preus" className="pricing-section">
       <div style={{ textAlign: 'center', marginBottom: 56 }}>
         <span className="eyebrow">Preus</span>
         <h2 style={{ marginBottom: 14 }}>
@@ -54,7 +54,7 @@ export default function Pricing() {
       </div>
 
       {/* Cycle selector — pestanyes editorials */}
-      <div style={{
+      <div className="pricing-selector" style={{
         display: 'flex', justifyContent: 'center', gap: 0,
         maxWidth: 540, margin: '0 auto 48px',
         borderTop: '1px solid var(--hairline)',
@@ -99,7 +99,7 @@ export default function Pricing() {
       </div>
 
       {/* Card editorial */}
-      <div style={{
+      <div className="pricing-card" style={{
         maxWidth: 560, margin: '0 auto',
         padding: '56px 44px',
         border: '1px solid var(--hairline)',
@@ -176,7 +176,7 @@ export default function Pricing() {
       </div>
 
       {/* ROI */}
-      <div style={{
+      <div className="pricing-roi" style={{
         maxWidth: 560, margin: '40px auto 0',
         padding: '36px 32px',
         borderTop: '1px solid var(--hairline)',
@@ -188,7 +188,7 @@ export default function Pricing() {
           Compensa des del primer dia de partit
         </h4>
 
-        <div style={{ display: 'flex', gap: 32, marginBottom: 24, textAlign: 'center' }}>
+        <div className="pricing-roi-row" style={{ display: 'flex', gap: 32, marginBottom: 24, textAlign: 'center' }}>
           <div style={{ flex: 1 }}>
             <span className="eyebrow" style={{ fontSize: 11, marginBottom: 8 }}>
               La teva inversió

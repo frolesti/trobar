@@ -19,11 +19,11 @@ export default function RegisterBar() {
       <Header />
 
       {/* Hero — sense fons propi, el degradat global flueix */}
-      <section style={{
+      <section className="register-hero" style={{
         padding: 'clamp(140px, 14vw, 180px) 24px clamp(40px, 6vw, 70px)',
         textAlign: 'center',
       }}>
-        <div style={{ maxWidth: 720, margin: '0 auto' }} className="fade-up">
+        <div style={{ maxWidth: 720, margin: '0 auto' }} className="fade-up register-hero-inner">
           <span className="eyebrow">Per a bars i restaurants</span>
           <h1 style={{ marginBottom: 20 }}>
             Fes créixer el teu <em style={{ color: 'var(--gold)', fontWeight: 500 }}>negoci</em>
@@ -35,7 +35,7 @@ export default function RegisterBar() {
       </section>
 
       <main>
-        <section id="formulari-registre" style={{ padding: 'clamp(20px, 4vw, 40px) 16px clamp(80px, 8vw, 120px)' }}>
+        <section id="formulari-registre" className="register-form-wrap" style={{ padding: 'clamp(20px, 4vw, 40px) 16px clamp(80px, 8vw, 120px)' }}>
           <div style={{ maxWidth: 600, margin: '0 auto' }}>
             <ContactForm onOpenLegal={(type) => setLegalOpen(type)} />
           </div>
