@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "sync:assets": "node ./scripts/sync-shared-assets.js",
+    "predev": "npm run sync:assets",
+    "prebuild": "npm run sync:assets",
+    "prestart": "npm run sync:assets",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "node ./scripts/autostart.js",
