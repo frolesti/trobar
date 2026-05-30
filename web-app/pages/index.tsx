@@ -173,12 +173,12 @@ export default function Home() {
                 { n: '02', title: 'Busca al mapa',      desc: 'Veu tots els bars propers que emeten el Barça avui. Toca qualsevol punter per veure\'n els detalls.' },
                 { n: '03', title: 'Gaudeix del partit', desc: 'Tria el bar que més t\'agradi i gaudeix del Barça com es mereix: envoltat de la millor afició.' },
               ].map((s, i) => (
-                <div key={i} style={{
+                <div key={i} className="step-item" style={{
                   paddingRight: 48,
                   paddingLeft: i > 0 ? 48 : 0,
                   borderLeft: i > 0 ? '1px solid var(--hairline)' : 'none',
                 }}>
-                  <span style={{
+                  <span className="step-num" style={{
                     display: 'block',
                     fontFamily: 'var(--font-display)',
                     fontSize: 'clamp(56px, 6vw, 96px)',

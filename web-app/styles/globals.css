@@ -188,6 +188,28 @@ p { margin: 0 0 1.2em; color: var(--cream-70); }
 }
 .fade-up { animation: fadeUp 1s ease-out both; }
 
+.site-header-burger {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--hairline);
+  background: rgba(12,12,12,0.45);
+  border-radius: 8px;
+  padding: 9px 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.site-header-burger span {
+  width: 16px;
+  height: 1px;
+  background: var(--cream);
+  display: block;
+}
+
 /* ── Formularis (ContactForm) ── */
 .field-label {
   display: block;
@@ -241,34 +263,54 @@ ul.legal li::before {
 @media (max-width: 768px) {
   .site-header {
     padding: 14px 16px !important;
-    gap: 12px;
-    align-items: flex-start !important;
+    gap: 10px;
+    align-items: center !important;
+  }
+
+  .site-header-burger {
+    display: inline-flex !important;
   }
 
   .site-header nav,
   .site-header-nav {
-    gap: 10px !important;
-    row-gap: 10px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    white-space: nowrap;
-    justify-content: flex-end !important;
-    scrollbar-width: none;
+    display: none !important;
   }
 
-  .site-header-nav::-webkit-scrollbar {
-    display: none;
+  .site-header-nav.open {
+    display: flex !important;
+    position: absolute;
+    top: calc(100% + 1px);
+    left: 0;
+    right: 0;
+    padding: 14px 16px;
+    gap: 12px !important;
+    flex-direction: column;
+    align-items: stretch;
+    background: rgba(12,12,12,0.96);
+    border-bottom: 1px solid var(--hairline);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 1001;
+  }
+
+  .site-header-nav.open a {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-size: 10px !important;
+    letter-spacing: 2px !important;
+    padding: 10px 12px !important;
   }
 
   .site-header nav a,
   .site-header-cta {
-    font-size: 9px !important;
+    font-size: 10px !important;
     letter-spacing: 2px !important;
-    padding: 9px 14px !important;
+    padding: 10px 14px !important;
   }
 
   .site-header-nav {
-    max-width: calc(100vw - 88px);
+    max-width: none;
   }
 
   .hero-section {
@@ -310,6 +352,25 @@ ul.legal li::before {
     grid-template-columns: 1fr !important;
   }
 
+  .step-grid .step-item {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border-left: none !important;
+    border-top: 1px solid var(--hairline);
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  .step-grid .step-item:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .step-grid .step-num {
+    font-size: clamp(44px, 14vw, 64px) !important;
+    margin-bottom: 18px !important;
+  }
+
   .pricing-selector {
     flex-direction: column !important;
     max-width: 100% !important;
@@ -347,7 +408,7 @@ ul.legal li::before {
   }
 
   .per-a-bars-page .per-a-bars-floats {
-    opacity: 0.18 !important;
+    opacity: 0.24 !important;
     display: block !important;
   }
 
@@ -363,8 +424,8 @@ ul.legal li::before {
   .per-a-bars-benefits,
   .per-a-bars-preus,
   .per-a-bars-cta {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
   }
 
   .per-a-bars-benefits-grid > div {
@@ -377,7 +438,7 @@ ul.legal li::before {
   }
 
   .register-hero {
-    padding: 110px 16px 28px !important;
+    padding: 100px 14px 20px !important;
   }
 
   .register-form-wrap {
@@ -432,17 +493,24 @@ ul.legal li::before {
 }
 
 @media (max-width: 560px) {
-  .site-header {
-    align-items: center !important;
+  #com-funciona {
+    padding: 88px 22px !important;
   }
 
-  .site-header-nav {
-    max-width: none;
+  #caracteristiques {
+    padding: 86px 22px !important;
   }
 
-  .site-header nav a {
-    font-size: 8px !important;
-    letter-spacing: 1.8px !important;
-    padding: 8px 11px !important;
+  #descarrega {
+    min-height: auto !important;
+    padding: 84px 18px !important;
+  }
+
+  #per-a-bars {
+    min-height: auto !important;
+  }
+
+  #per-a-bars > div:last-child {
+    padding: 48px 20px !important;
   }
 }
