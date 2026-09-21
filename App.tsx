@@ -1,13 +1,16 @@
 import 'react-native-gesture-handler'; // MUST BE AT THE TOP
 import React from 'react';
-import { LogBox, Platform, View, ActivityIndicator, Text } from 'react-native';
+import { LogBox, Platform, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, Lora_400Regular, Lora_700Bold, Lora_400Regular_Italic } from '@expo-google-fonts/lora';
+import { Oi_400Regular } from '@expo-google-fonts/oi';
 import AppNavigator from './app/src/navigation/AppNavigator';
 import { AuthProvider } from './app/src/context/AuthContext';
+import { SplashProvider } from './app/src/context/SplashContext';
 import ErrorBoundary from './app/src/components/ErrorBoundary';
 import { AlertBannerHost } from './app/src/components/AlertBanner';
-import { SKETCH_THEME } from './app/src/theme/sketchTheme';
+import SplashScreen from './app/src/components/SplashScreen';
+import GlobalSplash from './app/src/components/GlobalSplash';
 
 LogBox.ignoreLogs([
   'props.pointerEvents is deprecated',
@@ -92,6 +95,7 @@ export default function App() {
     // Alias perquè el codi llegat que fa servir `fontFamily: 'Lora'`
     // continuï funcionant sense haver de tocar 170+ ocurrències.
     Lora: Lora_400Regular,
+    Oi_400Regular,
   });
 
   // Aplicar Lora com a font per defecte a TOTS els <Text> de l'app
@@ -108,20 +112,22 @@ export default function App() {
     ];
   }, [fontsLoaded]);
 
+  // Mentre carreguen les fonts, mostrem només el fons grana + GIF (sense text
+  // "troBar", per evitar el flash de tipografia de sistema → reflow a Oi).
   if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, backgroundColor: SKETCH_THEME.colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-      </View>
-    );
+    return <SplashScreen visible fontReady={false} />;
   }
 
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         <AuthProvider>
-          <AppNavigator />
-          <AlertBannerHost defaultPosition="bottom" bottomOffset={88} />
+          <SplashProvider>
+            <AppNavigator />
+            <AlertBannerHost defaultPosition="bottom" bottomOffset={88} />
+            {/* Splash global: cobreix l'app mentre l'auth o qualsevol pantalla carreguen */}
+            <GlobalSplash />
+          </SplashProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </ErrorBoundary>

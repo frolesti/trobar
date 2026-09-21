@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ca">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="theme-color" content="#a50044" />
+    <title>troBar</title>
+
+    <!--
+      Estils crítics inline: el navegador els aplica ABANS de baixar el bundle JS.
+      Així evitem el "flash blanc" entre que es carrega l'HTML i React munta el splash.
+    -->
+    <style>
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #a50044; /* Grana Barça */
+      }
+      body { overflow: hidden; }
+      #root { display: flex; flex-direction: column; }
+
+      /* Pantalla de càrrega estàtica (apareix immediatament, sense esperar React) */
+      .splash-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #a50044;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
+
+      .splash-gif {
+        width: 200px;
+        height: 200px;
+        margin-bottom: 12px;
+        border-radius: 100px;
+        object-fit: contain;
+      }
+
+      .splash-text {
+        font-family: 'Oi', sans-serif;
+        font-size: 36px;
+        font-weight: 400;
+        color: #ffffff;
+        text-align: center;
+        letter-spacing: 1px;
+        margin: 0;
+      }
+
+      /* SVG per al text curvat */
+      .splash-text-svg {
+        width: 280px;
+        height: 100px;
+        margin-top: -20px;
+      }
+
+      .splash-text-svg text {
+        font-family: 'Oi', sans-serif;
+        font-size: 36px;
+        font-weight: 400;
+        fill: #ffffff;
+        letter-spacing: 1px;
+      }
+    </style>
+
+    <!--
+      Precarrega la font Oi des de Google Fonts perquè estigui disponible
+      el més aviat possible. Evita el FOUC (flash de tipografia de sistema → Oi).
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oi&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oi&display=swap" />
+
+    <!--
+      Precarrega el GIF per renderitzar-lo més ràpidament.
+    -->
+    <link rel="preload" as="image" href="/gif/trobar.gif" />
+  </head>
+  <body>
+    <noscript>Aquesta aplicació requereix JavaScript.</noscript>
+
+    <!-- Pantalla estàtica de càrrega (GIF + text curvat) — apareix instantàniament -->
+    <div class="splash-overlay" id="splash-static">
+      <img src="/gif/trobar.gif" alt="troBar" class="splash-gif" />
+      <svg class="splash-text-svg" viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <path id="curved-path" d="M 40 35 Q 140 80 240 35" fill="none"/>
+        </defs>
+        <text font-family="Oi, sans-serif" font-size="36" font-weight="400" fill="white" letter-spacing="1">
+          <textPath href="#curved-path" startOffset="50%" text-anchor="middle">
+            troBar
+          </textPath>
+        </text>
+      </svg>
+    </div>
+
+    <!-- Contenidor on React muntarà l'app -->
+    <div id="root"></div>
+
+    <script>
+      /**
+       * Quan React renderitza i el SplashScreen es munta amb visible=true,
+       * elimina aquest splash estàtic per evitar duplicar la pantalla.
+      *
+       * El SplashScreen React té el mateix estil + GIF, de manera que visualment
+       * no es nota cap canvi — simplement React pren el control de la pantalla.
+      *
+       * Timeout de seguretat: Si React no ha eliminat el splash en 10 segons,
+       * el fem invisible de totes maneres per evitar quedar-se enganxat.
+       */
+      function removeSplashStatic() {
+        const splash = document.getElementById('splash-static');
+        if (splash) {
+          splash.style.display = 'none';
+        }
+      }
+
+      window.removeSplashStatic = removeSplashStatic;
+
+      // Timeout de seguretat: Si React tarda més de 10 segons, fa invisible el splash
+      setTimeout(removeSplashStatic, 10000);
+    </script>
+    <!-- Expo Metro web injecta aquí el bundle automàticament -->
+  </body>
+</html>

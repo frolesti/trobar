@@ -20,10 +20,11 @@ export const EDITORIAL = {
     danger: '#db0030',
     success: '#1f7a3a',
 
-    // Typography family aliases (require @expo-google-fonts/lora loaded)
+    // Typography family aliases (require @expo-google-fonts/lora + @expo-google-fonts/oi loaded)
     fontRegular: 'Lora_400Regular',
     fontBold: 'Lora_700Bold',
     fontItalic: 'Lora_400Regular_Italic',
+    fontDisplay: 'Oi_400Regular',
 
     // Spacing
     space: {
@@ -54,24 +55,25 @@ export const ED_TYPE = StyleSheet.create({
         textTransform: 'uppercase',
     } as TextStyle,
     display: {
-        fontFamily: EDITORIAL.fontBold,
+        fontFamily: EDITORIAL.fontDisplay,
         fontSize: 40,
         lineHeight: 46,
         color: EDITORIAL.ink,
-        letterSpacing: -0.5,
+        letterSpacing: 0.5,
     } as TextStyle,
     h1: {
-        fontFamily: EDITORIAL.fontBold,
+        fontFamily: EDITORIAL.fontDisplay,
         fontSize: 30,
         lineHeight: 36,
         color: EDITORIAL.ink,
-        letterSpacing: -0.3,
+        letterSpacing: 0.2,
     } as TextStyle,
     h2: {
-        fontFamily: EDITORIAL.fontBold,
+        fontFamily: EDITORIAL.fontDisplay,
         fontSize: 22,
         lineHeight: 28,
         color: EDITORIAL.ink,
+        letterSpacing: 0.1,
     } as TextStyle,
     h3: {
         fontFamily: EDITORIAL.fontBold,

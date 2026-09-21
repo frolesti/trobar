@@ -6,7 +6,7 @@ import { SKETCH_THEME } from '../../theme/sketchTheme';
 
 export default StyleSheet.create({
     container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg, ...Platform.select({ web: { overflow: 'hidden' as const, height: '100vh', maxHeight: '100vh' } as any }) },
-    mapContainer: { flex: 1, width: '100%', height: '100%', ...Platform.select({ web: { overflow: 'hidden' as const } }) },
+    mapContainer: { flex: 1, width: '100%', height: '100%', zIndex: 0, ...Platform.select({ web: { overflow: 'hidden' as const } }) },
     map: { width: '100%', height: '100%' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
     
@@ -52,24 +52,12 @@ export default StyleSheet.create({
         ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.06)', cursor: 'pointer' } })
     },
 
-    // Marcadors de pin 3D del mapa
+    // Marcadors 3D amb PNG transparent (3dicons.co, CC0)
     markerContainer: { alignItems: 'center', overflow: 'visible' as const, ...Platform.select({ web: { cursor: 'pointer' } }) },
-    markerShadow: {
-        width: 20, height: 6, borderRadius: 10,
-        backgroundColor: 'rgba(0,0,0,0.18)',
-        marginTop: -2,
-        ...Platform.select({ web: { filter: 'blur(2px)' } })
-    },
-    markerPin: {
-        width: 36, height: 42, alignItems: 'center', overflow: 'visible' as const,
-    },
-    markerPinSelected: {},
-    markerPinInner: {
-        width: 22, height: 22, borderRadius: 11,
-        backgroundColor: 'white',
-        justifyContent: 'center', alignItems: 'center',
-    },
-    markerPinIcon: {},
+    markerPin3d: { width: 52, height: 52 },
+    markerPinSelected3d: { width: 64, height: 64, transform: [{ scale: 1.06 }] },
+    markerPinScanned: { width: 44, height: 44 },
+    markerPremiumStar3d: { position: 'absolute', width: 25, height: 25, top: 1, right: -4 },
     // Legat (no utilitzat)
     markerBubble: {
         backgroundColor: SKETCH_THEME.colors.bg, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
@@ -109,7 +97,7 @@ export default StyleSheet.create({
 
     // Botó flotant (Fab)
     fabGps: {
-        position: 'absolute', right: 20, width: 32, height: 32, borderRadius: 16, 
+        position: 'absolute', right: 20, width: 44, height: 44, borderRadius: 22,
         backgroundColor: SKETCH_THEME.colors.card, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
         ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
