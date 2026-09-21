@@ -10,6 +10,11 @@ config.resolver.unstable_enablePackageExports = true;
 // Also add standard mjs and cjs to source extensions if needed
 config.resolver.sourceExts.push('mjs', 'cjs');
 
+// Ignore transient Gradle/Kotlin output that can disappear while Metro watches.
+config.resolver.blockList = [
+  /node_modules[\\/]expo-modules-autolinking[\\/]android[\\/].*[\\/]build[\\/]/,
+];
+
 // ─── Web shims for native-only modules ───────────────────────────
 // When platform=web, redirect native modules to lightweight stubs
 // so the app can load in a browser for debugging.

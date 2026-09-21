@@ -7,5 +7,8 @@
   "files.exclude": {
     "app/assets": true,
     "web-app/public/assets": true
-  }
+  },
+  // Silencia els warnings de TypeScript dels paquest a node_modules (ex: expo-modules-core)
+  "typescript.tsserver.skipLibCheck": true,
+  "java.configuration.updateBuildConfiguration": "automatic"
 }

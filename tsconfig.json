@@ -17,9 +17,11 @@
       "./node_modules/@types"
     ]
   },
+  "include": [
+    "app/**/*"
+  ],
   "exclude": [
     "node_modules",
-    "babel.config.js",
     ".expo",
     "web-build",
     "dist"

@@ -62,6 +62,41 @@ $env:TROBAR_DEV_FORCE=1; npm start
 $env:TROBAR_DEV_KILL_ALL=1; npm start
 ```
 
+### Provar a l'iPhone amb Expo Go (Windows)
+
+Fes servir una finestra PowerShell normal, situada a l'arrel del repositori:
+
+```powershell
+cd C:\Users\USER\Repos\trobar
+npm run start:iphone
+```
+
+Aquest script allibera els ports d’Expo, utilitza una caché de Metro dins del projecte i anuncia automàticament la IP LAN activa del PC. Deixa el terminal obert i escaneja el QR que hi apareix amb Expo Go o amb la càmera de l’iPhone.
+
+La URL esperada té aquest format:
+
+```text
+exp://<IP-LAN-DEL-PC>:8081
+```
+
+L'iPhone i el PC han d'estar a la mateixa Wi-Fi. Si Expo Go mostra “There was a problem running the requested project”, comprova primer la connectivitat des del PC:
+
+```powershell
+Test-NetConnection <IP-LAN-DEL-PC> -Port 8081
+```
+
+El resultat correcte és `TcpTestSucceeded: True`. Si `http://127.0.0.1:8081` respon però `192.168.1.187:8081` falla, Metro funciona i el bloqueig és de Windows Firewall, la xarxa Wi-Fi (xarxa de convidats/isolació de clients) o una VPN. Cal permetre Node.js a la xarxa privada de Windows i desactivar temporalment la VPN; no cal reinstal·lar Expo Go ni les dependències.
+
+Si Windows Firewall bloqueja el port, obre PowerShell **com a administrador** i executa una vegada:
+
+```powershell
+New-NetFirewallRule -DisplayName "troBar Metro 8081" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8081 -Profile Private
+```
+
+Després torna a executar `npm run start:iphone` i comprova de nou `Test-NetConnection`. Si continua fallant, el router probablement té activada la isolació de clients o el PC i l'iPhone no són a la mateixa xarxa privada.
+
+Per aturar Expo, prem `Ctrl+C` al mateix terminal.
+
 Això obrirà el Metro Bundler. Des del terminal pots introduir les opcions:
 - **`w`** : Per obrir la versió **Web** al navegador.
 - **Escanejar QR** : Utilitza l'app **Expo Go** al teu mòbil (Android/iOS).

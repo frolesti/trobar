@@ -1,16 +1,10 @@
 {
   "expo": {
     "name": "troBar",
-    "slug": "trobar-rn",
+    "slug": "trobar-ios",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./app/assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./app/assets/img/logo-nav.jpg",
-      "resizeMode": "contain",
-      "backgroundColor": "#a50044"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -25,14 +19,11 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./app/assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
       "package": "com.trobar.app",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "config": {
         "googleMaps": {
@@ -41,7 +32,6 @@
       }
     },
     "web": {
-      "favicon": "./app/assets/favicon.jpg",
       "bundler": "metro"
     },
     "plugins": [
@@ -52,14 +42,24 @@
           "photosPermission": "L'app necessita accés a les teves fotos per actualitzar el perfil."
         }
       ],
+      "@react-native-google-signin/google-signin",
+      "expo-font",
       [
-        "react-native-maps",
+        "expo-splash-screen",
         {
-          "androidGoogleMapsApiKey": "AIzaSyCJDfdnUcgcc_AUyXPnEdHStmuNsUAZtb0"
+          "image": "./app/assets/img/logo/LOGO_blanc.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#a50044"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "expo-status-bar"
     ],
-    "scheme": "trobar"
+    "scheme": "trobar",
+    "extra": {
+      "eas": {
+        "projectId": "d855540d-65e2-4f80-a58d-cff638387276"
+      }
+    },
+    "owner": "frolestis-team"
   }
 }
