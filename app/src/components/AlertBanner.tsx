@@ -26,6 +26,8 @@ export interface AlertPayload {
     eyebrow?: string;
     /** Visual position of the banner. Defaults to host defaultPosition. */
     position?: 'top' | 'bottom';
+    /** Overrides the host's default top/bottom offset for this alert only. */
+    offset?: number;
 }
 
 type Listener = (a: AlertPayload | null) => void;
@@ -54,6 +56,7 @@ export const AlertBannerHost: React.FC<{ topOffset?: number; bottomOffset?: numb
     const opacity = useRef(new Animated.Value(0)).current;
     const translateY = useRef(new Animated.Value(-12)).current;
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const MAX_DURATION_MS = 5000;
 
     const close = useCallback(() => {
         const isBottom = (alert?.position ?? defaultPosition) === 'bottom';
@@ -64,10 +67,17 @@ export const AlertBannerHost: React.FC<{ topOffset?: number; bottomOffset?: numb
         if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     }, [alert?.position, defaultPosition, opacity, translateY]);
 
+    // `close` és inestable (depèn de `alert`). Fem servir un ref perquè el
+    // listener no s'hagi de tornar a subscriure a cada canvi d'alerta —
+    // si no, el `cleanup` cancel·lava el `setTimeout` just després de crear-lo
+    // i l'avís mai es tancava sol.
+    const closeRef = useRef(close);
+    useEffect(() => { closeRef.current = close; }, [close]);
+
     useEffect(() => {
         const listener: Listener = (payload) => {
             if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-            if (!payload) { close(); return; }
+            if (!payload) { closeRef.current(); return; }
             setAlert(payload);
             const isBottom = (payload.position ?? defaultPosition) === 'bottom';
             opacity.setValue(0);
@@ -76,29 +86,33 @@ export const AlertBannerHost: React.FC<{ topOffset?: number; bottomOffset?: numb
                 Animated.timing(opacity, { toValue: 1, duration: 240, useNativeDriver: true }),
                 Animated.timing(translateY, { toValue: 0, duration: 240, useNativeDriver: true }),
             ]).start();
-            const dur = payload.duration ?? 5000;
-            if (dur > 0) {
-                timerRef.current = setTimeout(close, dur);
-            }
+            // Sempre auto-tanca; mai queda plantat esperant un tancament manual.
+            const dur = Math.min(payload.duration ?? MAX_DURATION_MS, MAX_DURATION_MS);
+            timerRef.current = setTimeout(() => closeRef.current(), dur);
         };
         listeners.add(listener);
         return () => {
             listeners.delete(listener);
             if (timerRef.current) clearTimeout(timerRef.current);
         };
-    }, [close, opacity, translateY]);
+        // Subscripció única: si depenguéssim de `close` (que canvia amb `alert`),
+        // el cleanup cancel·laria el temporitzador just després de crear-lo.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     if (!alert) return null;
 
     const eyebrowColor = TONE_EYEBROW[alert.tone ?? 'info'];
     const isBottom = (alert.position ?? defaultPosition) === 'bottom';
 
+    const resolvedOffset = alert.offset ?? (isBottom ? bottomOffset : topOffset);
+
     return (
         <Animated.View
             pointerEvents="box-none"
             style={[
                 styles.host,
-                isBottom ? { bottom: bottomOffset, opacity, transform: [{ translateY }] } : { top: topOffset, opacity, transform: [{ translateY }] },
+                isBottom ? { bottom: resolvedOffset, opacity, transform: [{ translateY }] } : { top: resolvedOffset, opacity, transform: [{ translateY }] },
             ]}
         >
             <View style={styles.card}>

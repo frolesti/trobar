@@ -8,8 +8,8 @@ import { fetchBroadcastMatchIds } from '../../services/barService';
 import { Ionicons } from '@expo/vector-icons';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { EDITORIAL } from '../../theme/editorialTheme';
-import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { useAuth } from '../../context/AuthContext';
+import { useScreenLoading } from '../../context/SplashContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserPreferences } from '../../services/userService';
@@ -83,6 +83,9 @@ const MatchesScreen = ({ navigation }: Props) => {
     const [loading, setLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // Splash global: mantenim grana mentre carreguem la llista inicial de partits.
+    useScreenLoading('MatchesScreen', loading);
     const isRefreshingRef = React.useRef(false);
     const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
     const [broadcastMatchIds, setBroadcastMatchIds] = useState<Set<string>>(new Set());
@@ -466,11 +469,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 onEndReached={loadMoreMatches}
                 onEndReachedThreshold={0.3}
                 ListEmptyComponent={
-                    loading ? (
-                        <LoadingState />
-                    ) : (
-                        <EmptyState filter={filter} />
-                    )
+                    loading ? null : <EmptyState filter={filter} />
                 }
                 ListHeaderComponent={
                     !loading && displayedMatches.length > 0 ? (
@@ -556,19 +555,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             />
         </SafeAreaView>    );
 };
-const LoadingState = () => (
-    <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <LoadingIndicator size={100} />
-        <Text style={{ 
-            color: EDITORIAL.inkMuted, 
-            marginTop: 16, 
-            fontSize: 14,
-            fontFamily: EDITORIAL.fontRegular
-        }}>
-            Carregant partits...
-        </Text>
-    </View>
-);
+
 
 const EmptyState = ({ filter }: { filter: FilterType }) => (
     <View style={{ alignItems: 'center', marginTop: 60 }}>

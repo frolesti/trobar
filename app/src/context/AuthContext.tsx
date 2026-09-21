@@ -19,13 +19,6 @@ import { showAlert } from '../components/AlertBanner';
 import { executeRequest, executeOrThrow } from '../api/core';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
-import { GoogleSignin, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
-
-// Configurem Google Sign-In amb el Web Client ID de Firebase
-// (imprescindible per obtenir l'idToken que Firebase necessita)
-GoogleSignin.configure({
-  webClientId: '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com',
-});
 
 // Configurem l'idioma de les notificacions d'auth a Català
 auth.languageCode = 'ca';
@@ -88,10 +81,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        console.log('[AuthContext] Firebase user found, fetching profile');
         await fetchAndSetUser(firebaseUser);
       } else {
+        console.log('[AuthContext] No Firebase user');
         setUser(null);
       }
+      console.log('[AuthContext] Setting isLoading = false');
       setIsLoading(false);
     });
     return unsubscribe;
@@ -153,6 +149,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             // Flux natiu Android/iOS via Google Play Services
+            const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+            GoogleSignin.configure({
+              webClientId: '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com',
+            });
+
             // 1. Comprovar si Google Play Services està disponible
             await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 

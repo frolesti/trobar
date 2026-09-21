@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useScreenLoading } from '../../context/SplashContext';
 import { Bar, BarAmenity } from '../../models/Bar';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { AMENITY_OPTIONS, AMENITY_MAP } from '../../data/amenities';
@@ -316,15 +317,12 @@ export default function BarDashboardScreen() {
     /* ═══════════════════════════════════════════════════════════════════════
        LOADING / EMPTY
     ═══════════════════════════════════════════════════════════════════════ */
+    // Splash global: mantenim grana mentre carreguem el perfil del bar.
+    useScreenLoading('BarDashboard', loading);
+
     if (loading) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.centered}>
-                    <LoadingIndicator size={100} />
-                    <Text style={styles.loadingText}>Carregant…</Text>
-                </View>
-            </SafeAreaView>
-        );
+        // No renderitzem res: el GlobalSplash cobreix la pantalla.
+        return null;
     }
 
     if (!bar) {
@@ -352,16 +350,8 @@ export default function BarDashboardScreen() {
        TAB 1: MAPA — Previsualització del bar tal com el veuen els usuaris
     ═══════════════════════════════════════════════════════════════════════ */
     const renderMapTab = () => (
-        <View style={{ flex: 1, position: 'relative' }}>
-            {/* Mapa a pantalla completa */}
-            <View style={styles.mapFullContainer}>
-                <View style={styles.centered}>
-                    <LoadingIndicator size={100} />
-                    <Text style={styles.loadingText}>Carregant mapa…</Text>
-                </View>
-            </View>
-
-
+        <View style={{ flex: 1, position: 'relative', backgroundColor: SKETCH_THEME.colors.bg }}>
+            {/* Mapa a pantalla completa — TODO: renderitzar mapa actual */}
         </View>
     );
 

@@ -218,8 +218,8 @@ const MapView = forwardRef<any, any>((props, ref) => {
     if (!isLoaded || !API_KEY) {
         return (
             <View style={[styles.wrapper, flatStyle]}>
+                {/* El SplashScreen de MapScreen cobreix el loading del mapa */}
                 <View style={styles.errorOverlay}>
-                    <Text style={styles.errorText}>Carregant mapa…</Text>
                     {!API_KEY && (
                         <Text style={styles.errorSub}>EXPO_PUBLIC_GOOGLE_MAPS_API_KEY no configurada</Text>
                     )}
