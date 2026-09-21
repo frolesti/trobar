@@ -1,5 +1,9 @@
 node_modules
 .expo
+.expo-export-*/
+.expo-config-current.txt
+trobar_after_launch.png
+assets/app/img/logo/icon.png
 dist
 dist-android
 web-build
@@ -28,4 +32,7 @@ functions/lib/
 # scripts/setup-asset-junctions.ps1). Only /assets is committed.
 app/assets
 web-app/public/assets
+
+# Local runbook (personal notes)
+docs/LOCAL_EMULATOR_GUIDE.md
 
