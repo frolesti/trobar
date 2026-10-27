@@ -10,4 +10,8 @@ export interface Match {
     homeScore?: number;
     awayScore?: number;
     status?: 'scheduled' | 'finished' | 'live' | 'postponed';
+    stage?: string;
+    group?: string | null;
+    round?: string;
+    timeConfirmed?: boolean;
 }

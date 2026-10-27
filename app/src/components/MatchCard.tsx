@@ -1,385 +1,182 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Image, ImageSourcePropType, Platform } from 'react-native';
-import { Match } from '../services/matchService';
-import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image, ImageSource } from 'expo-image';
+import { Feather } from '@expo/vector-icons';
+import Text from './AppText';
+import { Match } from '../models/Match';
+import { EDITORIAL } from '../theme/editorialTheme';
 import { formatTeamNameForDisplay } from '../utils/teamName';
+import { getWomenTeamCrest } from '../data/womenTeamCrests';
 
 type MatchCardProps = {
     match: Match;
     onPress?: () => void;
-    compact?: boolean; // Per a ús al bàner del mapa
-    /** Si true, almenys un bar emet aquest partit → mostra botó 'Trobar bars' */
+    compact?: boolean;
+    grana?: boolean;
     hasBroadcast?: boolean;
-    /** Si true, es mostra com a filtre actiu (només canvia el border) */
     isFilter?: boolean;
-    /** Si true, és el pròxim partit real → mostra "Proper partit" */
     isNextMatch?: boolean;
-    /** Si true, mostra la X per tancar (ve de la pestanya Partits) */
     showDismiss?: boolean;
-    /** Callback per tancar el filtre (X) */
     onDismissFilter?: () => void;
-    /** Callback per activar/toggle filtre de bars (toc sobre targeta compacta) */
     onToggleFilter?: () => void;
+    onLongPress?: () => void;
 };
 
-const getTeam = (key: any) => {
-    if (typeof key === 'object' && key !== null) {
-        return {
-            name: key.name || key.shortName || 'Unknown Team',
-            badge: key.crest || key.badge || null
-        };
-    }
-    return { name: String(key), badge: null };
+const LOGOS = {
+    liga: require('../../../assets/app/img/competicions/liga.png'),
+    champions: require('../../../assets/app/img/competicions/champions.png'),
+    championsWomen: require('../../../assets/app/img/competicions/champions-w.png'),
+    copa: require('../../../assets/app/img/competicions/copa-del-rey.png'),
+    copaWomen: require('../../../assets/app/img/competicions/copa-reina.png'),
+    ligaWomen: require('../../../assets/app/img/competicions/ligaf.png'),
 };
 
-// Logos locals empaquetats des de assets/img/competicions/
-const LOCAL_LOGOS: Record<string, ImageSourcePropType> = {
-    'liga':         require('../../assets/img/competicions/liga.png'),
-    'champions':    require('../../assets/img/competicions/champions.png'),
-    'champions-w':  require('../../assets/img/competicions/champions-w.png'),
-    'copa-del-rey': require('../../assets/img/competicions/copa-del-rey.png'),
-    'copa-reina':   require('../../assets/img/competicions/copa-reina.png'),
-    'ligaf':        require('../../assets/img/competicions/ligaf.png'),
-};
-
-/** Retorna el source local (require) pel nom de la competició */
-function resolveCompLogo(match: Match): ImageSourcePropType | null {
-    const name = (match.competition?.name || match.league || '').toLowerCase();
-
-    if (name.includes('women') && name.includes('champions')) return LOCAL_LOGOS['champions-w'];
-    if (name.includes('uwcl')) return LOCAL_LOGOS['champions-w'];
-    if (name.includes('champions')) return LOCAL_LOGOS['champions'];
-    if (name.includes('copa') && (name.includes('reina') || name.includes('queen'))) return LOCAL_LOGOS['copa-reina'];
-    if (name.includes('copa') || name.includes('king')) return LOCAL_LOGOS['copa-del-rey'];
-    if (name.includes('liga f') || name.includes('femen')) return LOCAL_LOGOS['ligaf'];
-    if (name.includes('primera') || name.includes('la liga') || name.includes('liga')) return LOCAL_LOGOS['liga'];
-    if (name.includes('supercopa')) return LOCAL_LOGOS['copa-del-rey']; // reutilitzar copa
-    return null;
+function competitionLogo(name: string): ImageSource | number | undefined {
+    const normalized = name.toLowerCase();
+    if (/uwcl|women.*champion/.test(normalized)) return LOGOS.championsWomen;
+    if (normalized.includes('champion')) return LOGOS.champions;
+    if (/copa.*reina|queen/.test(normalized)) return LOGOS.copaWomen;
+    if (/copa|king/.test(normalized)) return LOGOS.copa;
+    if (/liga f|femen/.test(normalized)) return LOGOS.ligaWomen;
+    if (/primera|liga/.test(normalized)) return LOGOS.liga;
+    return undefined;
 }
 
-/** Nom de competició amigable per a la UI */
-function displayCompName(name: string): string {
-    const l = name.toLowerCase();
-    if (l.includes('primera') && l.includes('divisi')) return 'La Liga';
-    if (l === 'primera division') return 'La Liga';
-    if (l.includes("women's champions") || l.includes('uwcl')) return 'UWCL';
-    if (l.includes('copa de la reina')) return 'Copa de la Reina';
-    return name;
+function teamData(team: Match['homeTeam']) {
+    return typeof team === 'string'
+        ? { name: team, badge: undefined }
+        : { name: team?.name || team?.shortName || 'Equip per confirmar', badge: team?.badge || team?.crest };
 }
 
-// Paleta Barça per a les targetes de partits (sense blau)
-const BARCA = {
-    blau: '#0F1B2D',
-    grana: '#A50044',
-    gold: '#FFFFFF',
-    granaLight: 'rgba(165, 0, 68, 0.08)',
-    blauLight: 'rgba(15, 27, 45, 0.06)',
-    granaGradientStart: '#A50044',
-    granaGradientEnd: '#7A0033',
-};
-
-const MatchCard = ({ match, onPress, compact = false, hasBroadcast = false, isFilter = false, isNextMatch = false, showDismiss = false, onDismissFilter, onToggleFilter }: MatchCardProps) => {
-
-    const homeTeam = getTeam(match.homeTeam);
-    const awayTeam = getTeam(match.awayTeam);
-    
-    // Determinar la visualització de la competició
-    const compName = match.competition?.name || match.league || 'Partit';
-    const compLogoSource = resolveCompLogo(match);
-
-    const catLower = String(match.category || '').toLowerCase();
-    const compLower = compName.toLowerCase();
-    const isFemenino = catLower === 'femenino' || catLower === 'femeni' || compLower.includes('feman') || compLower.includes('femen') || compLower.includes('liga f') || compLower.includes('uwcl');
-    const genderAccent = isFemenino ? BARCA.grana : BARCA.blau;
-
-
-    const formatDate = (match: Match) => {
-        // @ts-ignore
-        const d = match.date instanceof Date ? match.date : (match.date && match.date.toDate ? match.date.toDate() : new Date(match.date));
-        
-        const now = new Date();
-        const isToday = now.toDateString() === d.toDateString();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const isTomorrow = tomorrow.toDateString() === d.toDateString();
-        
-        // Detectar hora no confirmada (midnight UTC = 00:00:00Z)
-        const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
-        const isUnconfirmedTime = isMidnightUTC && match.status !== 'finished';
-        const timeStr = isUnconfirmedTime
-            ? 'Hora per confirmar'
-            : `${d.getHours()}:${d.getMinutes().toString().padStart(2,'0')}`;
-
-        if (compact) {
-            if (isToday) return `Avui, ${timeStr}`;
-            if (isTomorrow) return `Demà, ${timeStr}`;
-            return d.toLocaleDateString('ca-ES', { weekday: 'short', day: 'numeric', month: 'short' }) + `, ${timeStr}`;
-        }
-
-        if (isUnconfirmedTime) {
-            return d.toLocaleDateString('ca-ES', { 
-                weekday: 'short', 
-                day: 'numeric', 
-                month: 'short',
-            }) + ' · Hora per confirmar';
-        }
-
-        return d.toLocaleDateString('ca-ES', { 
-            weekday: 'short', 
-            day: 'numeric', 
-            month: 'short', 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
+function phaseLabel(match: Match): string | undefined {
+    const labels: Record<string, string> = {
+        GROUP_STAGE: 'Fase de grups', LEAGUE_STAGE: 'Fase de lliga', LEAGUE_PHASE: 'Fase de lliga',
+        LAST_32: 'Setzens de final', ROUND_OF_32: 'Setzens de final',
+        LAST_16: 'Vuitens de final', ROUND_OF_16: 'Vuitens de final',
+        QUARTER_FINALS: 'Quarts de final', SEMI_FINALS: 'Semifinals', FINAL: 'Final',
+        PLAYOFFS: 'Play-off', PLAY_OFF_ROUND: 'Play-off', QUALIFICATION: 'Fase prèvia',
     };
+    return labels[(match.stage || match.round || '').toUpperCase().replace(/[ -]/g, '_')];
+}
 
-    const StatusBadge = () => {
-        if (match.status === 'finished') {
-            const hasScore = match.homeScore !== null && match.homeScore !== undefined 
-                          && match.awayScore !== null && match.awayScore !== undefined;
-            if (hasScore) {
-                return (
-                    <View style={{ alignItems: 'center' }}>
-                        <Text style={{ fontSize: 22, fontFamily: 'Lora_700Bold', color: BARCA.grana }}>
-                            {match.homeScore} - {match.awayScore}
-                        </Text>
-                        <Text style={{ fontSize: 9, fontFamily: 'Lora_700Bold', color: 'rgba(15,27,45,0.5)', letterSpacing: 1.2, marginTop: 2, textTransform: 'uppercase' }}>
-                            Final
-                        </Text>
-                    </View>
-                );
-            }
-            // Finalitzat sense resultat disponible — mostrar logo + badge
-            const logoSize = compact ? 28 : 30;
-            return (
-                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    {compLogoSource && (
-                        <Image 
-                            source={compLogoSource} 
-                            style={{ width: logoSize, height: logoSize, marginBottom: 4, tintColor: '#0F1B2D' }} 
-                            resizeMode="contain"
-                        />
-                    )}
-                    <Text style={{ fontSize: 9, fontFamily: 'Lora_700Bold', color: 'rgba(15,27,45,0.5)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                        Final
-                    </Text>
-                </View>
-            );
-        }
-        
-        // Programat — logo de competició entre escuts
-        const logoSize = compact ? 28 : 30;
-        if (compLogoSource) {
-             return (
-                 <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <Image 
-                        source={compLogoSource} 
-                        style={{ width: logoSize, height: logoSize, tintColor: '#0F1B2D' }} 
-                        resizeMode="contain"
-                    />
-                 </View>
-             )
-        }
-        
-        return <View style={{ width: logoSize }} />;
-    };
-
-    const cardStyle = compact ? {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 4,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        paddingLeft: 18,
-        marginHorizontal: 4,
-        marginTop: 8,
-        borderWidth: 1,
-        borderColor: isFilter ? BARCA.grana : 'rgba(15,27,45,0.14)',
-        borderLeftWidth: 5,
-        borderLeftColor: genderAccent,
-        ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.05)' }, default: sketchShadow() })
-    } : {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 4,
-        padding: 18,
-        paddingLeft: 22,
-        marginBottom: 14,
-        borderWidth: 1,
-        borderColor: 'rgba(15,27,45,0.14)',
-        borderLeftWidth: 5,
-        borderLeftColor: genderAccent,
-        ...Platform.select({
-            web: { boxShadow: '0 2px 12px rgba(15,27,45,0.06)' },
-            default: sketchShadow()
-        })
-    };
-
-    // Paleta editorial: text ink sobre paper, grana per eyebrow
-    const textColor = '#0F1B2D';
-    const subTextColor = 'rgba(15,27,45,0.55)';
-
-    if (compact) {
-        return (
-            <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={onToggleFilter}
-                disabled={!onToggleFilter}
-                style={cardStyle}
-            >
-                {/* X tancar — només quan venim de la pestanya Partits */}
-                {showDismiss && onDismissFilter && (
-                    <TouchableOpacity
-                        onPress={(e) => { e.stopPropagation?.(); onDismissFilter(); }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{
-                            position: 'absolute', top: 6, right: 6, zIndex: 10,
-                            width: 22, height: 22, borderRadius: 11,
-                            backgroundColor: 'rgba(15,27,45,0.08)',
-                            alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        <Feather name="x" size={13} color={textColor} />
-                    </TouchableOpacity>
-                )}
-                {/* Capçalera */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                    <Text style={{ 
-                        fontSize: 10, fontWeight: '700',
-                        color: genderAccent,
-                        fontFamily: 'Lora_700Bold', 
-                        letterSpacing: 2, textAlign: 'center',
-                        textTransform: 'uppercase',
-                    }}>
-                        {isNextMatch && !isFilter ? `Proper partit  ·  ${formatDate(match)}` : formatDate(match)}
-                    </Text>
-                </View>
-
-                {/* Fila d'equips — compacta */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    {/* LOCAL */}
-                    <View style={{ alignItems: 'center', width: 70 }}>
-                        {homeTeam.badge ? (
-                            <Image source={{ uri: homeTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
-                        ) : (
-                            <Ionicons name="shield-outline" size={24} color={subTextColor} style={{ marginBottom: 4 }} />
-                        )}
-                        <Text numberOfLines={1} style={{ 
-                            textAlign: 'center', fontWeight: 'bold', fontSize: 11, 
-                            color: textColor, fontFamily: 'Lora'
-                        }}>
-                            {formatTeamNameForDisplay(homeTeam.name)}
-                        </Text>
-                    </View>
-
-                    {/* VS / RESULTAT */}
-                    <View style={{ marginHorizontal: 8, alignItems: 'center' }}>
-                        <StatusBadge />
-                    </View>
-
-                    {/* VISITANT */}
-                    <View style={{ alignItems: 'center', width: 70 }}>
-                        {awayTeam.badge ? (
-                            <Image source={{ uri: awayTeam.badge }} style={{ width: 32, height: 32, marginBottom: 4 }} resizeMode="contain" />
-                        ) : (
-                            <Ionicons name="shield-outline" size={24} color={subTextColor} style={{ marginBottom: 4 }} />
-                        )}
-                        <Text numberOfLines={1} style={{ 
-                            textAlign: 'center', fontWeight: 'bold', fontSize: 11, 
-                            color: textColor, fontFamily: 'Lora'
-                        }}>
-                            {formatTeamNameForDisplay(awayTeam.name)}
-                        </Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        );
-    }
-
+function TeamCrest({ name, uri, localSource, size }: { name: string; uri?: string; localSource?: number; size: number }) {
+    const sourceKey = localSource ?? uri;
+    const [failedSource, setFailedSource] = useState<string | number | undefined>();
+    const [loadedSource, setLoadedSource] = useState<string | number | undefined>();
+    const hasImage = sourceKey !== undefined && failedSource !== sourceKey;
+    const initials = name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase('ca-ES') || '?';
     return (
-        <View style={cardStyle}>
-            {/* Eyebrow editorial: competició · data */}
-            <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 14,
-            }}>
-                {compLogoSource && (
-                    <Image source={compLogoSource} style={{ width: 14, height: 14, marginRight: 8, tintColor: genderAccent }} resizeMode="contain" />
-                )}
-                <Text style={{
-                    fontSize: 10, fontFamily: 'Lora_700Bold', textTransform: 'uppercase',
-                    color: genderAccent, letterSpacing: 2,
-                }}>
-                    {displayCompName(compName)}  ·  {formatDate(match)}
-                </Text>
-            </View>
-
-            {/* Fila d'equips */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                
-                {/* LOCAL */}
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                     {homeTeam.badge ? (
-                         <Image source={{ uri: homeTeam.badge }} style={{ width: 44, height: 44, marginBottom: 6 }} resizeMode="contain" />
-                     ) : (
-                         <Ionicons name="shield-outline" size={30} color={subTextColor} style={{ marginBottom: 6 }} />
-                     )}
-                     <Text numberOfLines={2} style={{ 
-                         textAlign: 'center', fontWeight: 'bold', fontSize: 12, 
-                         color: textColor, fontFamily: 'Lora', lineHeight: 15 
-                     }}>
-                         {formatTeamNameForDisplay(homeTeam.name)}
-                     </Text>
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            {(!hasImage || loadedSource !== sourceKey) && (
+                <View accessibilityLabel={`Equip: ${name}`} style={{ width: size, height: size, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.65)', backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text numberOfLines={1} style={{ color: '#FFFFFF', fontFamily: EDITORIAL.fontBold, fontSize: Math.round(size * 0.35) }}>{initials}</Text>
                 </View>
-
-                {/* VS / RESULTAT */}
-                <View style={{ marginHorizontal: 10, alignItems: 'center', minWidth: 36 }}>
-                    <StatusBadge />
-                </View>
-
-                {/* VISITANT */}
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                     {awayTeam.badge ? (
-                         <Image source={{ uri: awayTeam.badge }} style={{ width: 44, height: 44, marginBottom: 6 }} resizeMode="contain" />
-                     ) : (
-                         <Ionicons name="shield-outline" size={30} color={subTextColor} style={{ marginBottom: 6 }} />
-                     )}
-                     <Text numberOfLines={2} style={{ 
-                         textAlign: 'center', fontWeight: 'bold', fontSize: 12, 
-                         color: textColor, fontFamily: 'Lora', lineHeight: 15 
-                     }}>
-                         {formatTeamNameForDisplay(awayTeam.name)}
-                     </Text>
-                </View>
-            </View>
-
-            {/* Botó d'acció — només quan almenys un bar emet aquest partit */}
-            {hasBroadcast && match.status !== 'finished' && onPress && (
-                 <TouchableOpacity
-                    style={{
-                        backgroundColor: BARCA.grana,
-                        paddingVertical: 12,
-                        borderRadius: 4,
-                        alignItems: 'center',
-                        marginTop: 14,
-                        borderWidth: 1,
-                        borderColor: BARCA.grana,
-                    }}
-                    onPress={onPress}
-                    activeOpacity={0.75}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="map-pin" size={16} color={BARCA.gold} style={{ marginRight: 8 }} />
-                        <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 14, fontFamily: 'Lora' }}>
-                            Trobar bars
-                        </Text>
-                    </View>
-                </TouchableOpacity>
             )}
-
+            {hasImage && <Image source={localSource ?? { uri }} style={{ position: 'absolute', width: size, height: size, opacity: loadedSource === sourceKey ? 1 : 0 }} contentFit="contain" accessibilityLabel={`Escut de ${name}`} onLoad={() => setLoadedSource(sourceKey)} onError={() => setFailedSource(sourceKey)} />}
         </View>
     );
-};
+}
+
+function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcast = false, isFilter = false, showDismiss = false, onDismissFilter, onToggleFilter, onLongPress }: MatchCardProps) {
+    const home = teamData(match.homeTeam);
+    const away = teamData(match.awayTeam);
+    const date = match.date instanceof Date ? match.date : new Date(match.date);
+    const compName = match.competition?.name || String(match.league || 'Partit');
+    const compLabel = /primera.*divisi/i.test(compName) ? 'La Liga' : /women.*champion/i.test(compName) ? 'UWCL' : compName;
+    const compSource = competitionLogo(compName) || (match.competition?.logo ? { uri: match.competition.logo } : undefined);
+    const women = match.category === 'femenino' || /women|femen|liga f|uwcl|reina/i.test(compName);
+    const categoryColor = women ? EDITORIAL.feminine : EDITORIAL.masculine;
+    const textColor = '#FFFFFF';
+    const mutedColor = '#F3D8E3';
+    const hasScore = Number.isInteger(match.homeScore) && Number.isInteger(match.awayScore);
+    const pending = !hasScore && date.getTime() < Date.now() - 3 * 3600_000 && match.status !== 'postponed';
+    const live = match.status === 'live';
+    const timeUnknown = match.timeConfirmed === false || (match.timeConfirmed !== true && date.getUTCHours() === 0 && date.getUTCMinutes() === 0);
+    const time = date.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+    const phase = phaseLabel(match);
+    const status = match.status === 'postponed' ? 'Ajornat' : pending ? 'Resultat pendent' : live ? 'En directe' : match.status === 'finished' ? 'Final' : timeUnknown ? 'Horari per confirmar' : '';
+    const canFind = hasBroadcast && match.status !== 'finished' && match.status !== 'postponed' && !pending && !!onPress;
+    const teams = (
+        <View style={[styles.teams, compact && styles.teamsCompact]}>
+            <View style={styles.team}>
+                <TeamCrest name={home.name} uri={home.badge} localSource={women ? getWomenTeamCrest(home.name) : undefined} size={compact ? 30 : 38} />
+                <Text numberOfLines={2} style={[styles.teamName, compact && styles.teamNameCompact, { color: textColor }]}>{formatTeamNameForDisplay(home.name)}</Text>
+            </View>
+            <View style={styles.result}>
+                <View style={styles.scoreRow}>
+                    {hasScore && <Text style={[styles.score, compact && styles.scoreCompact, { color: textColor }]}>{match.homeScore}</Text>}
+                    <View style={styles.logoBase}>
+                        {compSource ? <Image source={compSource} style={styles.compLogo} tintColor="#FFFFFF" contentFit="contain" accessibilityLabel={compLabel} /> : <Feather name="award" size={22} color="#FFFFFF" />}
+                    </View>
+                    {hasScore && <Text style={[styles.score, compact && styles.scoreCompact, { color: textColor }]}>{match.awayScore}</Text>}
+                </View>
+                {!hasScore && !pending && !timeUnknown && match.status !== 'postponed' && <Text style={[styles.kickoff, { color: textColor }]}>{time}</Text>}
+                {!!status && <Text numberOfLines={2} style={[styles.status, { color: mutedColor }, live && { color: grana ? '#A9F0C0' : EDITORIAL.success }]}>{status}</Text>}
+            </View>
+            <View style={styles.team}>
+                <TeamCrest name={away.name} uri={away.badge} localSource={women ? getWomenTeamCrest(away.name) : undefined} size={compact ? 30 : 38} />
+                <Text numberOfLines={2} style={[styles.teamName, compact && styles.teamNameCompact, { color: textColor }]}>{formatTeamNameForDisplay(away.name)}</Text>
+            </View>
+        </View>
+    );
+    const content = (
+        <>
+            <TouchableOpacity disabled={!compact || !onToggleFilter} onLongPress={onLongPress} delayLongPress={450} onPress={onToggleFilter} activeOpacity={0.8} accessibilityRole={compact ? 'button' : undefined} accessibilityState={compact ? { selected: isFilter } : undefined} aria-pressed={compact ? isFilter : undefined} accessibilityLabel={compact ? `${isFilter ? 'Treure' : 'Aplicar'} filtre: ${home.name} - ${away.name}` : women ? 'Barça femení' : 'Barça masculí'} style={[styles.dateBand, { backgroundColor: categoryColor }]}>
+                <Text style={[styles.date, { color: '#FFFFFF' }]}>{date.toLocaleDateString('ca-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                {phase && <Text style={{ fontFamily: EDITORIAL.fontRegular, fontSize: 11, lineHeight: 15, color: mutedColor, textAlign: 'center' }}>{phase}</Text>}
+            </TouchableOpacity>
+            {compact && showDismiss && onDismissFilter && <View style={styles.meta}>
+                <View style={styles.competition} />
+                {compact && showDismiss && onDismissFilter && (
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Treure filtre de partit" style={styles.iconButton} onPress={event => { event.stopPropagation(); onDismissFilter(); }}>
+                        <Feather name="x" size={18} color={textColor} />
+                    </TouchableOpacity>
+                )}
+            </View>}
+            {compact && onToggleFilter ? (
+                <TouchableOpacity activeOpacity={0.8} onPress={onToggleFilter} onLongPress={onLongPress} delayLongPress={450} accessibilityRole="button" accessibilityState={{ selected: isFilter }} aria-pressed={isFilter} accessibilityLabel={`${isFilter ? 'Treure' : 'Aplicar'} filtre: ${home.name} - ${away.name}`}>
+                    {teams}
+                </TouchableOpacity>
+            ) : teams}
+            {!compact && canFind && (
+                <TouchableOpacity onPress={onPress} accessibilityRole="button" style={styles.action} activeOpacity={0.75}>
+                    <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Trobar bars</Text>
+                </TouchableOpacity>
+            )}
+        </>
+    );
+    return compact ? (
+        <View style={[styles.card, styles.compact, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }, isFilter && styles.selected]}>
+            {content}
+        </View>
+    ) : <View style={[styles.card, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }]}>{content}</View>;
+}
+
+const styles = StyleSheet.create({
+    card: { backgroundColor: EDITORIAL.card, borderRadius: 8, borderWidth: 1, borderColor: EDITORIAL.hairline, marginBottom: 12, overflow: 'hidden' },
+    dateBand: { minHeight: 30, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: EDITORIAL.granaSoft, alignItems: 'center', justifyContent: 'center' },
+    compact: { marginHorizontal: 4, marginTop: 8, marginBottom: 0 },
+    selected: { borderColor: '#FFFFFF', borderWidth: 2 },
+    meta: { minHeight: 32, paddingHorizontal: 12, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    compLogo: { width: 28, height: 32 },
+    logoBase: { width: 36, height: 38, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
+    scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+    kickoff: { fontFamily: EDITORIAL.fontBold, fontSize: 16, lineHeight: 20, color: EDITORIAL.ink, fontVariant: ['tabular-nums'] },
+    competition: { flex: 1, minWidth: 0 },
+    category: { fontFamily: EDITORIAL.fontRegular, fontSize: 12, color: EDITORIAL.inkMuted, marginTop: 2 },
+    date: { fontFamily: EDITORIAL.fontBold, fontSize: 12, lineHeight: 17, color: EDITORIAL.granaDeep, textAlign: 'center' },
+    teams: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingTop: 2, paddingBottom: 10, gap: 6, minHeight: 96 },
+    teamsCompact: { paddingTop: 0, paddingBottom: 8, minHeight: 84 },
+    team: { flex: 1, minWidth: 0, alignItems: 'center', gap: 4 },
+    teamName: { fontFamily: EDITORIAL.fontBold, fontSize: 16, lineHeight: 21, color: EDITORIAL.ink, textAlign: 'center', minHeight: 42 },
+    teamNameCompact: { fontSize: 14, lineHeight: 18, minHeight: 36 },
+    result: { width: 96, alignItems: 'center', justifyContent: 'center' },
+    score: { fontFamily: EDITORIAL.fontBold, fontSize: 28, lineHeight: 36, color: EDITORIAL.ink, fontVariant: ['tabular-nums'] },
+    scoreCompact: { fontSize: 26, lineHeight: 32 },
+    status: { fontFamily: EDITORIAL.fontRegular, fontSize: 11, lineHeight: 14, color: EDITORIAL.inkMuted, textAlign: 'center', marginTop: 3 },
+    action: { minHeight: 44, marginHorizontal: 12, marginBottom: 12, marginTop: 2, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+    actionText: { fontFamily: EDITORIAL.fontBold, fontSize: 14, color: EDITORIAL.grana },
+    iconButton: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center' },
+});
 
 export default React.memo(MatchCard);

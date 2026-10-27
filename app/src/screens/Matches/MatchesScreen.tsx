@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import { View, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import Text from '../../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { fetchAllMatches, fetchPastMatches, Match } from '../../services/matchService';
+import { fetchAllMatches, fetchPastMatches, fetchCompetitionMatches, subscribeToMatchUpdates, Match } from '../../services/matchService';
+import { showAlert } from '../../components/AlertBanner';
 import { fetchBroadcastMatchIds } from '../../services/barService';
-import { Ionicons } from '@expo/vector-icons';
-import { SKETCH_THEME } from '../../theme/sketchTheme';
+import AppIcon from '../../components/AppIcon';
 import { EDITORIAL } from '../../theme/editorialTheme';
 import { useAuth } from '../../context/AuthContext';
 import { useScreenLoading } from '../../context/SplashContext';
@@ -15,6 +16,18 @@ import { db } from '../../config/firebase';
 import { getUserPreferences } from '../../services/userService';
 import MatchCard from '../../components/MatchCard';
 import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
+import { StatusBar } from 'expo-status-bar';
+import { useIsFocused } from '@react-navigation/native';
+import { nextBroadcastMatchId } from '../../utils/matchBroadcast';
+import { previousMatchPage } from '../../utils/matchHistory';
+
+const MATCHES_COLORS = {
+    page: EDITORIAL.granaDeep,
+    header: EDITORIAL.granaDeep,
+    text: '#FFFFFF',
+    muted: '#F0CDD9',
+    line: 'rgba(255,255,255,0.24)',
+};
 
 // Temporada futbolística: agost any N → juliol any N+1
 function getSeason(d: Date): string {
@@ -25,8 +38,9 @@ function getSeason(d: Date): string {
 }
 
 type SeasonHeader = { type: 'season'; season: string; id: string };
+type MonthHeader = { type: 'month'; label: string; id: string };
 type MatchItem = Match & { type?: 'match' };
-type ListItem = SeasonHeader | MatchItem;
+type ListItem = SeasonHeader | MonthHeader | MatchItem;
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Matches'>;
@@ -45,6 +59,7 @@ function displayCompName(name: string): string {
 }
 
 const MatchesScreen = ({ navigation }: Props) => {
+    const isFocused = useIsFocused();
     const { user } = useAuth();
 
     // Bar owners no tenen accés a la pantalla de partits
@@ -56,20 +71,35 @@ const MatchesScreen = ({ navigation }: Props) => {
 
     const [allMatches, setAllMatches] = useState<Match[]>([]);
     const [pastMatches, setPastMatches] = useState<Match[]>([]);
+    const subscribedMatchIds = [...allMatches, ...pastMatches].map(match => match.id).sort().join(',');
+
+    useEffect(() => subscribeToMatchUpdates(subscribedMatchIds ? subscribedMatchIds.split(',') : [], updates => {
+        const byId = new Map(updates.map(match => [match.id, match]));
+        setAllMatches(previous => previous.map(match => byId.get(match.id) || match));
+        setPastMatches(previous => previous.map(match => byId.get(match.id) || match));
+    }), [subscribedMatchIds]);
     const [visibleCount, setVisibleCount] = useState(20);
     const [filter, setFilter] = useState<FilterType>('ALL');
     const [selectedComp, setSelectedComp] = useState<string | null>(null);
+    const categorySelection = useRef(0);
 
     // Carregar categoria per defecte des de les preferències d'usuari
     useEffect(() => {
-        if (user) {
-            getUserPreferences(user.id).then(prefs => {
-                if (prefs.display.defaultCategory === 'masculino') setFilter('MASCULI');
-                else if (prefs.display.defaultCategory === 'femenino') setFilter('FEMENI');
-                // 'all' ja és el default
-            }).catch(console.error);
+        if (!isFocused) return;
+        let active = true;
+        const selection = categorySelection.current;
+        if (!user) {
+            setFilter('ALL');
+            setSelectedComp(null);
+            return;
         }
-    }, [user]);
+        getUserPreferences(user.id).then(prefs => {
+            if (!active || selection !== categorySelection.current) return;
+            setFilter(prefs.display.defaultCategory === 'masculino' ? 'MASCULI' : prefs.display.defaultCategory === 'femenino' ? 'FEMENI' : 'ALL');
+            setSelectedComp(null);
+        }).catch(console.error);
+        return () => { active = false; };
+    }, [user?.id, isFocused]);
     
     // Animació personalitzada: Quan naveguem al Mapa, estàndard. Quan apareix... per defecte llisca des de la dreta.
     // Si volem 'Lliscar des de l'esquerra', hauríem d'ajustar opcions de navegació o assumir que aquesta pantalla és a l'esquerra.
@@ -90,6 +120,42 @@ const MatchesScreen = ({ navigation }: Props) => {
     const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
     const [broadcastMatchIds, setBroadcastMatchIds] = useState<Set<string>>(new Set());
     const PAGE_SIZE = 20;
+    const [competitionLoading, setCompetitionLoading] = useState(false);
+    const [competitionMatches, setCompetitionMatches] = useState<Match[]>([]);
+    const [hasMoreHistory, setHasMoreHistory] = useState(true);
+    const scopeKey = `${filter}|${selectedComp || ''}`;
+    const scopeRef = useRef(scopeKey);
+    scopeRef.current = scopeKey;
+
+    useEffect(() => {
+        setPastMatches([]);
+        setVisibleCount(PAGE_SIZE);
+        setHasMoreHistory(true);
+        setIsRefreshing(false);
+        isRefreshingRef.current = false;
+        scrollAdjustRef.current = null;
+        previousScrollOffsetRef.current = 0;
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }, [scopeKey]);
+
+    useEffect(() => {
+        if (!selectedComp) {
+            setCompetitionLoading(false);
+            return;
+        }
+        let active = true;
+        setCompetitionMatches([]);
+        setCompetitionLoading(true);
+        const ids = Object.entries(competitionMap).filter(([, competition]) => competition.name === selectedComp).map(([id]) => id);
+        fetchCompetitionMatches(ids).then(matches => {
+            if (!active) return;
+            setCompetitionMatches(matches);
+            setVisibleCount(PAGE_SIZE);
+        }).catch(() => {
+            if (active) showAlert({ tone: 'error', message: 'No hem pogut carregar els partits de la competició. Torna-ho a provar.' });
+        }).finally(() => { if (active) setCompetitionLoading(false); });
+        return () => { active = false; };
+    }, [selectedComp, competitionMap]);
 
     // --- MANTENIMENT DE SCROLL PER A CÀRREGA DE PARTITS PASSATS ---
     const flatListRef = useRef<FlatList>(null);
@@ -136,7 +202,6 @@ const MatchesScreen = ({ navigation }: Props) => {
                 // Ordenar per data ascendent (futurs)
                 const sortedFuture = fetchedMatches
                     .slice()
-                    .map(m => ({ ...m, status: 'scheduled' as const }))
                     .sort((a, b) => {
                         const dA = a.date instanceof Date ? a.date : new Date(a.date);
                         const dB = b.date instanceof Date ? b.date : new Date(b.date);
@@ -147,7 +212,7 @@ const MatchesScreen = ({ navigation }: Props) => {
 
                 // 4. Obtenir dades d'emissió — quins partits tenen almenys un bar?
                 const allIds = sortedFuture.map(m => m.id);
-                const bcastIds = await fetchBroadcastMatchIds(allIds);
+                const bcastIds = await fetchBroadcastMatchIds(allIds, nextBroadcastMatchId(sortedFuture));
                 setBroadcastMatchIds(bcastIds);
 
             } catch (e) {
@@ -182,6 +247,10 @@ const MatchesScreen = ({ navigation }: Props) => {
     // --- Dades derivades ---
     const uniqueCompetitions = useMemo(() => {
          const comps = new Set<string>();
+         Object.values(competitionMap).forEach(competition => {
+             const women = /women|femen|liga f|reina|uwcl/i.test(competition.name);
+             if (filter === 'ALL' || (filter === 'FEMENI') === women) comps.add(competition.name);
+         });
          const matches = [...pastMatches, ...allMatches];
          matches.forEach(m => {
              const isFem = isFemenino(m);
@@ -197,7 +266,8 @@ const MatchesScreen = ({ navigation }: Props) => {
     }, [pastMatches, allMatches, filter, isFemenino, competitionMap]);
 
     const filteredFutureMatches = useMemo(() => {
-        return allMatches.filter(m => {
+        return (selectedComp ? competitionMatches : allMatches).filter(m => {
+            if (m.date.getTime() < Date.now() - 2 * 3600_000) return false;
             if (filter === 'ALL') {
                 // passar o comprovar competició
             } else {
@@ -213,7 +283,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             }
             return true;
         });
-    }, [allMatches, filter, isFemenino, selectedComp, competitionMap]);
+    }, [allMatches, competitionMatches, filter, isFemenino, selectedComp, competitionMap]);
 
     const displayedMatches = useMemo(() => {
         const filteredPast = pastMatches.filter(m => {
@@ -233,12 +303,13 @@ const MatchesScreen = ({ navigation }: Props) => {
         const futureSlice = filteredFutureMatches.slice(0, visibleCount);
 
         return [...filteredPast, ...futureSlice];
-    }, [pastMatches, filteredFutureMatches, visibleCount, filter, isFemenino, selectedComp]);
+    }, [pastMatches, filteredFutureMatches, visibleCount, filter, isFemenino, selectedComp, competitionMap]);
 
     // Llista amb separadors de temporada intercalats
     const listItems: ListItem[] = useMemo(() => {
         const items: ListItem[] = [];
         let currentSeason = '';
+        let currentMonth = '';
         for (const m of displayedMatches) {
             const d = m.date instanceof Date ? m.date : new Date(m.date);
             const s = getSeason(d);
@@ -249,14 +320,20 @@ const MatchesScreen = ({ navigation }: Props) => {
                 }
                 currentSeason = s;
             }
+            const month = `${d.getFullYear()}-${d.getMonth() + 1}`;
+            if (month !== currentMonth) {
+                items.push({ type: 'month', label: d.toLocaleDateString('ca-ES', { month: 'long', year: 'numeric' }), id: `month-${month}` });
+                currentMonth = month;
+            }
             items.push(m as MatchItem);
         }
         return items;
     }, [displayedMatches]);
 
     const handleRefresh = useCallback(async () => {
-        if (isRefreshingRef.current) return;
+        if (isRefreshingRef.current || competitionLoading || !hasMoreHistory) return;
         isRefreshingRef.current = true;
+        const requestedScope = scopeKey;
 
         // Capturar posició de scroll ABANS de qualsevol canvi d'estat
         const savedOffset = previousScrollOffsetRef.current;
@@ -270,25 +347,13 @@ const MatchesScreen = ({ navigation }: Props) => {
                                     : filter === 'FEMENI' ? 'femenino' as const 
                                    : undefined;
 
-            // Trobar la data més antiga dels partits carregats (de la categoria activa si hi ha filtre)
-            let oldestDate = new Date();
-            if (categoryForQuery) {
-                const filteredPast = pastMatches.filter(m => m.category === categoryForQuery);
-                if (filteredPast.length > 0) {
-                    oldestDate = filteredPast[0].date;
-                } else if (allMatches.length > 0) {
-                    oldestDate = allMatches[0].date;
-                }
-            } else {
-                if (pastMatches.length > 0) {
-                    oldestDate = pastMatches[0].date;
-                } else if (allMatches.length > 0) {
-                    oldestDate = allMatches[0].date;
-                }
-            }
-                
-            const history = await fetchPastMatches(oldestDate, 10, categoryForQuery);
+            const oldestDate = pastMatches.length > 0 ? pastMatches[0].date : new Date(Date.now() - 2 * 3600_000);
+            const history = selectedComp
+                ? previousMatchPage(competitionMatches.filter(match => !categoryForQuery || isFemenino(match) === (categoryForQuery === 'femenino')), oldestDate, 10)
+                : await fetchPastMatches(oldestDate, 10, categoryForQuery);
+            if (scopeRef.current !== requestedScope) return;
             const sortedHistory = history.sort((a, b) => a.date.getTime() - b.date.getTime());
+            setHasMoreHistory(history.length === 10);
             
             if (sortedHistory.length > 0) {
                 // Guardar referència per ajust de scroll sense parpelleig
@@ -300,13 +365,17 @@ const MatchesScreen = ({ navigation }: Props) => {
                     return [...newMatches, ...prev];
                 });
                 // Cancel·lar ajust després d'1.5s (vàlvula de seguretat)
-                setTimeout(() => { scrollAdjustRef.current = null; }, 1500);
+                setTimeout(() => { if (scopeRef.current === requestedScope) scrollAdjustRef.current = null; }, 1500);
             }
+        } catch {
+            if (scopeRef.current === requestedScope) showAlert({ tone: 'error', message: "No hem pogut carregar els partits anteriors. Torna-ho a provar." });
         } finally {
-            setIsRefreshing(false);
-            isRefreshingRef.current = false;
+            if (scopeRef.current === requestedScope) {
+                setIsRefreshing(false);
+                isRefreshingRef.current = false;
+            }
         }
-    }, [pastMatches, allMatches, filter]);
+    }, [pastMatches, filter, selectedComp, competitionMatches, competitionLoading, hasMoreHistory, scopeKey, isFemenino]);
 
     const loadMoreMatches = useCallback(() => {
         if (isLoadingMore || visibleCount >= filteredFutureMatches.length) return;
@@ -324,8 +393,9 @@ const MatchesScreen = ({ navigation }: Props) => {
     return (
         <SafeAreaView style={[{ 
                 flex: 1, 
-                backgroundColor: EDITORIAL.paper 
+                backgroundColor: MATCHES_COLORS.page
         }, webScreenContainer]}>
+            {isFocused && <StatusBar style="light" />}
             {/* Capçalera */}
             <View style={{
                 flexDirection: 'row',
@@ -333,18 +403,15 @@ const MatchesScreen = ({ navigation }: Props) => {
                 justifyContent: 'space-between',
                 paddingHorizontal: 24,
                 paddingVertical: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: EDITORIAL.hairline,
-                backgroundColor: EDITORIAL.paper,
+                backgroundColor: MATCHES_COLORS.header,
             }}>
                 <View style={{ width: 32 }} />
 
                 <Text style={{
                     fontFamily: EDITORIAL.fontBold,
-                    fontSize: 11,
-                    letterSpacing: 2.4,
-                    textTransform: 'uppercase',
-                    color: EDITORIAL.grana,
+                    fontSize: 18,
+                    letterSpacing: 0,
+                    color: MATCHES_COLORS.text,
                 }}>
                     Partits
                 </Text>
@@ -357,10 +424,10 @@ const MatchesScreen = ({ navigation }: Props) => {
                     style={{ padding: 6 }}
                     hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
                 >
-                    <Ionicons name="arrow-forward" size={22} color={EDITORIAL.ink} />
+                    <AppIcon name="arrow-forward" size={22} color={MATCHES_COLORS.text} />
                 </TouchableOpacity>
             </View>
-            <View style={{ height: 54, backgroundColor: EDITORIAL.paper, borderBottomWidth: 1, borderBottomColor: EDITORIAL.hairline }}>
+            <View style={{ height: 54, backgroundColor: MATCHES_COLORS.header }}>
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -368,11 +435,15 @@ const MatchesScreen = ({ navigation }: Props) => {
                     style={{ flex: 1 }}
                 >
                     {/* Pestanyes de categoria */}
-                    {(['ALL', 'MASCULI', 'FEMENI'] as const).map((tab) => (
+                    {(['MASCULI', 'FEMENI'] as const).map((tab) => (
                          <TouchableOpacity 
                             key={tab}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: filter === tab }}
+                            aria-pressed={filter === tab}
                             onPress={() => {
-                                setFilter(tab);
+                                categorySelection.current += 1;
+                                setFilter(current => current === tab ? 'ALL' : tab);
                                 setSelectedComp(null);
                                 setVisibleCount(PAGE_SIZE);
                                 // Scroll al començament per mostrar "proper partit"
@@ -381,27 +452,23 @@ const MatchesScreen = ({ navigation }: Props) => {
                             style={{
                                 paddingVertical: 6,
                                 paddingHorizontal: 14,
-                                borderRadius: 4,
-                                backgroundColor: filter === tab ? EDITORIAL.grana : '#FFFFFF',
+                                borderRadius: 8,
+                                backgroundColor: tab === 'MASCULI' ? EDITORIAL.masculine : EDITORIAL.feminine,
                                 borderWidth: 1,
-                                borderColor: filter === tab ? EDITORIAL.grana : EDITORIAL.hairline,
+                                borderColor: filter === tab ? MATCHES_COLORS.text : MATCHES_COLORS.line,
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
                             }}
                         >
                             <Text style={{
-                                color: filter === tab ? '#FFFFFF' : EDITORIAL.ink,
+                                color: MATCHES_COLORS.text,
                                 fontFamily: filter === tab ? EDITORIAL.fontBold : EDITORIAL.fontRegular,
                                 fontSize: 12,
-                                letterSpacing: 0.6,
+                                letterSpacing: 0,
                             }}>
-                                {tab === 'ALL' ? 'Tots' : (tab === 'MASCULI' ? 'Masculí' : 'Femení')}
+                                {tab === 'MASCULI' ? 'Masculí' : 'Femení'}
                             </Text>
                         </TouchableOpacity>
                     ))}
-
-                    {/* Divisor vertical */}
-                    {uniqueCompetitions.length > 0 && (
-                        <View style={{ width: 1, height: 22, backgroundColor: EDITORIAL.hairlineStrong }} />
-                    )}
 
                     {/* Pestanyes de competició */}
                     {uniqueCompetitions.map(c => {
@@ -413,14 +480,14 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 style={{
                                     paddingVertical: 6,
                                     paddingHorizontal: 14,
-                                    borderRadius: 4,
-                                    backgroundColor: selectedComp === c ? EDITORIAL.grana : '#FFFFFF',
+                                    borderRadius: 8,
+                                    backgroundColor: selectedComp === c ? MATCHES_COLORS.text : 'transparent',
                                     borderWidth: 1,
-                                    borderColor: selectedComp === c ? EDITORIAL.grana : EDITORIAL.hairline,
+                                    borderColor: selectedComp === c ? MATCHES_COLORS.text : MATCHES_COLORS.line,
                                 }}
                             >
                                 <Text style={{
-                                    color: selectedComp === c ? '#FFFFFF' : EDITORIAL.ink,
+                                    color: selectedComp === c ? EDITORIAL.granaDeep : MATCHES_COLORS.text,
                                     fontSize: 12, fontFamily: EDITORIAL.fontRegular,
                                 }}>{compDisplayName}</Text>
                             </TouchableOpacity>
@@ -430,11 +497,12 @@ const MatchesScreen = ({ navigation }: Props) => {
             </View>
 
             <FlatList
+                key={scopeKey}
                 ref={flatListRef}
                 data={loading ? [] : listItems}
                 style={[{ flex: 1 }, webScreenScroll]}
                 keyExtractor={(item) => (item as any).type === 'season' ? (item as SeasonHeader).id : (item as MatchItem).id}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, flexGrow: 1 }}
                 showsVerticalScrollIndicator={false}
                 bounces={true}
                 alwaysBounceVertical={true}
@@ -462,50 +530,49 @@ const MatchesScreen = ({ navigation }: Props) => {
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={handleRefresh}
-                        tintColor={SKETCH_THEME.colors.primary}
+                        tintColor={MATCHES_COLORS.text}
+                        titleColor={MATCHES_COLORS.muted}
                         title="Carregant historial..."
                     />
                 }
                 onEndReached={loadMoreMatches}
                 onEndReachedThreshold={0.3}
                 ListEmptyComponent={
-                    loading ? null : <EmptyState filter={filter} />
+                    loading ? undefined : competitionLoading ? <ActivityIndicator color={MATCHES_COLORS.text} style={{ marginTop: 32 }} /> : <EmptyState />
                 }
+                ListHeaderComponentStyle={{ minHeight: 54, flexShrink: 0 }}
                 ListHeaderComponent={
-                    !loading && displayedMatches.length > 0 ? (
+                    !loading && hasMoreHistory ? (
                         <TouchableOpacity
                             onPress={handleRefresh}
-                            disabled={isRefreshing}
-                            accessibilityLabel="Carregar partits anteriors"
+                            disabled={isRefreshing || competitionLoading}
+                            accessibilityLabel="Carregar 10 partits anteriors"
                             style={{
                                 alignSelf: 'center',
-                                width: 40,
-                                height: 40,
-                                borderRadius: 20,
+                                width: 44,
+                                height: 44,
+                                flexShrink: 0,
                                 marginTop: 4,
                                 marginBottom: 10,
-                                backgroundColor: '#FFFFFF',
-                                borderWidth: 1,
-                                borderColor: EDITORIAL.hairline,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 opacity: isRefreshing ? 0.5 : 1,
                             }}
                         >
                             {isRefreshing ? (
-                                <ActivityIndicator size="small" color={EDITORIAL.grana} />
+                                <ActivityIndicator size="small" color={MATCHES_COLORS.text} />
                             ) : (
-                                <Ionicons name="chevron-up" size={20} color={EDITORIAL.ink} />
+                                <AppIcon name="chevron-up" size={24} color={MATCHES_COLORS.text} />
                             )}
                         </TouchableOpacity>
-                    ) : null
+                    ) : undefined
                 }
                 ListFooterComponent={
                     !loading && visibleCount < filteredFutureMatches.length ? (
                         <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-                            <ActivityIndicator size="small" color={EDITORIAL.grana} />
+                            <ActivityIndicator size="small" color={MATCHES_COLORS.text} />
                             <Text style={{
-                                color: EDITORIAL.inkMuted,
+                                color: MATCHES_COLORS.muted,
                                 marginTop: 8,
                                 fontSize: 12,
                                 fontFamily: EDITORIAL.fontRegular
@@ -515,11 +582,18 @@ const MatchesScreen = ({ navigation }: Props) => {
                         </View>
                     ) : !loading && displayedMatches.length > 0 ? (
                         <View style={{ alignItems: 'center', marginTop: 16, paddingBottom: 8 }}>
-                            <Ionicons name="checkmark-circle-outline" size={22} color={EDITORIAL.inkMuted} />
+                            <AppIcon name="checkmark-circle-outline" size={22} color={EDITORIAL.inkMuted} />
                         </View>
-                    ) : null
+                    ) : undefined
                 }
                 renderItem={({ item }) => {
+                    if (item.type === 'month') {
+                        return (
+                            <View style={{ paddingTop: 12, paddingBottom: 12 }}>
+                                <Text accessibilityRole="header" style={{ fontSize: 15, fontFamily: EDITORIAL.fontBold, color: MATCHES_COLORS.text }}>{item.label.charAt(0).toLocaleUpperCase('ca-ES') + item.label.slice(1)}</Text>
+                            </View>
+                        );
+                    }
                     if ((item as any).type === 'season') {
                         const sh = item as SeasonHeader;
                         return (
@@ -527,19 +601,16 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 flexDirection: 'row', alignItems: 'center',
                                 marginVertical: 18, paddingHorizontal: 4,
                             }}>
-                                <View style={{ flex: 1, height: 1, backgroundColor: EDITORIAL.hairline }} />
                                 <View style={{
-                                    paddingHorizontal: 14, paddingVertical: 4,
+                                    paddingVertical: 4,
                                 }}>
                                     <Text style={{
-                                        fontSize: 10, fontFamily: EDITORIAL.fontBold,
-                                        color: EDITORIAL.grana, letterSpacing: 2,
-                                        textTransform: 'uppercase',
+                                        fontSize: 12, fontFamily: EDITORIAL.fontBold,
+                                        color: MATCHES_COLORS.text, letterSpacing: 0,
                                     }}>
                                         Temporada {sh.season}
                                     </Text>
                                 </View>
-                                <View style={{ flex: 1, height: 1, backgroundColor: EDITORIAL.hairline }} />
                             </View>
                         );
                     }
@@ -547,6 +618,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                     return (
                         <MatchCard
                             match={m}
+                            grana
                             hasBroadcast={broadcastMatchIds.has(m.id)}
                             onPress={() => navigation.navigate('Map', { matchId: m.id })}
                         />
@@ -557,17 +629,15 @@ const MatchesScreen = ({ navigation }: Props) => {
 };
 
 
-const EmptyState = ({ filter }: { filter: FilterType }) => (
-    <View style={{ alignItems: 'center', marginTop: 60 }}>
-        <Ionicons name="calendar-outline" size={56} color={EDITORIAL.inkMuted} />
+const EmptyState = () => (
+    <View style={{ alignItems: 'center', paddingTop: 32, paddingHorizontal: 16 }}>
         <Text style={{ 
-            color: EDITORIAL.ink, 
-            marginTop: 18, 
+            color: MATCHES_COLORS.text,
             fontSize: 16,
             fontFamily: EDITORIAL.fontBold,
             textAlign: 'center',
         }}>
-            Cap partit {filter === 'ALL' ? 'programat' : filter === 'MASCULI' ? 'masculí' : 'femení'}
+            Encara no hi ha partits programats
         </Text>
     </View>
 );
