@@ -1,5 +1,10 @@
+# Dependencies and local tool state
 node_modules
 .expo
+.local/
+.venv/
+
+# Legacy output locations (new exports belong in .local/exports)
 .expo-export-*/
 .expo-config-current.txt
 trobar_after_launch.png
@@ -33,6 +38,5 @@ functions/lib/
 app/assets
 web-app/public/assets
 
-# Local runbook (personal notes)
-docs/LOCAL_EMULATOR_GUIDE.md
-
+# Local runbooks (personal notes)
+docs/local/
