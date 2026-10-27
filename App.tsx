@@ -44,7 +44,7 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   //    encara que la imatge font sigui un JPG quadrat sense transparència.
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const faviconAsset = require('./app/assets/img/logo-nav.jpg');
+    const faviconAsset = require('./assets/app/img/logo/logo-nav.jpg');
     const faviconUri = typeof faviconAsset === 'string'
       ? faviconAsset
       : (faviconAsset?.uri || faviconAsset?.default?.uri || faviconAsset?.default || '');

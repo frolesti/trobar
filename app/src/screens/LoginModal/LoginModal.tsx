@@ -326,7 +326,7 @@ const LoginModal = ({ navigation }: Props) => {
                 <View style={styles.panel}>
                     <View style={styles.topBar}>
                         <Image
-                            source={require('../../../assets/img/logo/logo-nav.jpg')}
+                            source={require('../../../../assets/app/img/logo/logo-nav.jpg')}
                             style={styles.logoImg}
                             resizeMode="cover"
                         />

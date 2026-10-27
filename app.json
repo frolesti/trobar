@@ -52,7 +52,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./app/assets/img/logo/LOGO_blanc.png",
+          "image": "./assets/app/img/logo/LOGO_blanc.png",
           "resizeMode": "contain",
           "backgroundColor": "#7a0033"
         }

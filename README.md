@@ -21,6 +21,10 @@ Els fitxers d'entrada i configuració d'Expo, Firebase, TypeScript i npm es
 conserven a l'arrel perquè les eines els descobreixin sense opcions especials.
 `firebase.json` apunta a les regles i els índexs de `firebase/`.
 
+Els imports d'imatges de l'app i la configuració d'Expo apunten directament
+a `assets/app/`. No han de dependre de la junction local `app/assets`:
+aquest enllaç no existeix als clons nets de Vercel o EAS.
+
 Les sortides locals no es versionen: `.local/exports/` conté els exports de
 validació, `.local/logs/` els logs, `.local/screenshots/` les captures i
 `.local/diagnostics/` els diagnòstics. Els exports i logs antics s'hi han

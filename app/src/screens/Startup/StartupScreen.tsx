@@ -29,7 +29,7 @@ const StartupScreen = ({ navigation }: Props) => {
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image
-          source={require('../../../assets/img/logo/logo-nav.jpg')}
+          source={require('../../../../assets/app/img/logo/logo-nav.jpg')}
           style={styles.logo}
           resizeMode="cover"
         />
@@ -44,4 +44,3 @@ const StartupScreen = ({ navigation }: Props) => {
 };
 
 export default StartupScreen;
-

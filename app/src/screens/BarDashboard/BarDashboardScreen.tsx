@@ -694,13 +694,13 @@ export default function BarDashboardScreen() {
 
                 const resolveCompLogo = (m: Match) => {
                     const name = (m.competition?.name || '').toLowerCase();
-                    if (name.includes('women') && name.includes('champions')) return require('../../../assets/img/competicions/champions-w.png');
-                    if (name.includes('uwcl')) return require('../../../assets/img/competicions/champions-w.png');
-                    if (name.includes('champions')) return require('../../../assets/img/competicions/champions.png');
-                    if (name.includes('copa') && (name.includes('reina') || name.includes('queen'))) return require('../../../assets/img/competicions/copa-reina.png');
-                    if (name.includes('copa') || name.includes('king')) return require('../../../assets/img/competicions/copa-del-rey.png');
-                    if (name.includes('liga f') || name.includes('femen')) return require('../../../assets/img/competicions/ligaf.png');
-                    if (name.includes('primera') || name.includes('la liga') || name.includes('liga')) return require('../../../assets/img/competicions/liga.png');
+                    if (name.includes('women') && name.includes('champions')) return require('../../../../assets/app/img/competicions/champions-w.png');
+                    if (name.includes('uwcl')) return require('../../../../assets/app/img/competicions/champions-w.png');
+                    if (name.includes('champions')) return require('../../../../assets/app/img/competicions/champions.png');
+                    if (name.includes('copa') && (name.includes('reina') || name.includes('queen'))) return require('../../../../assets/app/img/competicions/copa-reina.png');
+                    if (name.includes('copa') || name.includes('king')) return require('../../../../assets/app/img/competicions/copa-del-rey.png');
+                    if (name.includes('liga f') || name.includes('femen')) return require('../../../../assets/app/img/competicions/ligaf.png');
+                    if (name.includes('primera') || name.includes('la liga') || name.includes('liga')) return require('../../../../assets/app/img/competicions/liga.png');
                     return null;
                 };
 
