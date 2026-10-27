@@ -5,6 +5,7 @@
  */
 
 import { BarAmenity, OpeningPeriod } from '../models/Bar';
+import { fetchWithTimeout } from '../api/core';
 export type { OpeningPeriod };
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -40,7 +41,7 @@ export async function searchPlace(name: string, lat: number, lng: number): Promi
         // e.g. "Lleida" -> "Bar Lleida" or "Pub Lleida" or "Lleida bar"
         const query = `${name} bar`;
         
-        const response = await fetch(`${PLACES_BASE}:searchText`, {
+        const response = await fetchWithTimeout(`${PLACES_BASE}:searchText`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -57,7 +58,7 @@ export async function searchPlace(name: string, lat: number, lng: number): Promi
                 },
                 maxResultCount: 3, // Obtenir-ne uns quants per filtrar per tipus si cal
             }),
-        });
+        }, 'places.searchText', 15000);
 
         if (!response.ok) {
             if (response.status === 403) {
@@ -111,14 +112,14 @@ const DETAIL_FIELDS = [
  */
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
     try {
-        const response = await fetch(`${PLACES_BASE}/${placeId}`, {
+        const response = await fetchWithTimeout(`${PLACES_BASE}/${placeId}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': API_KEY,
                 'X-Goog-FieldMask': DETAIL_FIELDS,
             },
-        });
+        }, 'places.getDetails', 15000);
 
         // Place ID antic / movent / no v\u00e0lid → no escupim error a la consola
         if (response.status === 404) return null;

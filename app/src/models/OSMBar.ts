@@ -9,4 +9,5 @@ export interface OSMBar {
     tags: Record<string, string>;
     /** Amenitats derivades dels tags d'OSM */
     amenities?: BarAmenity[];
+    attributions?: { name: string; uri: string }[];
 }
