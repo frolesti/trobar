@@ -293,7 +293,7 @@
               "description": "Preferències de visualització",
               "fields": {
                 "defaultCategory": { "type": "string", "enum": ["all", "masculino", "femenino"], "default": "all", "description": "Categoria per defecte al llistat" },
-                "searchRadius":    { "type": "number", "enum": [500, 1000, 2000, 5000], "default": 2000, "description": "Radi de cerca (metres)" }
+                "searchRadius":    { "type": "number", "enum": [500, 1000, 2000, 5000, 10000], "default": 2000, "description": "Radi de cerca (metres)" }
               }
             }
           }

@@ -1,6 +1,8 @@
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { auth, db, storage } from '../config/firebase';
 import { executeRequest, executeOrThrow } from '../api/core';
 import { UserProfile, UserPreferences, DEFAULT_PREFERENCES } from '../models/UserProfile';
 
@@ -30,29 +32,40 @@ export const deleteUserProfile = async (userId: string): Promise<void> => {
     }, `deleteUserProfile:${userId}`);
 };
 
-export const uploadProfileImage = async (userId: string, uri: string): Promise<string> => {
-    // Utilitzem executeOrThrow perquè volem que l'error pugi si és greu,
-    // però gestionem el cas específic de CORS internament si cal.
+export const uploadProfileImage = async (userId: string, uri: string, mimeType?: string): Promise<string> => {
     return await executeOrThrow(async () => {
-        try {
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            
-            const storageRef = ref(storage, `avatars/${userId}`);
-            await uploadBytes(storageRef, blob);
-            
-            return await getDownloadURL(storageRef);
-        } catch (error: any) {
-            // Fallback específic per entorns de desenvolupament (CORS)
-            // A Chrome "Failed to fetch" sol ser error de CORS o xarxa.
-            const isCorsOrNetwork = error.message && (error.message.includes("CORS") || error.message.includes("Failed to fetch"));
-            
-            if (isCorsOrNetwork) {
-                 console.warn("Imatge no pujada: Error CORS/Xarxa (habitual en localhost). S'usarà la URI local.");
-                 return uri; 
-            }
-            throw error;
+        if (!auth.currentUser || auth.currentUser.uid !== userId) {
+            throw new Error('Cal iniciar sessió amb el propietari del perfil per pujar la foto.');
         }
+        const storageRef = ref(storage, `avatars/${userId}`);
+        if (Platform.OS !== 'web') {
+            const file = await FileSystem.getInfoAsync(uri);
+            if (!file.exists || !file.size) throw new Error("No s'ha pogut llegir la imatge seleccionada.");
+            if (file.size > 5 * 1024 * 1024) throw new Error('La foto no pot superar els 5 MB.');
+            const token = await auth.currentUser.getIdToken();
+            const bucket = storage.app.options.storageBucket;
+            if (!bucket) throw new Error('No hi ha cap bucket de fotos configurat.');
+            const contentType = mimeType?.startsWith('image/') ? mimeType : 'image/jpeg';
+            const result = await FileSystem.uploadAsync(
+                `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(`avatars/${userId}`)}`,
+                uri,
+                { httpMethod: 'POST', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: { Authorization: `Firebase ${token}`, 'Content-Type': contentType } },
+            );
+            if (result.status < 200 || result.status >= 300) {
+                const error = new Error(`No s'ha pogut pujar la foto (HTTP ${result.status}).`) as Error & { code: string };
+                error.code = result.status === 401 ? 'storage/unauthenticated' : result.status === 403 ? 'storage/unauthorized' : 'storage/unknown';
+                throw error;
+            }
+            return await getDownloadURL(storageRef);
+        }
+        const response = await fetch(uri);
+        if (!response.ok) throw new Error("No s'ha pogut llegir la imatge seleccionada.");
+        const blob = await response.blob();
+        if (blob.size > 5 * 1024 * 1024) throw new Error('La foto no pot superar els 5 MB.');
+        const contentType = blob.type?.startsWith('image/') ? blob.type : mimeType;
+        if (!contentType?.startsWith('image/')) throw new Error('El fitxer seleccionat no és una imatge compatible.');
+        await uploadBytes(storageRef, blob, { contentType });
+        return await getDownloadURL(storageRef);
     }, 'uploadProfileImage');
 };
 

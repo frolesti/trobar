@@ -1,62 +1,17 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { EDITORIAL } from '../../theme/editorialTheme';
 
-/**
- * Settings modal — paper editorial: paper bg, hairline borders, Lora typography,
- * grana eyebrow section titles, ink body, no blue.
- */
 export default StyleSheet.create({
-    /* ── Indicador d'arrossegament ── */
-    dragIndicator: {
-        width: 36,
-        height: 3,
-        borderRadius: 2,
-        backgroundColor: EDITORIAL.hairlineStrong,
-        alignSelf: 'center',
-        marginTop: 10,
-        marginBottom: 6,
-    },
-
-    /* ── Capçalera ── */
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingTop: 12,
-        paddingBottom: 18,
-        borderBottomWidth: 1,
-        borderBottomColor: EDITORIAL.hairline,
-    },
-    headerTitle: {
-        fontFamily: 'Lora_700Bold',
-        fontSize: 22,
-        color: EDITORIAL.ink,
-        letterSpacing: -0.3,
-    },
-    closeButton: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: EDITORIAL.hairline,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
     /* ── Secció genèrica ── */
     section: {
-        paddingHorizontal: 24,
-        paddingTop: 22,
-        paddingBottom: 8,
+        paddingTop: 32,
+        paddingBottom: 16,
     },
     sectionTitle: {
-        fontFamily: 'Lora_700Bold',
-        color: EDITORIAL.grana,
-        textTransform: 'uppercase',
-        letterSpacing: 2.4,
-        fontSize: 11,
+        fontFamily: EDITORIAL.fontBold,
+        color: '#FFFFFF',
+        letterSpacing: 0,
+        fontSize: 18,
         marginBottom: 14,
     },
 
@@ -65,7 +20,7 @@ export default StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 12,
+        paddingVertical: 16,
     },
     rowLast: {},
     rowLeft: {
@@ -79,20 +34,22 @@ export default StyleSheet.create({
         height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 14,
+        marginRight: 10,
     },
     rowTextGroup: {
         flex: 1,
     },
     rowTitle: {
-        fontFamily: 'Lora_700Bold',
-        fontSize: 14,
-        color: EDITORIAL.ink,
+        fontFamily: EDITORIAL.fontBold,
+        fontSize: 16,
+        lineHeight: 22,
+        color: '#FFFFFF',
     },
     rowSubtitle: {
-        fontFamily: 'Lora_400Regular',
-        fontSize: 12,
-        color: EDITORIAL.inkMuted,
+        fontFamily: EDITORIAL.fontRegular,
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#F0CDD9',
         marginTop: 2,
     },
 
@@ -100,38 +57,35 @@ export default StyleSheet.create({
     pillRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 4,
-        marginBottom: 4,
+        marginTop: 8,
+        marginBottom: 16,
         flexWrap: 'wrap',
     },
     pill: {
+        flexGrow: 1,
+        alignItems: 'center',
         paddingHorizontal: 14,
         paddingVertical: 7,
+        minHeight: 44,
+        justifyContent: 'center',
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: EDITORIAL.hairline,
-        backgroundColor: '#FFFFFF',
+        borderColor: 'rgba(255,255,255,0.4)',
+        backgroundColor: 'transparent',
     },
     pillActive: {
-        backgroundColor: EDITORIAL.grana,
-        borderColor: EDITORIAL.grana,
+        backgroundColor: '#FFFFFF',
+        borderColor: '#FFFFFF',
     },
     pillText: {
-        fontFamily: 'Lora_400Regular',
-        fontSize: 12,
-        color: EDITORIAL.ink,
-        letterSpacing: 0.4,
+        fontFamily: EDITORIAL.fontRegular,
+        fontSize: 14,
+        color: '#FFFFFF',
+        letterSpacing: 0,
     },
     pillTextActive: {
-        color: '#FFFFFF',
-        fontFamily: 'Lora_700Bold',
-    },
-
-    /* ── Separador ── */
-    separator: {
-        height: 1,
-        backgroundColor: EDITORIAL.hairline,
-        marginHorizontal: 24,
+        color: EDITORIAL.granaDeep,
+        fontFamily: EDITORIAL.fontBold,
     },
 
     /* ── Enllaços legals ── */
@@ -140,22 +94,35 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: 14,
-        paddingHorizontal: 24,
+        gap: 12,
     },
     legalText: {
-        fontFamily: 'Lora_400Regular',
-        fontSize: 14,
-        color: EDITORIAL.ink,
+        flexShrink: 1,
+        fontFamily: EDITORIAL.fontRegular,
+        fontSize: 16,
+        color: '#FFFFFF',
     },
 
-    /* ── Versió ── */
+    accountSection: { paddingTop: 24, paddingBottom: 8 },
+    logoutButton: { minHeight: 44, alignSelf: 'center', paddingHorizontal: 16, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+    logoutText: { color: '#FFFFFF', fontFamily: EDITORIAL.fontBold, fontSize: 16 },
+    deleteButton: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: 12, marginTop: 4 },
+    deleteText: { color: '#FFD2D9', fontFamily: EDITORIAL.fontRegular, fontSize: 14, textDecorationLine: 'underline' },
+    radiusControl: { paddingTop: 4, paddingBottom: 8 },
+    radiusValue: { color: '#FFFFFF', fontFamily: EDITORIAL.fontBold, fontSize: 18, textAlign: 'right' },
+    radiusSlider: { width: '100%', height: 48 },
+    radiusLimits: { flexDirection: 'row', justifyContent: 'space-between' },
+    footer: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.16)' },
+    footerLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 12, rowGap: 0 },
+    footerLink: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+    footerText: { color: '#F0CDD9', fontFamily: EDITORIAL.fontRegular, fontSize: 14, lineHeight: 20, textDecorationLine: 'underline' },
     versionText: {
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
         textAlign: 'center',
-        fontSize: 11,
-        color: EDITORIAL.inkMuted,
-        letterSpacing: 0.5,
-        marginTop: 20,
-        marginBottom: 30,
+        fontSize: 12,
+        color: '#F0CDD9',
+        letterSpacing: 0,
+        marginTop: 0,
+        marginBottom: 0,
     },
 });

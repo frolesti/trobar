@@ -34,7 +34,7 @@ export interface DisplayPreferences {
     /** Categoria per defecte al llistat de partits */
     defaultCategory: 'all' | 'masculino' | 'femenino';
     /** Radi de cerca de bars al mapa (metres) */
-    searchRadius: 500 | 1000 | 2000 | 5000;
+    searchRadius: 500 | 1000 | 2000 | 5000 | 10000;
 }
 
 /** Totes les preferències d'usuari agrupades */
