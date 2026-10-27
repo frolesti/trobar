@@ -15,7 +15,7 @@ export const LoadingIndicator = ({ size = 'small', style, color }: LoadingIndica
 
     return (
         <View style={[styles.container, style]}>
-            <ActivityIndicator size={spinnerSize} color={color || SKETCH_THEME.colors.textInverse} />
+            <ActivityIndicator size={spinnerSize} color={color || SKETCH_THEME.colors.primary} />
         </View>
     );
 };

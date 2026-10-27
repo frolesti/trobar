@@ -1,12 +1,9 @@
-// SOBREESCRIPTURA AMB COLORS DE MARCA — TEMA BLAUGRANA
-// Terra: Crema càlid (#F5F2EE) -> Fons de l'app
-// Text: Blau fosc (#1A1A2E)
-// Carrers: Blanc
+import { EDITORIAL } from './editorialTheme';
 
 export const CUSTOM_MAP_STYLE = [
     {
       "elementType": "geometry",
-      "stylers": [{ "color": "#F5F2EE" }] // Color de terra per defecte
+      "stylers": [{ "color": EDITORIAL.paperAlt }]
     },
     {
       "elementType": "labels.icon",
@@ -14,11 +11,11 @@ export const CUSTOM_MAP_STYLE = [
     },
     {
       "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#1A1A2E" }]
+      "stylers": [{ "color": EDITORIAL.ink }]
     },
     {
       "elementType": "labels.text.stroke",
-      "stylers": [{ "color": "#F5F2EE" }, { "weight": 2 }]
+      "stylers": [{ "color": EDITORIAL.paper }, { "weight": 2 }]
     },
     {
       "featureType": "administrative",
@@ -28,12 +25,12 @@ export const CUSTOM_MAP_STYLE = [
     {
       "featureType": "landscape",
       "elementType": "geometry",
-      "stylers": [{ "color": "#F5F2EE" }] // Fons de l'app
+      "stylers": [{ "color": EDITORIAL.paperAlt }]
     },
     {
       "featureType": "landscape.natural",
       "elementType": "geometry",
-      "stylers": [{ "color": "#F5F2EE" }]
+      "stylers": [{ "color": EDITORIAL.paperAlt }]
     },
     {
       "featureType": "poi",
@@ -42,12 +39,12 @@ export const CUSTOM_MAP_STYLE = [
     {
       "featureType": "poi.park",
       "elementType": "geometry",
-      "stylers": [{ "visibility": "on" }, { "color": "#E8E4D9" }] // Crema lleugerament més fosc per a parcs
+      "stylers": [{ "visibility": "on" }, { "color": EDITORIAL.greenSoft }]
     },
     {
         "featureType": "poi.park",
         "elementType": "labels.text.fill",
-        "stylers": [{ "visibility": "on" }, { "color": "#0F1B2D" }] // Ink editorial per a etiquetes de parc
+        "stylers": [{ "visibility": "on" }, { "color": EDITORIAL.inkMuted }]
     },
     {
       "featureType": "road",
@@ -57,21 +54,21 @@ export const CUSTOM_MAP_STYLE = [
     {
         "featureType": "road",
         "elementType": "geometry.stroke",
-        "stylers": [{ "color": "#E2DDD5" }] // Vora suau càlida
+        "stylers": [{ "color": '#DEE5ED' }]
     },
     {
       "featureType": "road",
       "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#6B7280" }] // Gris neutre per a noms de carrer
+      "stylers": [{ "color": EDITORIAL.inkMuted }]
     },
     {
       "featureType": "water",
       "elementType": "geometry.fill",
-      "stylers": [{ "color": "#B3D4E8" }] // Blau clar suau
+      "stylers": [{ "color": "#BBDDF0" }]
     },
     {
       "featureType": "water",
       "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#0F1B2D" }] // Ink editorial per a etiquetes d'aigua
+      "stylers": [{ "color": EDITORIAL.inkMuted }]
     }
   ];

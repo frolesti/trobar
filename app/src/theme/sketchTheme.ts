@@ -1,29 +1,25 @@
 import { StyleSheet, TextStyle, ViewStyle, Platform } from 'react-native';
+import { EDITORIAL } from './editorialTheme';
 
 export const SKETCHY_COLORS = {
-    bg: '#a50044',           // GRANA PUR — fons principal
-    bgLight: '#8a003a',      // Grana fosc — seccions alternes
-    uiBg: 'rgba(165, 0, 68, 0.96)',
+    bg: EDITORIAL.paper,
+    bgLight: EDITORIAL.paperAlt,
+    uiBg: EDITORIAL.card,
     card: '#FFFFFF',
-    text: '#1A1A2E',         // Blau molt fosc (gairebé negre, llegible dins targetes)
+    text: EDITORIAL.ink,
     textInverse: '#FFFFFF',  // Text sobre fons grana
-    textMuted: '#6B7280',    // Gris neutre (dins targetes)
+    textMuted: EDITORIAL.inkMuted,
     mutedInverse: 'rgba(255,255,255,0.70)', // Text secundari sobre fons grana
     accent: '#a50044',       // Granate Barça — botons secundaris, accents
-    accentSoft: 'rgba(255, 255, 255, 0.10)',
-    border: 'rgba(255, 255, 255, 0.12)', // Vora subtil sobre fons fosc
+    accentSoft: EDITORIAL.granaSoft,
+    border: EDITORIAL.hairline,
     primary: '#a50044',      // Granate Barça — color principal (sense blau)
     primarySoft: 'rgba(165, 0, 68, 0.10)',
     gold: '#FFFFFF',         // (abans groc) — etiquetes premium / accents sobre fons grana
     danger: '#db0030',       // Vermell Barça
 };
 
-export const sketchFontFamily = () => Platform.select({
-    web: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-    ios: 'System',
-    android: 'sans-serif',
-    default: 'System',
-}) as string;
+export const sketchFontFamily = () => EDITORIAL.fontRegular;
 
 // --- TIPOGRAFIA ESTÀNDARD ---
 // Defineix els estils de text base per reutilitzar-los i evitar repetir fontFamily
@@ -35,7 +31,7 @@ export const SKETCH_TYPOGRAPHY = StyleSheet.create({
         fontSize: 48,
         fontWeight: 'bold',
         color: SKETCHY_COLORS.text,
-        letterSpacing: 1,
+        letterSpacing: 0,
     } as TextStyle,
     h1: {
         ...fontBase,
@@ -97,18 +93,18 @@ export const SKETCH_THEME = {
   typography: SKETCH_TYPOGRAPHY,
   layout: SKETCH_LAYOUT,
   radius: {
-    sm: 10,
-    md: 14,
-    lg: 18,
-    xl: 22,
+        sm: 8,
+        md: 8,
+        lg: 8,
+        xl: 8,
     pill: 999,
   },
   spacing: {
-    xs: 6,
-    sm: 10,
-    md: 14,
-    lg: 18,
-    xl: 24,
+        xs: 4,
+        sm: 8,
+        md: 16,
+        lg: 24,
+        xl: 32,
   },
 };
 

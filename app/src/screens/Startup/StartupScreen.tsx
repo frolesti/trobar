@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, Image } from 'react-native';
+import { View, Image } from 'react-native';
+import Text from '../../components/AppText';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import styles from './StartupScreen.styles';

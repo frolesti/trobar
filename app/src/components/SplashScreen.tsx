@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Image, Text, Platform, Animated, Easing } from 'react-native';
+import { EDITORIAL } from '../theme/editorialTheme';
 
 interface SplashScreenProps {
   visible: boolean;
@@ -62,13 +63,13 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }
       {
         translateY: logoAnim.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, -10],
+          outputRange: [0, -16],
         }),
       },
       {
         scale: logoAnim.interpolate({
           inputRange: [0, 1],
-          outputRange: [1, 1.035],
+          outputRange: [1, 1.06],
         }),
       },
     ],
@@ -114,7 +115,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }
             zIndex: 9999,
           },
         }),
-        backgroundColor: '#a50044', // Grana Barça
+        backgroundColor: EDITORIAL.background,
         justifyContent: 'center',
         alignItems: 'center',
         flex: 1,

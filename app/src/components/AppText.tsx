@@ -1,10 +1,10 @@
 import React from 'react';
 import { Text, TextProps, StyleSheet } from 'react-native';
+import { EDITORIAL } from '../theme/editorialTheme';
 
 /**
  * Component de text per defecte de l'app.
- * Aplica la font Lora globalment perquè no calgui repetir
- * `fontFamily: 'Lora'` a tots els <Text> del codi.
+ * Resol les variants Barlow i preserva les fonts de marca i esport.
  *
  * Ús:
  *   <AppText style={{ fontSize: 16, color: 'red' }}>Hola</AppText>
@@ -13,12 +13,21 @@ import { Text, TextProps, StyleSheet } from 'react-native';
  * `fontFamily` dins de `style` (té prioritat sobre el default).
  */
 const AppText: React.FC<TextProps> = ({ style, ...rest }) => {
-    return <Text {...rest} style={[styles.base, style]} />;
+    const flattened = StyleSheet.flatten(style);
+    const bold = flattened?.fontFamily === EDITORIAL.fontBold || flattened?.fontWeight === 'bold' || Number(flattened?.fontWeight) >= 600;
+    const italic = flattened?.fontFamily === EDITORIAL.fontItalic || flattened?.fontStyle === 'italic';
+    return <Text {...rest} style={[styles.base, style, {
+        fontFamily: flattened?.fontFamily === EDITORIAL.fontDisplay ? EDITORIAL.fontDisplay : flattened?.fontFamily === EDITORIAL.fontSport ? EDITORIAL.fontSport : italic ? EDITORIAL.fontItalic : bold ? EDITORIAL.fontBold : EDITORIAL.fontRegular,
+        fontWeight: 'normal',
+        letterSpacing: 0,
+    }]} />;
 };
 
 const styles = StyleSheet.create({
     base: {
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
+        fontSize: 14,
+        color: EDITORIAL.ink,
     },
 });
 

@@ -1,9 +1,12 @@
 import 'react-native-gesture-handler'; // MUST BE AT THE TOP
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React from 'react';
 import { LogBox, Platform, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, Lora_400Regular, Lora_700Bold, Lora_400Regular_Italic } from '@expo-google-fonts/lora';
 import { Oi_400Regular } from '@expo-google-fonts/oi';
+import { Barlow_400Regular, Barlow_600SemiBold, Barlow_400Regular_Italic } from '@expo-google-fonts/barlow';
+import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed';
 import AppNavigator from './app/src/navigation/AppNavigator';
 import { AuthProvider } from './app/src/context/AuthContext';
 import { SplashProvider } from './app/src/context/SplashContext';
@@ -11,6 +14,7 @@ import ErrorBoundary from './app/src/components/ErrorBoundary';
 import { AlertBannerHost } from './app/src/components/AlertBanner';
 import SplashScreen from './app/src/components/SplashScreen';
 import GlobalSplash from './app/src/components/GlobalSplash';
+import { EDITORIAL } from './app/src/theme/editorialTheme';
 
 LogBox.ignoreLogs([
   'props.pointerEvents is deprecated',
@@ -28,7 +32,7 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      html, body, #root { height: 100%; width: 100%; margin: 0; padding: 0; background-color: #a50044; }
+      html, body, #root { height: 100%; width: 100%; margin: 0; padding: 0; background-color: ${EDITORIAL.background}; }
       body { overflow: hidden; }
       #root { display: flex; flex-direction: column; }
     `;
@@ -96,6 +100,10 @@ export default function App() {
     // continuï funcionant sense haver de tocar 170+ ocurrències.
     Lora: Lora_400Regular,
     Oi_400Regular,
+    Barlow_400Regular,
+    Barlow_600SemiBold,
+    Barlow_400Regular_Italic,
+    BarlowCondensed_700Bold,
   });
 
   // Aplicar Lora com a font per defecte a TOTS els <Text> de l'app
@@ -105,7 +113,7 @@ export default function App() {
     const TextAny = Text as any;
     TextAny.defaultProps = TextAny.defaultProps || {};
     TextAny.defaultProps.style = [
-      { fontFamily: 'Lora_400Regular' },
+      { fontFamily: 'Barlow_400Regular' },
       ...(Array.isArray(TextAny.defaultProps.style)
           ? TextAny.defaultProps.style
           : TextAny.defaultProps.style ? [TextAny.defaultProps.style] : []),
@@ -120,6 +128,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: EDITORIAL.background }}>
       <SafeAreaProvider>
         <AuthProvider>
           <SplashProvider>
@@ -130,6 +139,7 @@ export default function App() {
           </SplashProvider>
         </AuthProvider>
       </SafeAreaProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   );
 }

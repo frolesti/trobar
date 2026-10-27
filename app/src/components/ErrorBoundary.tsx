@@ -1,6 +1,8 @@
+import { EDITORIAL } from '../theme/editorialTheme';
 import React, { Component, ErrorInfo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, TouchableOpacity } from 'react-native';
+import Text from './AppText';
+import AppIcon from './AppIcon';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 
 interface Props {
@@ -60,13 +62,13 @@ class ErrorBoundary extends Component<Props, State> {
                     justifyContent: 'center', alignItems: 'center',
                     marginBottom: 24,
                 }}>
-                    <Feather name="alert-triangle" size={40} color="#db0030" />
+                    <AppIcon name="alert-triangle" size={40} color="#db0030" />
                 </View>
 
                 {/* Títol */}
                 <Text style={{
                     fontSize: 24, fontWeight: 'bold',
-                    fontFamily: 'Lora', color: SKETCH_THEME.colors.text,
+                    fontFamily: EDITORIAL.fontRegular, color: SKETCH_THEME.colors.text,
                     marginBottom: 12, textAlign: 'center',
                 }}>
                     Alguna cosa ha anat malament
@@ -74,8 +76,8 @@ class ErrorBoundary extends Component<Props, State> {
 
                 {/* Subtítol */}
                 <Text style={{
-                    fontSize: 15, color: SKETCH_THEME.colors.textMuted,
-                    fontFamily: 'Lora', textAlign: 'center',
+                    fontSize: 16, color: SKETCH_THEME.colors.textMuted,
+                    fontFamily: EDITORIAL.fontRegular, textAlign: 'center',
                     marginBottom: 32, lineHeight: 22,
                 }}>
                     L'aplicació ha trobat un error inesperat.{'\n'}
@@ -88,15 +90,15 @@ class ErrorBoundary extends Component<Props, State> {
                     style={{
                         backgroundColor: SKETCH_THEME.colors.primary,
                         paddingVertical: 14, paddingHorizontal: 32,
-                        borderRadius: 12,
+                        borderRadius: 8,
                         flexDirection: 'row', alignItems: 'center',
                         ...sketchShadow(),
                     }}
                 >
-                    <Feather name="refresh-cw" size={18} color="white" style={{ marginRight: 8 }} />
+                    <AppIcon name="refresh-cw" size={18} color="white" style={{ marginRight: 8 }} />
                     <Text style={{
                         color: 'white', fontWeight: 'bold',
-                        fontSize: 16, fontFamily: 'Lora',
+                        fontSize: 16, fontFamily: EDITORIAL.fontRegular,
                     }}>
                         Tornar a l'inici
                     </Text>
@@ -110,8 +112,8 @@ class ErrorBoundary extends Component<Props, State> {
                         borderRadius: 8, maxWidth: 400, width: '100%',
                     }}>
                         <Text style={{
-                            fontSize: 11, color: SKETCH_THEME.colors.textMuted,
-                            fontFamily: 'Courier',
+                            fontSize: 12, color: SKETCH_THEME.colors.textMuted,
+                            fontFamily: EDITORIAL.fontRegular,
                         }}>
                             {this.state.error.toString()}
                         </Text>

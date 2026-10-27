@@ -1,5 +1,6 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { EDITORIAL } from '../theme/editorialTheme';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import StartupScreen from '../screens/Startup/StartupScreen';
 import MapScreen from '../screens/Map/MapScreen';
@@ -53,18 +54,19 @@ const linking = {
 
 export default function AppNavigator() {
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer linking={linking} theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: EDITORIAL.grana, background: EDITORIAL.background, card: EDITORIAL.background, text: EDITORIAL.onBackground, border: EDITORIAL.borderOnBackground, notification: EDITORIAL.grana } }}>
       <Stack.Navigator 
         initialRouteName="Startup"
         screenOptions={{
           headerShown: false,
           title: 'troBar', // Títol per defecte per a totes les pantalles
+          cardStyle: { backgroundColor: EDITORIAL.background },
           // Això assegura que l'animació de lliscament lateral funcioni també a web
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
       >
         <Stack.Screen name="Startup" component={StartupScreen} options={{ title: 'troBar' }} />
-        <Stack.Screen name="Map" component={MapScreen} options={{ title: 'troBar' }} />
+        <Stack.Screen name="Map" component={MapScreen} options={{ title: 'troBar', gestureEnabled: false }} />
         <Stack.Screen 
           name="Matches" 
           component={MatchesScreen} 

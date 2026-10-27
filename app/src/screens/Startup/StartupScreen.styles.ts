@@ -10,7 +10,7 @@ export default StyleSheet.create({
     height,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: EDITORIAL.grana,
+    backgroundColor: EDITORIAL.background,
     paddingHorizontal: 32,
   },
   logoContainer: {
@@ -45,7 +45,7 @@ export default StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     position: 'absolute',
     bottom: 32,
-    letterSpacing: 1.2,
+    letterSpacing: 0,
   },
 });
 

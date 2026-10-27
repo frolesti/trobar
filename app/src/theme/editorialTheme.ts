@@ -1,35 +1,50 @@
 /**
- * Editorial theme tokens — Barça editorial premium.
- * Magazine feel: cream paper bg, ink typography, grana CTAs.
+ * Shared matchday theme: light map surfaces, grana brand and yellow accents.
  * Use these tokens across all screens for visual consistency.
  */
 import { StyleSheet, Platform, TextStyle, ViewStyle } from 'react-native';
+import brandColors from './brandColors.json';
 
 export const EDITORIAL = {
     // Palette
-    ink: '#0F1B2D',           // titulars, text principal
-    inkMuted: '#5B6677',      // text secundari
-    paper: '#FAF6EF',         // fons editorial crema
-    paperAlt: '#F2EDE3',      // fons alternat (seccions)
+    ink: '#202631',
+    inkMuted: '#66707D',
+    paper: '#F5F7FA',
+    paperAlt: '#EAF0F5',
     card: '#FFFFFF',          // targetes sobre paper
     hairline: 'rgba(15,27,45,0.12)',
     hairlineStrong: 'rgba(15,27,45,0.22)',
-    grana: '#a50044',         // Barça grana — CTA primaris, accents, links
+    grana: brandColors.primary,         // Barça grana — CTA primaris, accents, links
     granaSoft: 'rgba(165,0,68,0.08)',
-    granaDeep: '#7a0033',     // grana fosc per hover/pressed
+    granaDeep: brandColors.background,
+    background: brandColors.background,
+    onBackground: '#FFFFFF',
+    onBackgroundMuted: '#F0CDD9',
+    borderOnBackground: 'rgba(255,255,255,0.3)',
+    matchCard: '#96003E',
+    matchDate: '#850037',
+    masculine: '#8C003B',
+    feminine: '#AD2857',
     danger: '#db0030',
     success: '#1f7a3a',
+    blue: '#328BC7',
+    blueSoft: '#E5F3FB',
+    greenSoft: '#E7F3ED',
+    warning: '#B96A16',
+    matchday: '#F4D35E',
+    matchdaySoft: '#FFF5CC',
 
-    // Typography family aliases (require @expo-google-fonts/lora + @expo-google-fonts/oi loaded)
-    fontRegular: 'Lora_400Regular',
-    fontBold: 'Lora_700Bold',
-    fontItalic: 'Lora_400Regular_Italic',
+    // Typography family aliases loaded by App.tsx
+    fontRegular: 'Barlow_400Regular',
+    fontBold: 'Barlow_600SemiBold',
+    fontItalic: 'Barlow_400Regular_Italic',
+    fontSport: 'BarlowCondensed_700Bold',
     fontDisplay: 'Oi_400Regular',
 
     // Spacing
     space: {
-        xs: 6,
-        sm: 10,
+        xs: 4,
+        sm: 8,
         md: 16,
         lg: 24,
         xl: 32,
@@ -39,7 +54,7 @@ export const EDITORIAL = {
     // Radius — editorial = squared / minimal
     radius: {
         none: 0,
-        sm: 4,
+        sm: 8,
         md: 8,
         full: 999,
     },
@@ -49,9 +64,9 @@ export const EDITORIAL = {
 export const ED_TYPE = StyleSheet.create({
     eyebrow: {
         fontFamily: EDITORIAL.fontBold,
-        fontSize: 11,
+        fontSize: 12,
         color: EDITORIAL.grana,
-        letterSpacing: 2.4,
+        letterSpacing: 0,
         textTransform: 'uppercase',
     } as TextStyle,
     display: {
@@ -59,25 +74,25 @@ export const ED_TYPE = StyleSheet.create({
         fontSize: 40,
         lineHeight: 46,
         color: EDITORIAL.ink,
-        letterSpacing: 0.5,
+        letterSpacing: 0,
     } as TextStyle,
     h1: {
-        fontFamily: EDITORIAL.fontDisplay,
-        fontSize: 30,
+        fontFamily: EDITORIAL.fontSport,
+        fontSize: 28,
         lineHeight: 36,
         color: EDITORIAL.ink,
-        letterSpacing: 0.2,
+        letterSpacing: 0,
     } as TextStyle,
     h2: {
-        fontFamily: EDITORIAL.fontDisplay,
+        fontFamily: EDITORIAL.fontSport,
         fontSize: 22,
         lineHeight: 28,
         color: EDITORIAL.ink,
-        letterSpacing: 0.1,
+        letterSpacing: 0,
     } as TextStyle,
     h3: {
         fontFamily: EDITORIAL.fontBold,
-        fontSize: 17,
+        fontSize: 18,
         lineHeight: 22,
         color: EDITORIAL.ink,
     } as TextStyle,
@@ -176,12 +191,12 @@ export const ED_BUTTON = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontFamily: EDITORIAL.fontBold,
-        letterSpacing: 0.2,
+        letterSpacing: 0,
     } as TextStyle,
     secondaryText: {
         color: EDITORIAL.ink,
         fontSize: 16,
         fontFamily: EDITORIAL.fontBold,
-        letterSpacing: 0.2,
+        letterSpacing: 0,
     } as TextStyle,
 });

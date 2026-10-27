@@ -1,12 +1,14 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, Linking } from 'react-native';
+import { ScrollView, StyleSheet, View, TouchableOpacity, Linking } from 'react-native';
+import Text from '../../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EDITORIAL, ED_TYPE } from '../../theme/editorialTheme';
-import { Feather } from '@expo/vector-icons';
+import AppIcon from '../../components/AppIcon';
+import IconCredits from '../../components/IconCredits';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
-import { LegalDoc } from '../../data/legalContent';
+import { LegalDoc, TERMS } from '../../data/legalContent';
 
 interface LegalScreenProps {
     doc: LegalDoc;
@@ -26,11 +28,11 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
         const parts = text.split(splitter);
         return parts.map((part, i) =>
             isEmail.test(part) ? (
-                <Text key={i} style={styles.link} onPress={() => Linking.openURL(`mailto:${part}`)}>
+                <Text key={i} style={[styles.inlineText, styles.link]} onPress={() => Linking.openURL(`mailto:${part}`)}>
                     {part}
                 </Text>
             ) : (
-                <Text key={i}>{part}</Text>
+                <Text key={i} style={styles.inlineText}>{part}</Text>
             )
         );
     };
@@ -38,14 +40,14 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
     return (
         <SafeAreaView style={[styles.container, webScreenContainer]} edges={['top', 'left', 'right']}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Feather name="arrow-left" size={20} color={EDITORIAL.ink} />
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tornar enrere" onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <AppIcon name="arrow-left" size={20} color={EDITORIAL.onBackground} />
                 </TouchableOpacity>
                 <Text style={styles.eyebrow}>Legal</Text>
             </View>
             <ScrollView contentContainerStyle={styles.content} style={webScreenScroll}>
                 <Text style={styles.title}>
-                    {doc.title} <Text style={styles.titleItalic}>{doc.titleAccent}</Text>
+                    {doc.title} {doc.titleAccent}
                 </Text>
                 <Text style={styles.lastUpdated}>Última actualització — {doc.lastUpdated}</Text>
 
@@ -76,38 +78,42 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
                     </View>
                 ))}
 
-                <View style={{ height: 40 }} />
+                {doc === TERMS && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Crèdits</Text>
+                        <IconCredits style={{ color: EDITORIAL.onBackgroundMuted }} />
+                    </View>
+                )}
             </ScrollView>
-            <StatusBar style="dark" />
+            <StatusBar style="light" />
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: EDITORIAL.paper },
+    container: { flex: 1, backgroundColor: EDITORIAL.background },
     header: {
         flexDirection: 'row', alignItems: 'center',
         paddingHorizontal: 24, paddingVertical: 14,
-        borderBottomWidth: 1, borderBottomColor: EDITORIAL.hairline,
-        backgroundColor: EDITORIAL.paper,
+        backgroundColor: EDITORIAL.background,
     },
-    backButton: { padding: 6, marginRight: 14 },
-    eyebrow: { ...ED_TYPE.eyebrow },
+    backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+    eyebrow: { fontFamily: EDITORIAL.fontBold, fontSize: 18, color: EDITORIAL.onBackground },
     content: {
         paddingHorizontal: 28, paddingTop: 32, paddingBottom: 32,
         maxWidth: 720, width: '100%', alignSelf: 'center',
     },
-    title: { ...ED_TYPE.display, fontSize: 36, lineHeight: 42, marginBottom: 8 },
-    titleItalic: { ...ED_TYPE.italic, color: EDITORIAL.grana },
+    title: { fontFamily: EDITORIAL.fontBold, color: EDITORIAL.onBackground, fontSize: 28, lineHeight: 34, marginBottom: 12 },
     lastUpdated: {
-        ...ED_TYPE.caption, marginBottom: 32,
-        letterSpacing: 1, textTransform: 'uppercase',
+        ...ED_TYPE.caption, color: EDITORIAL.onBackgroundMuted, marginBottom: 32,
+        letterSpacing: 0,
     },
     section: { marginBottom: 28 },
-    sectionTitle: { ...ED_TYPE.h3, marginBottom: 10 },
-    sectionText: { ...ED_TYPE.body, color: EDITORIAL.inkMuted, marginBottom: 8 },
+    sectionTitle: { ...ED_TYPE.h3, color: EDITORIAL.onBackground, marginBottom: 12 },
+    sectionText: { ...ED_TYPE.body, color: EDITORIAL.onBackgroundMuted, marginBottom: 12 },
+    inlineText: { ...ED_TYPE.body, color: EDITORIAL.onBackgroundMuted },
     list: { marginTop: 4, marginBottom: 4 },
     listItem: { flexDirection: 'row', marginBottom: 6, paddingLeft: 4 },
-    bullet: { ...ED_TYPE.body, color: EDITORIAL.grana, marginRight: 10, marginTop: 0 },
-    link: { color: EDITORIAL.grana, textDecorationLine: 'underline' },
+    bullet: { ...ED_TYPE.body, color: EDITORIAL.onBackground, marginRight: 10, marginTop: 0 },
+    link: { color: EDITORIAL.onBackground, textDecorationLine: 'underline' },
 });

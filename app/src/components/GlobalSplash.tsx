@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import SplashScreen from './SplashScreen';
 import { useSplashState } from '../context/SplashContext';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +16,14 @@ import { useAuth } from '../context/AuthContext';
 const GlobalSplash: React.FC = () => {
   const { isAnyLoading, hasRegisteredScreen } = useSplashState();
   const { isLoading: authLoading } = useAuth();
-  const visible = authLoading || isAnyLoading || !hasRegisteredScreen;
+  const [initialAnimationElapsed, setInitialAnimationElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialAnimationElapsed(true), 1900);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const visible = authLoading || isAnyLoading || !hasRegisteredScreen || !initialAnimationElapsed;
   console.log('[GlobalSplash] render - authLoading:', authLoading, 'isAnyLoading:', isAnyLoading, 'hasRegisteredScreen:', hasRegisteredScreen, 'visible:', visible);
   return <SplashScreen visible={visible} />;
 };

@@ -1,11 +1,11 @@
+import { EDITORIAL } from '../../theme/editorialTheme';
 import { StyleSheet, Platform } from 'react-native';
-import { SKETCH_THEME } from '../../theme/sketchTheme';
 
-const INK = '#0F1B2D';
-const INK_MUTED = '#5B6677';
-const PAPER = '#FAF6EF';
-const HAIRLINE = 'rgba(15,27,45,0.12)';
-const GRANA = SKETCH_THEME.colors.bg; // #a50044
+const INK = EDITORIAL.ink;
+const INK_MUTED = EDITORIAL.onBackgroundMuted;
+const PAPER = EDITORIAL.background;
+const HAIRLINE = EDITORIAL.borderOnBackground;
+const GRANA = EDITORIAL.onBackground;
 
 export default StyleSheet.create({
     container: {
@@ -39,8 +39,8 @@ export default StyleSheet.create({
         fontSize: 14,
         color: INK_MUTED,
         marginLeft: 6,
-        fontFamily: 'Lora_400Regular',
-        letterSpacing: 0.3,
+        fontFamily: EDITORIAL.fontRegular,
+        letterSpacing: 0,
     },
     header: {
         alignItems: 'flex-start',
@@ -55,22 +55,22 @@ export default StyleSheet.create({
         borderColor: HAIRLINE,
     },
     eyebrow: {
-        fontSize: 11,
+        fontSize: 12,
         color: GRANA,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: 2.4,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
         textTransform: 'uppercase',
         marginBottom: 14,
     },
     title: {
         fontSize: 32,
         lineHeight: 38,
-        color: INK,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: -0.4,
+        color: EDITORIAL.onBackground,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
     },
     titleItalic: {
-        fontFamily: 'Lora_400Regular_Italic',
+        fontFamily: EDITORIAL.fontItalic,
         fontWeight: '400',
         color: GRANA,
     },
@@ -79,7 +79,7 @@ export default StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: INK_MUTED,
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
         maxWidth: 380,
     },
     hairline: {
@@ -95,7 +95,7 @@ export default StyleSheet.create({
         width: '100%',
         paddingVertical: 16,
         paddingHorizontal: 18,
-        borderRadius: 4,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 12,
@@ -106,8 +106,8 @@ export default StyleSheet.create({
     },
     buttonText: {
         fontSize: 16,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: 0.2,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
     },
     googleButton: {
         backgroundColor: '#FFFFFF',
@@ -125,10 +125,10 @@ export default StyleSheet.create({
     darkButton: { backgroundColor: INK, borderColor: INK },
     primaryButton: { backgroundColor: GRANA, borderColor: GRANA },
     primaryButtonText: {
-        color: '#FFFFFF',
+        color: EDITORIAL.background,
         fontSize: 16,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: 0.2,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
     },
     dividerRow: {
         flexDirection: 'row',
@@ -142,11 +142,11 @@ export default StyleSheet.create({
     },
     dividerText: {
         marginHorizontal: 14,
-        fontSize: 11,
+        fontSize: 12,
         color: INK_MUTED,
-        fontFamily: 'Lora_700Bold',
+        fontFamily: EDITORIAL.fontBold,
         textTransform: 'uppercase',
-        letterSpacing: 2,
+        letterSpacing: 0,
     },
     emailLink: {
         paddingVertical: 8,
@@ -155,7 +155,7 @@ export default StyleSheet.create({
     emailText: {
         color: GRANA,
         fontSize: 16,
-        fontFamily: 'Lora_700Bold',
+        fontFamily: EDITORIAL.fontBold,
     },
     emailLinkRow: {
         alignSelf: 'center',
@@ -166,8 +166,8 @@ export default StyleSheet.create({
     emailLinkText: {
         fontSize: 14,
         color: GRANA,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: 0.4,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
         textAlign: 'center',
         textDecorationLine: 'underline',
     },
@@ -177,31 +177,31 @@ export default StyleSheet.create({
         paddingHorizontal: 2,
     },
     errorText: {
-        color: SKETCH_THEME.colors.danger,
-        fontSize: 13,
+        color: '#FFD2D9',
+        fontSize: 14,
         lineHeight: 18,
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
         textAlign: 'left',
     },
     formTitle: {
         fontSize: 28,
-        color: INK,
+        color: EDITORIAL.onBackground,
         marginBottom: 20,
-        fontFamily: 'Lora_700Bold',
-        letterSpacing: -0.3,
+        fontFamily: EDITORIAL.fontBold,
+        letterSpacing: 0,
     },
     input: {
         width: '100%',
         borderWidth: 1,
         borderColor: HAIRLINE,
-        borderRadius: 4,
+        borderRadius: 8,
         paddingVertical: 14,
         paddingHorizontal: 14,
         fontSize: 16,
         marginBottom: 12,
         backgroundColor: '#FFFFFF',
         color: INK,
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
     },
     inlineLink: {
         marginTop: 14,
@@ -210,7 +210,7 @@ export default StyleSheet.create({
     inlineLinkText: {
         textAlign: 'center',
         color: INK_MUTED,
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
         fontSize: 14,
     },
     disclaimerFixed: {
@@ -238,12 +238,12 @@ export default StyleSheet.create({
         color: INK_MUTED,
         textAlign: 'center',
         lineHeight: 18,
-        fontFamily: 'Lora_400Regular',
+        fontFamily: EDITORIAL.fontRegular,
     },
     linkText: {
         fontSize: 12,
         color: GRANA,
-        fontFamily: 'Lora_700Bold',
+        fontFamily: EDITORIAL.fontBold,
         textDecorationLine: 'underline',
     },
 });
