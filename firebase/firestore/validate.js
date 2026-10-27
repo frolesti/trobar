@@ -1,13 +1,13 @@
 /**
- * firestore/validate.js
+ * firebase/firestore/validate.js
  *
  * Validates live Firestore data against the canonical schema.json.
  * Reports missing fields, wrong types, and unknown fields.
  *
  * Usage:
- *   node firestore/validate.js                # validate all collections
- *   node firestore/validate.js matches        # validate only 'matches'
- *   node firestore/validate.js --sample 5     # check 5 docs per collection
+ *   npm run db:validate                  # validate all collections
+ *   npm run db:validate -- matches       # validate only 'matches'
+ *   npm run db:validate -- --sample 5     # check 5 docs per collection
  */
 
 require('dotenv').config();

@@ -8,8 +8,7 @@
  *   - amenities
  *
  * Usage:
- *   cd app
- *   node firestore/seed_premium_dev.js
+ *   node firebase/firestore/seed_premium_dev.js
  *
  * ⚠️  Només per a DEV (trobar-1123f). No executar mai en producció.
  */

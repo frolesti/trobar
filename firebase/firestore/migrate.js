@@ -1,18 +1,18 @@
 /**
- * firestore/migrate.js
+ * firebase/firestore/migrate.js
  *
  * Sistema de migracions per a Firestore.
  *
- * Cada migració és un fitxer a firestore/migrations/ amb:
+ * Cada migració és un fitxer a firebase/firestore/migrations/ amb:
  *   module.exports = { id, description, up(db) }
  *
  * L'estat s'emmagatzema a Firestore:  system/schema_version
  *   { version, migratedAt, migrations: ['001_initial', '002_xxx', …] }
  *
  * Usage:
- *   node firestore/migrate.js              # aplica migracions pendents
- *   node firestore/migrate.js --status     # mostra estat actual
- *   node firestore/migrate.js --dry-run    # mostra què s'aplicaria
+ *   npm run db:migrate              # aplica migracions pendents
+ *   npm run db:migrate:status        # mostra estat actual
+ *   npm run db:migrate:dry-run       # mostra què s'aplicaria
  */
 
 require('dotenv').config();
