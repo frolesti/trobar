@@ -87,18 +87,6 @@ export default StyleSheet.create({
         borderWidth: 1,
         borderColor: EDITORIAL.hairline,
     },
-    sectionCardIcon: {
-        width: 38,
-        height: 38,
-        borderRadius: 8,
-        backgroundColor: EDITORIAL.card,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    sectionCardIconActive: {
-        backgroundColor: EDITORIAL.granaSoft,
-    },
     sectionCardInfo: {
         flex: 1,
     },
@@ -592,14 +580,6 @@ export default StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-    },
-    settingRowIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        backgroundColor: EDITORIAL.card,
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     settingRowText: {
         color: EDITORIAL.ink,

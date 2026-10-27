@@ -4,7 +4,6 @@ import Slider from '@react-native-community/slider';
 import Constants from 'expo-constants';
 import { registerPushNotifications, requestNotificationPermission, saveNotificationArea, clearNotificationArea } from '../../services/notificationService';
 import Text from '../../components/AppText';
-import AppIcon from '../../components/AppIcon';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
 import { EDITORIAL } from '../../theme/editorialTheme';
 import { showAlert } from '../../components/AlertBanner';
@@ -216,7 +215,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
     return (
         <View>
                     {!loaded && <View style={styles.section}>
-                        {loadError ? <TouchableOpacity accessibilityRole="button" style={styles.legalRow} onPress={() => setLoadAttempt(value => value + 1)}><Text style={styles.legalText}>Tornar a carregar les preferències</Text><AppIcon name="refresh-cw" size={20} color="#FFFFFF" /></TouchableOpacity> : <ActivityIndicator accessibilityLabel="Carregant preferències" color="#FFFFFF" />}
+                        {loadError ? <TouchableOpacity accessibilityRole="button" style={styles.legalRow} onPress={() => setLoadAttempt(value => value + 1)}><Text style={styles.legalText}>Tornar a carregar les preferències</Text></TouchableOpacity> : <ActivityIndicator accessibilityLabel="Carregant preferències" color="#FFFFFF" />}
                     </View>}
                     {/* ═══════════ NOTIFICACIONS ═══════════ */}
                     <View style={styles.section}>
@@ -225,9 +224,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Recordatori de partit */}
                         <View style={styles.row}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="alarm-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Recordatori de partit</Text>
                                     <Text style={styles.rowSubtitle}>Avisa abans d'un partit</Text>
@@ -244,9 +240,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Resultats en directe */}
                         <View style={styles.row}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="football-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Resultats en directe</Text>
                                     <Text style={styles.rowSubtitle}>Gols i resultat final</Text>
@@ -266,9 +259,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Nous bars a prop */}
                         <View style={styles.row}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="location-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Nous bars a prop</Text>
                                     <Text style={styles.rowSubtitle}>Alertes de bars verificats nous</Text>
@@ -288,9 +278,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Promocions */}
                         <View style={[styles.row, styles.rowLast]}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="pricetag-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Promocions de bars</Text>
                                     <Text style={styles.rowSubtitle}>Ofertes de bars premium</Text>
@@ -315,9 +302,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Categoria per defecte */}
                         <View style={styles.row}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="shirt-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Categoria per defecte</Text>
                                     <Text style={styles.rowSubtitle}>Categoria inicial al mapa i als partits</Text>
@@ -334,9 +318,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         {/* Radi de cerca */}
                         <View style={[styles.row, styles.rowLast]}>
                             <View style={styles.rowLeft}>
-                                <View style={styles.rowIcon}>
-                                    <AppIcon name="navigate-outline" size={18} color={C.primary} />
-                                </View>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Radi de cerca</Text>
                                     <Text style={styles.rowSubtitle}>Distància per buscar bars al mapa</Text>
@@ -381,7 +362,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                     <View style={[styles.section, styles.accountSection]}>
                         <Text accessibilityRole="header" style={styles.sectionTitle}>Compte</Text>
                         {onLogout && <TouchableOpacity accessibilityRole="button" disabled={accountBusy || isDeleting} onPress={onLogout} style={styles.logoutButton}>
-                            <AppIcon name="log-out" size={20} color="#FFFFFF" />
                             <Text style={styles.logoutText}>Tancar sessió</Text>
                         </TouchableOpacity>}
                         <TouchableOpacity accessibilityRole="button" onPress={handleDeleteAccount} disabled={isDeleting || accountBusy} style={styles.deleteButton}>

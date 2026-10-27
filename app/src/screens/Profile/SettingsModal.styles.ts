@@ -29,13 +29,6 @@ export default StyleSheet.create({
         flex: 1,
         marginRight: 12,
     },
-    rowIcon: {
-        width: 36,
-        height: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 10,
-    },
     rowTextGroup: {
         flex: 1,
     },

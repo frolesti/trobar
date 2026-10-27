@@ -280,37 +280,37 @@ export default function BarDashboardScreen() {
     };
 
     /* ── Definició seccions perfil ─────────────────────────────────────────── */
-    const profileSections: { key: Section; icon: any; title: string; subtitle: string; hasContent: boolean }[] = [
+    const profileSections: { key: Section; title: string; subtitle: string; hasContent: boolean }[] = [
         {
-            key: 'description', icon: 'file-text', title: 'Descripció',
+            key: 'description', title: 'Descripció',
             subtitle: description.trim()
                 ? description.trim().substring(0, 50) + (description.trim().length > 50 ? '…' : '')
                 : 'No definida',
             hasContent: !!description.trim(),
         },
         {
-            key: 'promotions', icon: 'zap', title: 'Promoció',
+            key: 'promotions', title: 'Promoció',
             subtitle: promotionalText.trim()
                 ? promotionalText.trim().substring(0, 50) + (promotionalText.trim().length > 50 ? '…' : '')
                 : 'Cap promoció activa',
             hasContent: !!promotionalText.trim(),
         },
         {
-            key: 'socials', icon: 'share-2', title: 'Xarxes Socials',
+            key: 'socials', title: 'Xarxes Socials',
             subtitle: configuredSocials > 0
                 ? `${configuredSocials} ${configuredSocials === 1 ? 'configurada' : 'configurades'}`
                 : 'Cap configurada',
             hasContent: configuredSocials > 0,
         },
         {
-            key: 'amenities', icon: 'check-circle', title: 'Serveis',
+            key: 'amenities', title: 'Serveis',
             subtitle: selectedAmenities.size > 0
                 ? `${selectedAmenities.size} ${selectedAmenities.size === 1 ? 'seleccionat' : 'seleccionats'}`
                 : 'Cap seleccionat',
             hasContent: selectedAmenities.size > 0,
         },
         {
-            key: 'matches', icon: 'tv', title: 'Partits que emets',
+            key: 'matches', title: 'Partits que emets',
             subtitle: broadcastingIds.size > 0
                 ? `${broadcastingIds.size} ${broadcastingIds.size === 1 ? 'partit marcat' : 'partits marcats'}`
                 : 'Cap configurat',
@@ -372,9 +372,6 @@ export default function BarDashboardScreen() {
                     onPress={() => openSheet(sec.key)}
                     activeOpacity={0.7}
                 >
-                    <View style={[styles.sectionCardIcon, sec.hasContent && styles.sectionCardIconActive]}>
-                        <AppIcon name={sec.icon} size={20} color={sec.hasContent ? 'white' : 'rgba(255,255,255,0.4)'} />
-                    </View>
                     <View style={styles.sectionCardInfo}>
                         <Text style={styles.sectionCardTitle}>{sec.title}</Text>
                         <Text
@@ -382,7 +379,6 @@ export default function BarDashboardScreen() {
                             numberOfLines={1}
                         >{sec.subtitle}</Text>
                     </View>
-                    <AppIcon name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
             ))}
         </ScrollView>
@@ -393,11 +389,11 @@ export default function BarDashboardScreen() {
     ═══════════════════════════════════════════════════════════════════════ */
     const currentTier = bar.tier || 'premium';
 
-    const NOTIF_OPTIONS: { key: keyof BarOwnerNotificationPreferences; label: string; desc: string; icon: string }[] = [
-        { key: 'newReviews', label: 'Noves ressenyes', desc: 'Quan algú escriu una ressenya al teu bar', icon: 'message-circle' },
-        { key: 'newRatings', label: 'Noves valoracions', desc: 'Quan algú puntua el teu bar', icon: 'star' },
-        { key: 'upcomingMatches', label: 'Partits propers', desc: 'Recordatori dels partits que emets', icon: 'tv' },
-        { key: 'newFollowers', label: 'Nous seguidors', desc: 'Quan algú comença a seguir el teu bar', icon: 'user-plus' },
+    const NOTIF_OPTIONS: { key: keyof BarOwnerNotificationPreferences; label: string; desc: string }[] = [
+        { key: 'newReviews', label: 'Noves ressenyes', desc: 'Quan algú escriu una ressenya al teu bar' },
+        { key: 'newRatings', label: 'Noves valoracions', desc: 'Quan algú puntua el teu bar' },
+        { key: 'upcomingMatches', label: 'Partits propers', desc: 'Recordatori dels partits que emets' },
+        { key: 'newFollowers', label: 'Nous seguidors', desc: 'Quan algú comença a seguir el teu bar' },
     ];
 
     const handleSaveNotifPrefs = async () => {
@@ -498,14 +494,12 @@ export default function BarDashboardScreen() {
                         onPress={() => setShowNotifPrefs(true)}
                         activeOpacity={0.7}
                     >
-                        <AppIcon name="sliders" size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 10 }} />
                         <View style={{ flex: 1 }}>
                             <Text style={{ color: EDITORIAL.ink, fontSize: 14, fontWeight: '600' }}>Preferències de notificacions</Text>
                             <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 1 }}>
                                 Tria quines notificacions vols rebre
                             </Text>
                         </View>
-                        <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                     </TouchableOpacity>
                 </View>
 
@@ -520,12 +514,8 @@ export default function BarDashboardScreen() {
                     activeOpacity={0.6}
                 >
                     <View style={styles.settingRowLeft}>
-                        <View style={styles.settingRowIcon}>
-                            <AppIcon name="file-text" size={16} color="rgba(255,255,255,0.6)" />
-                        </View>
                         <Text style={styles.settingRowText}>Termes del servei</Text>
                     </View>
-                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -534,12 +524,8 @@ export default function BarDashboardScreen() {
                     activeOpacity={0.6}
                 >
                     <View style={styles.settingRowLeft}>
-                        <View style={styles.settingRowIcon}>
-                            <AppIcon name="shield" size={16} color="rgba(255,255,255,0.6)" />
-                        </View>
                         <Text style={styles.settingRowText}>Política de privacitat</Text>
                     </View>
-                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -551,19 +537,14 @@ export default function BarDashboardScreen() {
                     activeOpacity={0.6}
                 >
                     <View style={styles.settingRowLeft}>
-                        <View style={styles.settingRowIcon}>
-                            <AppIcon name="mail" size={16} color="rgba(255,255,255,0.6)" />
-                        </View>
                         <Text style={styles.settingRowText}>Contactar amb suport</Text>
                     </View>
-                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 {/* Logout + eliminar + versió (dins del scroll) */}
                 <View style={styles.settingsFooter}>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
-                        <AppIcon name="log-out" size={16} color="rgba(255,255,255,0.7)" />
-                        <Text style={styles.logoutText}>  Tancar sessió</Text>
+                        <Text style={styles.logoutText}>Tancar sessió</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={() => {
@@ -1091,14 +1072,6 @@ export default function BarDashboardScreen() {
                                         onPress={() => setNotifPrefs(prev => ({ ...prev, [opt.key]: !prev[opt.key] }))}
                                         activeOpacity={0.7}
                                     >
-                                        <View style={{
-                                            width: 36, height: 36, borderRadius: 8,
-                                            backgroundColor: isActive ? EDITORIAL.granaSoft : EDITORIAL.paperAlt,
-                                            alignItems: 'center', justifyContent: 'center',
-                                            marginRight: 12,
-                                        }}>
-                                            <AppIcon name={opt.icon as any} size={16} color={isActive ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} />
-                                        </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
                                             <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 1 }}>{opt.desc}</Text>

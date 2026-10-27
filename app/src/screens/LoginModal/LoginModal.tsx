@@ -352,7 +352,6 @@ const LoginModal = ({ navigation }: Props) => {
                                 }
                             }}
                         >
-                            <AppIcon name="arrow-left" size={16} color={EDITORIAL.onBackgroundMuted} />
                             <Text style={styles.closeText}>Tornar</Text>
                         </TouchableOpacity>
                     </View>

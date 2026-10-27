@@ -95,7 +95,6 @@ class ErrorBoundary extends Component<Props, State> {
                         ...sketchShadow(),
                     }}
                 >
-                    <AppIcon name="refresh-cw" size={18} color="white" style={{ marginRight: 8 }} />
                     <Text style={{
                         color: 'white', fontWeight: 'bold',
                         fontSize: 16, fontFamily: EDITORIAL.fontRegular,

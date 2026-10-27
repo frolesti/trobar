@@ -202,7 +202,6 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         <Text style={{ color: C.icon, fontSize: 14, fontFamily: EDITORIAL.fontBold, flexShrink: 1 }}>
                             Veure totes les dades
                         </Text>
-                        <Feather name="chevron-down" size={18} color={C.icon} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -265,7 +264,6 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         <ActivityIndicator color="white" />
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                            <Feather name="check-circle" size={18} color="white" style={{ marginRight: 8 }} />
                             <Text style={{ color: 'white', fontSize: 16, fontFamily: EDITORIAL.fontBold }}>Sí, avisa tothom!</Text>
                         </View>
                     )}
