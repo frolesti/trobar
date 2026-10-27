@@ -522,20 +522,21 @@ export const stripeWebhook = onRequest(
           // Obtenir la subscripció per saber el cicle
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           const billingCycle = sub.metadata?.billingCycle || "monthly";
+          const isPremium = sub.status === "active" && session.payment_status === "paid";
 
           await db.collection("barOwners").doc(uid).update({
             stripeSubscriptionId: subscriptionId,
             stripeCustomerId: session.customer,
-            subscriptionStatus: "active",
+            subscriptionStatus: sub.status,
             billingCycle,
             subscribedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
           if (barId) {
             await db.collection("bars").doc(barId).update({
-              tier: "premium",
+              tier: isPremium ? "premium" : "free",
               billing: billingCycle,
-              premium: true,
+              premium: isPremium,
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
           }
@@ -558,7 +559,7 @@ export const stripeWebhook = onRequest(
           });
 
           if (barId) {
-            const isPremium = subscription.status === "active" || subscription.status === "trialing";
+            const isPremium = subscription.status === "active";
             await db.collection("bars").doc(barId).update({
               tier: isPremium ? "premium" : "free",
               premium: isPremium,
@@ -612,6 +613,14 @@ export const stripeWebhook = onRequest(
               subscriptionStatus: "payment_failed",
               lastPaymentError: admin.firestore.FieldValue.serverTimestamp(),
             });
+            const barId = ownerDoc.data().barId;
+            if (barId) {
+              await db.collection("bars").doc(barId).update({
+                tier: "free",
+                premium: false,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
             console.log(`⚠️ Pagament fallat per customer ${customerId}`);
           }
         }
