@@ -645,6 +645,7 @@ function createIdManager(mappings) {
 //  MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 async function main() {
+    throw new Error('Legacy match sync disabled. Deploy functions:scheduledMatchSync; see docs/guides/MATCH_SYNC.md.');
     if (!API_KEY) {
         console.error('❌ FOOTBALL_DATA_API_KEY not set in .env');
         return;
@@ -894,4 +895,3 @@ async function main() {
 main()
     .then(() => process.exit(0))
     .catch(err => { console.error('❌ Fatal:', err); process.exit(1); });
-
