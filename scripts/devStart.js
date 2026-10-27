@@ -8,8 +8,8 @@
 
   What it does:
   1) Tries to detect which PIDs are LISTENING on the known dev ports.
-  2) Kills only "safe" targets by default (node-based Expo/Metro or our proxy).
-  3) Runs `npm run start:raw` with stdio inherited.
+  2) Reclaims the dedicated 8081 port; other ports retain safe-target checks.
+  3) Loads Expo in this process, retaining its terminal and native Ctrl+C handling.
 
   Controls:
   - TROBAR_DEV_FORCE=1 : also kill unknown node processes on these ports.
@@ -18,9 +18,10 @@
 */
 
 const path = require('path');
-const { spawn, spawnSync, execSync } = require('child_process');
+const { spawnSync, execSync } = require('child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
+const runnerStatePath = path.join(projectRoot, '.expo', 'dev-runner.json');
 
 const DEV_PORTS = [8081, 19000, 19001, 19002];
 
@@ -28,14 +29,15 @@ function getNpmArgvFallback() {
   // npm sets npm_config_argv for scripts. On some Windows setups, args after `--` don't
   // reliably show up in process.argv, so we also parse this env var.
   try {
-    const raw = process.env.npm_config_argv;
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(process.env.npm_config_argv || '{}');
     const original = Array.isArray(parsed?.original) ? parsed.original : [];
     const remain = Array.isArray(parsed?.remain) ? parsed.remain : [];
 
     // Keep only likely flags to avoid noise like "start".
-    return [...original, ...remain]
+    const configuredFlags = ['clear', 'go', 'dev-client', 'lan', 'localhost', 'tunnel', 'web', 'dry-run', 'free-only']
+      .filter(flag => /^(true|1)$/i.test(process.env[`npm_config_${flag}`] || process.env[`npm_config_${flag.replace(/-/g, '_')}`] || ''))
+      .map(flag => `--${flag}`);
+    return [...original, ...remain, ...configuredFlags]
       .map(String)
       .filter((s) => s.startsWith('-'));
   } catch {
@@ -46,8 +48,7 @@ function getNpmArgvFallback() {
 const argv = new Set([...process.argv.slice(2), ...getNpmArgvFallback()]);
 const dryRun = argv.has('--dry-run');
 const freeOnly = argv.has('--free-only');
-const noProxy = argv.has('--no-proxy');
-const expoClear = argv.has('--clear');
+const ownerPid = Number(process.env.TROBAR_DEV_OWNER_PID || process.pid);
 
 const force = /^1|true|yes$/i.test(String(process.env.TROBAR_DEV_FORCE || ''));
 const killAll = /^1|true|yes$/i.test(String(process.env.TROBAR_DEV_KILL_ALL || ''));
@@ -108,10 +109,8 @@ function getProcessNameWin(pid) {
 
 function getCommandLineWin(pid) {
   try {
-    // Use PowerShell because tasklist doesn't include command line.
-    const ps = `powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\\"ProcessId=${pid}\\\").CommandLine"`;
-    const raw = runCmd(ps, { shell: 'cmd.exe' });
-    const cmdline = String(raw || '').trim();
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine`], { encoding: 'utf8', windowsHide: true });
+    const cmdline = String(result.stdout || '').trim();
     return cmdline || null;
   } catch {
     return null;
@@ -122,18 +121,19 @@ function getListeningPidsOnPortWin(port) {
   // netstat output contains e.g.
   // TCP    0.0.0.0:8081   0.0.0.0:0   LISTENING   22844
   try {
-    const raw = runCmd(`netstat -ano -p tcp | findstr :${port}`, { shell: 'cmd.exe' });
+    const raw = runCmd('netstat -ano -p tcp', { shell: 'cmd.exe' });
     const pids = [];
     for (const line of raw.split(/\r?\n/)) {
       if (!line || !/LISTENING/i.test(line)) continue;
       const parts = line.trim().split(/\s+/);
+      if (!parts[1]?.endsWith(`:${port}`)) continue;
       const pidStr = parts[parts.length - 1];
       const pid = Number(pidStr);
       if (Number.isFinite(pid) && pid > 0) pids.push(pid);
     }
     return uniq(pids);
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(`Cannot inspect port ${port}: ${error.message}`);
   }
 }
 
@@ -151,6 +151,41 @@ function killPidWin(pid) {
   const args = ['/PID', String(pid), '/T', '/F'];
   const res = spawnSync('taskkill', args, { stdio: 'inherit', shell: false });
   return res.status === 0;
+}
+
+function getWindowsNodeProcesses() {
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object ProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress"], { encoding: 'utf8', windowsHide: true });
+  if (result.status !== 0) throw new Error('Cannot inspect running Expo processes.');
+  const processes = JSON.parse(result.stdout || '[]');
+  return (Array.isArray(processes) ? processes : [processes]).filter(Boolean);
+}
+
+function getProjectExpoPidsWin() {
+  const fs = require('fs');
+  let state;
+  try {
+    if (fs.existsSync(runnerStatePath)) state = JSON.parse(fs.readFileSync(runnerStatePath, 'utf8'));
+  } catch {}
+  return getWindowsNodeProcesses()
+    .filter(item => item.ProcessId !== process.pid && item.ProcessId !== ownerPid && (
+      (item.CommandLine?.toLowerCase().includes(projectRoot.toLowerCase()) && /expo[\\/]bin[\\/]cli["\s].*\bstart\b/i.test(item.CommandLine)) ||
+      (state?.pid === item.ProcessId && state.creationDate === item.CreationDate && /scripts[\\/]devStart\.js/i.test(item.CommandLine || ''))
+    ))
+    .map(item => item.ProcessId);
+}
+
+function registerRunner() {
+  if (process.platform !== 'win32') return;
+  const fs = require('fs');
+  const identity = getWindowsNodeProcesses().find(item => item.ProcessId === process.pid);
+  if (!identity?.CreationDate) throw new Error('Cannot record the Expo process identity.');
+  fs.mkdirSync(path.dirname(runnerStatePath), { recursive: true });
+  fs.writeFileSync(runnerStatePath, JSON.stringify({ pid: process.pid, creationDate: identity.CreationDate }));
+  process.once('exit', () => {
+    try {
+      if (JSON.parse(fs.readFileSync(runnerStatePath, 'utf8')).pid === process.pid) fs.unlinkSync(runnerStatePath);
+    } catch {}
+  });
 }
 
 function killPidPosix(pid) {
@@ -177,6 +212,7 @@ function isLikelyIcsProxyCmdline(cmdline) {
 }
 
 function shouldKillProcess({ port, pid, imageName, cmdline }) {
+  if (port === 8081) return true;
   if (killAll) return true;
 
   const isNode = (imageName || '').toLowerCase() === 'node.exe' || (imageName || '').toLowerCase() === 'node';
@@ -197,15 +233,45 @@ function shouldKillProcess({ port, pid, imageName, cmdline }) {
   return false;
 }
 
-function freePorts() {
+async function waitForPortFree() {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const server = require('node:net').createServer();
+        server.once('error', reject);
+        server.listen({ port: 8081, exclusive: true }, () => server.close(resolve));
+      });
+      return;
+    } catch (error) {
+      if (error.code !== 'EADDRINUSE') throw error;
+      if (attempt === 19) {
+        const remaining = process.platform === 'win32' ? getListeningPidsOnPortWin(8081) : getListeningPidsOnPortPosix(8081);
+        throw new Error(`Port 8081 is still occupied by PID ${remaining.join(', ') || 'unknown'}. Stop that process before starting Expo; no alternate port will be used.`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+}
+
+async function freePorts() {
   const isWin = process.platform === 'win32';
   const killed = [];
   const skipped = [];
+  const stoppedPids = new Set();
+
+  if (isWin) {
+    for (const pid of getProjectExpoPidsWin()) {
+      const label = `[project Expo] pid=${pid}`;
+      if (dryRun) killed.push(`[dry-run] ${label}`);
+      else if (killPidWin(pid)) { killed.push(label); stoppedPids.add(pid); }
+      else throw new Error(`Cannot stop project Expo PID ${pid}.`);
+    }
+  }
 
   for (const port of DEV_PORTS) {
     const pids = isWin ? getListeningPidsOnPortWin(port) : getListeningPidsOnPortPosix(port);
     for (const pid of pids) {
-      if (pid === process.pid) continue;
+      if (pid === process.pid || pid === ownerPid || stoppedPids.has(pid)) continue;
 
       const imageName = isWin ? getProcessNameWin(pid) : null;
       const cmdline = isWin ? getCommandLineWin(pid) : null;
@@ -242,27 +308,7 @@ function freePorts() {
     for (const line of skipped) console.log(`- ${line}`);
     console.log('Tip: set TROBAR_DEV_FORCE=1 (node only) or TROBAR_DEV_KILL_ALL=1 (any process).');
   }
-}
-
-function runMigrations() {
-  // Skip migrations if firestore directory doesn't exist
-  const fs = require('fs');
-  if (!fs.existsSync(path.join(projectRoot, 'firestore'))) {
-    console.log('-------------------------------------------------------');
-    console.log('🗄️  Skipping Firestore Migrations (firestore directory not found)...');
-    console.log('-------------------------------------------------------');
-    return;
-  }
-
-  console.log('-------------------------------------------------------');
-  console.log('🗄️  Running Firestore Migrations...');
-  const res = spawnSync(process.execPath, ['firestore/migrate.js'], {
-    stdio: 'inherit',
-    cwd: projectRoot,
-    env: process.env,
-    shell: false
-  });
-  console.log('-------------------------------------------------------');
+  if (!dryRun) await waitForPortFree();
 }
 
 function runSyncScript() {
@@ -278,52 +324,45 @@ function runSyncScript() {
 }
 
 function runStartRaw() {
-  // Run migrations first, then sync data
-  runMigrations();
-  runSyncScript();
-
-  if (noProxy) {
-    const res = spawnSync('npm', ['run', 'start:raw', ...(expoClear ? ['--', '--clear'] : [])], {
-      stdio: 'inherit',
-      shell: true,
-      env: process.env,
-      cwd: projectRoot,
-    });
-    process.exit(res.status ?? 1);
+  const expoCli = require.resolve('expo/bin/cli');
+  const expoArgs = [expoCli, 'start', '--port', '8081'];
+  if (!argv.has('--tunnel')) expoArgs.push('--offline');
+  for (const flag of ['--clear', '--go', '--dev-client', '--lan', '--localhost', '--tunnel', '--web']) {
+    if (argv.has(flag)) expoArgs.push(flag);
   }
+  registerRunner();
+  process.env.TROBAR_DEV_PORT_READY_PID = String(process.pid);
+  process.argv = [process.execPath, ...expoArgs];
+  require(expoCli);
+}
 
-  // Run proxy + Expo without concurrently (more reliable on Windows).
-  // Proxy server file scripts/icsProxyServer.js is missing, so we skip it.
-  
-  const expoCmd = 'npm';
-  const expoArgs = ['run', 'start:raw'];
-  if (expoClear) {
-    expoArgs.push('--', '--clear');
-  }
-
-  const expoProc = spawn(expoCmd, expoArgs, {
+function prepareDirectExpoStart() {
+  const entry = process.argv[1] || '';
+  if (!/[\\/]expo[\\/]bin[\\/]cli(?:\.js)?$/i.test(entry) || process.argv[2] !== 'start') return;
+  if (process.env.TROBAR_DEV_PORT_READY_PID === String(process.pid)) return;
+  const portIndex = process.argv.findIndex(argument => argument === '--port' || argument === '-p');
+  if (portIndex !== -1 && process.argv[portIndex + 1] !== '8081') return;
+  const result = spawnSync(process.execPath, [path.join(__dirname, 'devStart.js'), '--free-only'], {
     stdio: 'inherit',
     cwd: projectRoot,
-    env: process.env,
-    shell: true,
+    env: { ...process.env, TROBAR_DEV_OWNER_PID: String(process.pid) },
+    shell: false,
   });
-
-  expoProc.on('exit', (code) => {
-    process.exit(code ?? 1);
-  });
-
-  expoProc.on('error', () => {
-    process.exit(1);
-  });
-
-  process.on('SIGINT', () => {
-    process.exit(130);
-  });
+  if (result.status !== 0) throw new Error('Cannot recover port 8081. Expo startup was stopped.');
+  registerRunner();
+  process.env.TROBAR_DEV_PORT_READY_PID = String(process.pid);
 }
 
-freePorts();
-if (dryRun || freeOnly) {
-  process.exit(0);
+async function main() {
+  try {
+    await freePorts();
+    if (!dryRun && !freeOnly) runStartRaw();
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }
 
-runStartRaw();
+if (require.main === module) void main();
+
+module.exports = { shouldKillProcess, getListeningPidsOnPortWin, freePorts, runStartRaw, prepareDirectExpoStart };
