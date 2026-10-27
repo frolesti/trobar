@@ -48,16 +48,19 @@ export interface BarProfileUpdate {
 /** Obtenir el bar propietat d'un usuari */
 export async function getOwnedBar(userId: string): Promise<Bar | null> {
     const result = await executeRequest(async () => {
-        // Primer mirem el perfil de l'usuari per obtenir l'ID del bar
+        // registerBar stores ownership in barOwners/{uid}; retain legacy users.ownedBars fallback.
+        const ownerRef = doc(db, 'barOwners', userId);
+        const ownerSnap = await getDoc(ownerRef);
+        const ownerBarId = ownerSnap.exists() ? ownerSnap.data().barId as string | undefined : undefined;
+
+        // Older registrations may have the relation in users/{uid}.ownedBars.
         const userRef = doc(db, 'users', userId);
         const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) return null;
+        const ownedBars = userSnap.exists() ? userSnap.data().ownedBars as string[] | undefined : undefined;
+        const barId = ownerBarId || ownedBars?.[0];
+        if (!barId) return null;
 
-        const ownedBars = userSnap.data().ownedBars as string[] | undefined;
-        if (!ownedBars || ownedBars.length === 0) return null;
-
-        // Carregar el primer bar (per ara, un propietari = un bar)
-        const barRef = doc(db, 'bars', ownedBars[0]);
+        const barRef = doc(db, 'bars', barId);
         const barSnap = await getDoc(barRef);
         if (!barSnap.exists()) return null;
 

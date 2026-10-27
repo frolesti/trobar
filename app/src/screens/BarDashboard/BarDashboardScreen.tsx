@@ -1,11 +1,11 @@
+import { EDITORIAL } from '../../theme/editorialTheme';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-    View, Text, TextInput, TouchableOpacity, ScrollView, Image,
-    ActivityIndicator, Animated, Dimensions, StyleSheet, Linking, Platform,
-} from 'react-native';
+import { View, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Animated, Dimensions, StyleSheet, Linking, Platform } from 'react-native';
+import Text from '../../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import AppIcon from '../../components/AppIcon';
+import IconCredits from '../../components/IconCredits';
 import { useAuth } from '../../context/AuthContext';
 import { useScreenLoading } from '../../context/SplashContext';
 import { Bar, BarAmenity } from '../../models/Bar';
@@ -152,7 +152,7 @@ export default function BarDashboardScreen() {
                     // Carregar placeDetails i ressenyes per a la previsualització
                     const cleanName = ownedBar.name.replace(/\s+\d+$/, '');
                     setLoadingPlaceDetails(true);
-                    fetchBarPlaceDetails(cleanName, ownedBar.latitude, ownedBar.longitude, ownedBar.googlePlaceId)
+                    (ownedBar.isTestData ? Promise.resolve(null) : fetchBarPlaceDetails(cleanName, ownedBar.latitude, ownedBar.longitude, ownedBar.googlePlaceId))
                         .then(details => setPlaceDetails(details))
                         .catch(() => setPlaceDetails(null))
                         .finally(() => setLoadingPlaceDetails(false));
@@ -168,7 +168,9 @@ export default function BarDashboardScreen() {
                         .catch(() => {});
 
                     // Carregar estat de la subscripció
-                    getSubscriptionStatus()
+                    if (ownedBar.isTestData) {
+                        setSubscriptionActive(false);
+                    } else getSubscriptionStatus()
                         .then(status => {
                             if (status.billingCycle) setBillingCycle(status.billingCycle);
                             setSubscriptionActive(status.active);
@@ -205,9 +207,10 @@ export default function BarDashboardScreen() {
     useEffect(() => {
         if (!user) return;
         let unsubscribe: (() => void) | null = null;
+        let disposed = false;
 
         (async () => {
-            const result = await registerPushNotifications(user.id);
+            const result = await registerPushNotifications(user.id, false);
             setNotifPermission(result === 'granted' ? 'granted' : result === 'blocked' ? 'denied' : getNotificationPermissionStatus());
             unsubscribe = await listenForegroundMessages((payload: { title: string; body: string }) => {
                 showToast(`${payload.title}: ${payload.body}`, 'success');
@@ -216,9 +219,10 @@ export default function BarDashboardScreen() {
                     ...prev,
                 ].slice(0, 50));
             });
-        })();
+            if (disposed) unsubscribe?.();
+        })().catch(() => setNotifPermission('unsupported'));
 
-        return () => { if (unsubscribe) unsubscribe(); };
+        return () => { disposed = true; unsubscribe?.(); };
     }, [user, showToast]);
 
     /* ── Helpers ───────────────────────────────────────────────────────────── */
@@ -332,11 +336,11 @@ export default function BarDashboardScreen() {
                     <View style={{ width: 36 }} />
                     <Text style={styles.headerTitle}>Panell del bar</Text>
                     <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
-                        <Feather name="log-out" size={18} color="rgba(255,255,255,0.7)" />
+                        <AppIcon name="log-out" size={18} color="rgba(255,255,255,0.7)" />
                     </TouchableOpacity>
                 </View>
                 <View style={styles.centered}>
-                    <Feather name="alert-circle" size={48} color="rgba(255,255,255,0.5)" />
+                    <AppIcon name="alert-circle" size={48} color="rgba(255,255,255,0.5)" />
                     <Text style={styles.emptyTitle}>No s'ha trobat cap bar assignat</Text>
                     <Text style={styles.emptySubtitle}>
                         Contacta amb nosaltres per vincular el teu bar.
@@ -369,7 +373,7 @@ export default function BarDashboardScreen() {
                     activeOpacity={0.7}
                 >
                     <View style={[styles.sectionCardIcon, sec.hasContent && styles.sectionCardIconActive]}>
-                        <Feather name={sec.icon} size={20} color={sec.hasContent ? 'white' : 'rgba(255,255,255,0.4)'} />
+                        <AppIcon name={sec.icon} size={20} color={sec.hasContent ? 'white' : 'rgba(255,255,255,0.4)'} />
                     </View>
                     <View style={styles.sectionCardInfo}>
                         <Text style={styles.sectionCardTitle}>{sec.title}</Text>
@@ -378,7 +382,7 @@ export default function BarDashboardScreen() {
                             numberOfLines={1}
                         >{sec.subtitle}</Text>
                     </View>
-                    <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
+                    <AppIcon name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
             ))}
         </ScrollView>
@@ -415,20 +419,21 @@ export default function BarDashboardScreen() {
                 <View style={styles.planCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Feather name="award" size={20} color="#FFFFFF" />
+                            <AppIcon name="award" size={20} color="#FFFFFF" />
                             <Text style={styles.planName}>  {currentTier === 'premium' ? 'Premium' : 'Gratuït'}</Text>
                         </View>
                         <View style={{ backgroundColor: subscriptionActive ? 'rgba(255,215,0,0.2)' : 'rgba(165,0,68,0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                            <Text style={{ color: subscriptionActive ? '#FFFFFF' : '#a50044', fontSize: 11, fontWeight: '700' }}>
-                                {subscriptionActive ? 'ACTIU' : 'INACTIU'}
+                            <Text style={{ color: subscriptionActive ? EDITORIAL.success : EDITORIAL.grana, fontSize: 12, fontWeight: '700' }}>
+                                {bar?.isTestData ? 'PROVA' : subscriptionActive ? 'ACTIU' : 'INACTIU'}
                             </Text>
                         </View>
                     </View>
 
-                    {currentTier === 'premium' && (
+                    {bar?.isTestData && <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 12 }}>Premium de proves · Sense facturació</Text>}
+                    {currentTier === 'premium' && !bar?.isTestData && (
                         <View style={{ marginTop: 12 }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 10 }}>Periodicitat</Text>
-                            <View style={{ flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginBottom: 10 }}>Periodicitat</Text>
+                            <View style={{ flexDirection: 'row', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: EDITORIAL.hairline }}>
                                 {([{ key: 'monthly' as const, label: 'Mensual', price: '39€/mes', save: null },
                                    { key: 'quarterly' as const, label: 'Trimestral', price: '33€/mes', save: '-15%' },
                                    { key: 'annual' as const, label: 'Anual', price: '29€/mes', save: '-25%' }]
@@ -437,7 +442,7 @@ export default function BarDashboardScreen() {
                                         key={opt.key}
                                         style={{
                                             flex: 1, paddingVertical: 10, alignItems: 'center',
-                                            backgroundColor: billingCycle === opt.key ? '#FFFFFF' : 'rgba(255,255,255,0.06)',
+                                            backgroundColor: billingCycle === opt.key ? EDITORIAL.granaSoft : EDITORIAL.card,
                                         }}
                                         onPress={() => {
                                             if (opt.key === billingCycle) return;
@@ -446,15 +451,15 @@ export default function BarDashboardScreen() {
                                         }}
                                         activeOpacity={0.7}
                                     >
-                                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>{opt.label}</Text>
-                                        <Text style={{ color: billingCycle === opt.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>{opt.price}</Text>
+                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>{opt.label}</Text>
+                                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 2 }}>{opt.price}</Text>
                                         {opt.save && (
-                                            <Text style={{ color: billingCycle === opt.key ? 'white' : '#FFFFFF', fontSize: 10, fontWeight: '700', marginTop: 1 }}>{opt.save}</Text>
+                                            <Text style={{ color: EDITORIAL.grana, fontSize: 12, fontWeight: '700', marginTop: 1 }}>{opt.save}</Text>
                                         )}
                                     </TouchableOpacity>
                                 ))}
                             </View>
-                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center', marginTop: 6 }}>
+                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
                                 {billingCycle === 'monthly' ? 'Facturat 39€/mes' : billingCycle === 'quarterly' ? 'Facturat 99€ cada 3 mesos · Estalvies 72€/any' : 'Facturat 348€/any · Estalvies 120€/any'}
                             </Text>
 
@@ -463,13 +468,13 @@ export default function BarDashboardScreen() {
                                 <TouchableOpacity
                                     style={{
                                         marginTop: 12, paddingVertical: 10, paddingHorizontal: 16,
-                                        borderRadius: 10, backgroundColor: '#FFFFFF',
+                                        borderRadius: 8, backgroundColor: '#FFFFFF',
                                         alignItems: 'center',
                                     }}
                                     onPress={() => openCheckout(billingCycle).catch(e => showToast('Error obrint el pagament: ' + e.message, 'error'))}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>Activar subscripció</Text>
+                                    <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>Activar subscripció</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -487,20 +492,20 @@ export default function BarDashboardScreen() {
                         style={{
                             flexDirection: 'row', alignItems: 'center', marginTop: 10,
                             paddingVertical: 10, paddingHorizontal: 14,
-                            borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)',
-                            borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+                            borderRadius: 8, backgroundColor: EDITORIAL.card,
+                            borderWidth: 1, borderColor: EDITORIAL.hairline,
                         }}
                         onPress={() => setShowNotifPrefs(true)}
                         activeOpacity={0.7}
                     >
-                        <Feather name="sliders" size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 10 }} />
+                        <AppIcon name="sliders" size={16} color="rgba(255,255,255,0.7)" style={{ marginRight: 10 }} />
                         <View style={{ flex: 1 }}>
-                            <Text style={{ color: 'white', fontSize: 14, fontWeight: '600' }}>Preferències de notificacions</Text>
-                            <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 1 }}>
+                            <Text style={{ color: EDITORIAL.ink, fontSize: 14, fontWeight: '600' }}>Preferències de notificacions</Text>
+                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 1 }}>
                                 Tria quines notificacions vols rebre
                             </Text>
                         </View>
-                        <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
+                        <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                     </TouchableOpacity>
                 </View>
 
@@ -516,11 +521,11 @@ export default function BarDashboardScreen() {
                 >
                     <View style={styles.settingRowLeft}>
                         <View style={styles.settingRowIcon}>
-                            <Feather name="file-text" size={16} color="rgba(255,255,255,0.6)" />
+                            <AppIcon name="file-text" size={16} color="rgba(255,255,255,0.6)" />
                         </View>
                         <Text style={styles.settingRowText}>Termes del servei</Text>
                     </View>
-                    <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
+                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -530,11 +535,11 @@ export default function BarDashboardScreen() {
                 >
                     <View style={styles.settingRowLeft}>
                         <View style={styles.settingRowIcon}>
-                            <Feather name="shield" size={16} color="rgba(255,255,255,0.6)" />
+                            <AppIcon name="shield" size={16} color="rgba(255,255,255,0.6)" />
                         </View>
                         <Text style={styles.settingRowText}>Política de privacitat</Text>
                     </View>
-                    <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
+                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -547,17 +552,17 @@ export default function BarDashboardScreen() {
                 >
                     <View style={styles.settingRowLeft}>
                         <View style={styles.settingRowIcon}>
-                            <Feather name="mail" size={16} color="rgba(255,255,255,0.6)" />
+                            <AppIcon name="mail" size={16} color="rgba(255,255,255,0.6)" />
                         </View>
                         <Text style={styles.settingRowText}>Contactar amb suport</Text>
                     </View>
-                    <Feather name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
+                    <AppIcon name="chevron-right" size={18} color="rgba(255,255,255,0.3)" />
                 </TouchableOpacity>
 
                 {/* Logout + eliminar + versió (dins del scroll) */}
                 <View style={styles.settingsFooter}>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
-                        <Feather name="log-out" size={16} color="rgba(255,255,255,0.7)" />
+                        <AppIcon name="log-out" size={16} color="rgba(255,255,255,0.7)" />
                         <Text style={styles.logoutText}>  Tancar sessió</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -569,11 +574,12 @@ export default function BarDashboardScreen() {
                         disabled={isDeleting}
                         style={{ alignSelf: 'center', padding: 10, marginTop: 4, opacity: isDeleting ? 0.4 : 0.7 }}
                     >
-                        <Text style={{ color: 'rgba(255,255,255,0.45)', fontWeight: '600', fontSize: 12, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 12, textDecorationLine: 'underline' }}>
                             {isDeleting ? 'Eliminant...' : 'Eliminar el compte'}
                         </Text>
                     </TouchableOpacity>
                     <Text style={styles.versionText}>troBar v1.3.0 · @frolesti · 2026</Text>
+                    <IconCredits />
                 </View>
             </ScrollView>
         </View>
@@ -590,21 +596,21 @@ export default function BarDashboardScreen() {
                         style={[styles.input, styles.textArea]}
                         multiline value={description} onChangeText={setDescription}
                         placeholder="Escriu una descripció del teu bar…"
-                        placeholderTextColor="rgba(255,255,255,0.35)"
+                        placeholderTextColor={EDITORIAL.inkMuted}
                         textAlignVertical="top"
                     />
                 );
             case 'promotions':
                 return (
                     <View>
-                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 10, lineHeight: 18 }}>
+                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginBottom: 10, lineHeight: 18 }}>
                             Escriu una promoció que es mostrarà destacada al perfil del teu bar. Deixa-ho buit per treure-la.
                         </Text>
                         <TextInput
                             style={[styles.input, styles.textArea]}
                             multiline value={promotionalText} onChangeText={setPromotionalText}
                             placeholder="Ex: Happy Hour els dies de partit: 2x1 en cerveses fins al xiulet inicial!"
-                            placeholderTextColor="rgba(255,255,255,0.35)"
+                            placeholderTextColor={EDITORIAL.inkMuted}
                             textAlignVertical="top"
                         />
                     </View>
@@ -615,7 +621,7 @@ export default function BarDashboardScreen() {
                         {SOCIAL_NETWORKS.map(net => (
                             <View key={net.key} style={styles.socialRow}>
                                 <View style={styles.socialIconWrap}>
-                                    <Feather name={net.icon} size={16} color={
+                                    <AppIcon name={net.icon} size={16} color={
                                         socials[net.key]?.trim() ? 'white' : 'rgba(255,255,255,0.35)'
                                     } />
                                 </View>
@@ -626,7 +632,7 @@ export default function BarDashboardScreen() {
                                         value={socials[net.key] || ''}
                                         onChangeText={v => setSocials(prev => ({ ...prev, [net.key]: v }))}
                                         placeholder={net.placeholder}
-                                        placeholderTextColor="rgba(255,255,255,0.25)"
+                                        placeholderTextColor={EDITORIAL.inkMuted}
                                         autoCapitalize="none" autoCorrect={false}
                                         keyboardType={net.key === 'whatsapp' ? 'phone-pad' : 'url'}
                                     />
@@ -634,7 +640,7 @@ export default function BarDashboardScreen() {
                                 {socials[net.key]?.trim() ? (
                                     <TouchableOpacity style={styles.socialClear}
                                         onPress={() => setSocials(prev => ({ ...prev, [net.key]: '' }))}>
-                                        <Feather name="x" size={14} color="rgba(255,255,255,0.5)" />
+                                        <AppIcon name="x" size={14} color="rgba(255,255,255,0.5)" />
                                     </TouchableOpacity>
                                 ) : null}
                             </View>
@@ -646,7 +652,7 @@ export default function BarDashboardScreen() {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                         {AMENITY_OPTIONS.map(opt => {
                             const isActive = selectedAmenities.has(opt.key);
-                            const IconComp = opt.iconFamily === 'mci' ? MaterialCommunityIcons : Feather;
+                            const IconComp = AppIcon;
                             return (
                                 <TouchableOpacity
                                     key={opt.key}
@@ -660,7 +666,7 @@ export default function BarDashboardScreen() {
                                     }}
                                 >
                                     <IconComp name={opt.icon as any} size={14} color={isActive ? 'white' : 'rgba(255,255,255,0.4)'} />
-                                    <Text style={[styles.chipText, { color: isActive ? 'white' : 'rgba(255,255,255,0.4)' }]}>{opt.label}</Text>
+                                    <Text style={[styles.chipText, { color: isActive ? EDITORIAL.grana : EDITORIAL.inkMuted }]}>{opt.label}</Text>
                                 </TouchableOpacity>
                             );
                         })}
@@ -732,7 +738,7 @@ export default function BarDashboardScreen() {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Feather name={allFilteredSelected ? 'x-square' : 'check-square'} size={14} color="#FFFFFF" />
+                                <AppIcon name={allFilteredSelected ? 'x-square' : 'check-square'} size={14} color="#FFFFFF" />
                                 <Text style={styles.selectAllText}>
                                     {allFilteredSelected ? 'Deseleccionar tots' : 'Seleccionar tots'}
                                 </Text>
@@ -760,24 +766,24 @@ export default function BarDashboardScreen() {
                                     }}
                                 >
                                     <View style={[styles.matchCheck, isSelected && styles.matchCheckActive]}>
-                                        {isSelected && <Feather name="check" size={14} color="white" />}
+                                        {isSelected && <AppIcon name="check" size={14} color="white" />}
                                     </View>
                                     {/* Escuts junts amb competició entremig */}
                                     <View style={styles.matchCrests}>
                                         {home.crest ? (
                                             <Image source={{ uri: home.crest }} style={styles.matchCrest} resizeMode="contain" />
                                         ) : (
-                                            <Ionicons name="shield-outline" size={22} color="rgba(255,255,255,0.3)" />
+                                            <AppIcon name="shield-outline" size={22} color="rgba(255,255,255,0.3)" />
                                         )}
                                         {compLogo ? (
                                             <Image source={compLogo} style={styles.matchCompLogo} resizeMode="contain" />
                                         ) : (
-                                            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, marginHorizontal: 2 }}>vs</Text>
+                                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginHorizontal: 2 }}>vs</Text>
                                         )}
                                         {away.crest ? (
                                             <Image source={{ uri: away.crest }} style={styles.matchCrest} resizeMode="contain" />
                                         ) : (
-                                            <Ionicons name="shield-outline" size={22} color="rgba(255,255,255,0.3)" />
+                                            <AppIcon name="shield-outline" size={22} color="rgba(255,255,255,0.3)" />
                                         )}
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 10 }}>
@@ -834,7 +840,7 @@ export default function BarDashboardScreen() {
                         onPress={() => setShowNotifications(prev => !prev)}
                         style={styles.headerBtn}
                     >
-                        <Feather name="bell" size={18} color="rgba(255,255,255,0.7)" />
+                        <AppIcon name="bell" size={18} color="rgba(255,255,255,0.7)" />
                         {notifications.length > 0 && (
                             <View style={{
                                 position: 'absolute', top: 2, right: 2,
@@ -843,7 +849,7 @@ export default function BarDashboardScreen() {
                                 alignItems: 'center', justifyContent: 'center',
                                 paddingHorizontal: 4,
                             }}>
-                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '700' }}>
+                                <Text style={{ color: EDITORIAL.ink, fontSize: 12, fontWeight: '700' }}>
                                     {notifications.length > 99 ? '99+' : notifications.length}
                                 </Text>
                             </View>
@@ -866,7 +872,7 @@ export default function BarDashboardScreen() {
                     toast.type === 'error' ? styles.toastError : styles.toastSuccess,
                     { opacity: toastOpacity },
                 ]}>
-                    <Feather
+                    <AppIcon
                         name={toast.type === 'error' ? 'alert-circle' : 'check-circle'}
                         size={16} color="white"
                     />
@@ -896,7 +902,7 @@ export default function BarDashboardScreen() {
                                 {activeSection ? SHEET_TITLES[activeSection] : ''}
                             </Text>
                             <TouchableOpacity onPress={closeSheet} style={styles.sheetCloseBtn}>
-                                <Feather name="x" size={20} color="white" />
+                                <AppIcon name="x" size={20} color="white" />
                             </TouchableOpacity>
                         </View>
 
@@ -934,7 +940,7 @@ export default function BarDashboardScreen() {
                     style={styles.navItem}
                     onPress={() => { closeSheet(); setActiveTab('map'); }}
                 >
-                    <Ionicons
+                    <AppIcon
                         name={activeTab === 'map' ? 'map' : 'map-outline'}
                         size={24}
                         color={activeTab === 'map' ? 'white' : SKETCH_THEME.colors.mutedInverse}
@@ -949,7 +955,7 @@ export default function BarDashboardScreen() {
                     style={styles.navItem}
                     onPress={() => { closeSheet(); setActiveTab('profile'); }}
                 >
-                    <Ionicons
+                    <AppIcon
                         name={activeTab === 'profile' ? 'home' : 'home-outline'}
                         size={24}
                         color={activeTab === 'profile' ? 'white' : SKETCH_THEME.colors.mutedInverse}
@@ -964,7 +970,7 @@ export default function BarDashboardScreen() {
                     style={styles.navItem}
                     onPress={() => { closeSheet(); setActiveTab('settings'); }}
                 >
-                    <Ionicons
+                    <AppIcon
                         name={activeTab === 'settings' ? 'settings' : 'settings-outline'}
                         size={24}
                         color={activeTab === 'settings' ? 'white' : SKETCH_THEME.colors.mutedInverse}
@@ -978,28 +984,28 @@ export default function BarDashboardScreen() {
             {showNotifications && (
                 <View style={{
                     position: 'absolute', top: 60, right: 12, width: 320,
-                    maxHeight: 400, borderRadius: 14,
-                    backgroundColor: '#3a0018',
-                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+                    maxHeight: 400, borderRadius: 8,
+                    backgroundColor: EDITORIAL.card,
+                    borderWidth: 1, borderColor: EDITORIAL.hairline,
                     zIndex: 200,
                 }}>
                     <View style={{
                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                         paddingHorizontal: 16, paddingVertical: 12,
-                        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
+                        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: EDITORIAL.hairline,
                     }}>
-                        <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Notificacions</Text>
+                        <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '700' }}>Notificacions</Text>
                         {notifications.length > 0 && (
                             <TouchableOpacity onPress={() => setNotifications([])}>
-                                <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>Esborrar tot</Text>
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12 }}>Esborrar tot</Text>
                             </TouchableOpacity>
                         )}
                     </View>
                     <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
                         {notifications.length === 0 ? (
                             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-                                <Feather name="bell-off" size={32} color="rgba(255,255,255,0.2)" />
-                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 10 }}>
+                                <AppIcon name="bell-off" size={32} color="rgba(255,255,255,0.2)" />
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 10 }}>
                                     Cap notificació encara
                                 </Text>
                             </View>
@@ -1008,11 +1014,11 @@ export default function BarDashboardScreen() {
                                 <View key={n.id} style={{
                                     paddingHorizontal: 16, paddingVertical: 12,
                                     borderBottomWidth: StyleSheet.hairlineWidth,
-                                    borderBottomColor: 'rgba(255,255,255,0.06)',
+                                    borderBottomColor: EDITORIAL.hairline,
                                 }}>
-                                    <Text style={{ color: 'white', fontSize: 14, fontWeight: '600' }}>{n.title}</Text>
-                                    <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginTop: 2 }}>{n.body}</Text>
-                                    <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, marginTop: 4 }}>
+                                    <Text style={{ color: EDITORIAL.ink, fontSize: 14, fontWeight: '600' }}>{n.title}</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 2 }}>{n.body}</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 4 }}>
                                         {n.time.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' })}
                                     </Text>
                                 </View>
@@ -1047,28 +1053,28 @@ export default function BarDashboardScreen() {
                         onPress={() => setShowNotifPrefs(false)}
                     />
                     <View style={{
-                        width: '90%', maxWidth: 400, borderRadius: 18,
-                        backgroundColor: '#3a0018',
-                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+                        width: '90%', maxWidth: 400, borderRadius: 8,
+                        backgroundColor: EDITORIAL.card,
+                        borderWidth: 1, borderColor: EDITORIAL.hairline,
                     }}>
                         {/* Capçalera modal */}
                         <View style={{
                             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                             paddingHorizontal: 20, paddingVertical: 16,
-                            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
+                            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: EDITORIAL.hairline,
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Feather name="bell" size={20} color="#FFFFFF" />
-                                <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Preferències</Text>
+                                <AppIcon name="bell" size={20} color="#FFFFFF" />
+                                <Text style={{ color: EDITORIAL.ink, fontSize: 18, fontWeight: '700' }}>Preferències</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowNotifPrefs(false)} style={styles.headerBtn}>
-                                <Feather name="x" size={18} color="rgba(255,255,255,0.7)" />
+                                <AppIcon name="x" size={18} color="rgba(255,255,255,0.7)" />
                             </TouchableOpacity>
                         </View>
 
                         {/* Opcions */}
                         <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 14 }}>
+                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginBottom: 14 }}>
                                 Tria quines notificacions vols rebre al teu dispositiu.
                             </Text>
                             {NOTIF_OPTIONS.map(opt => {
@@ -1080,27 +1086,27 @@ export default function BarDashboardScreen() {
                                             flexDirection: 'row', alignItems: 'center',
                                             paddingVertical: 14,
                                             borderBottomWidth: StyleSheet.hairlineWidth,
-                                            borderBottomColor: 'rgba(255,255,255,0.06)',
+                                            borderBottomColor: EDITORIAL.hairline,
                                         }}
                                         onPress={() => setNotifPrefs(prev => ({ ...prev, [opt.key]: !prev[opt.key] }))}
                                         activeOpacity={0.7}
                                     >
                                         <View style={{
-                                            width: 36, height: 36, borderRadius: 10,
-                                            backgroundColor: isActive ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.06)',
+                                            width: 36, height: 36, borderRadius: 8,
+                                            backgroundColor: isActive ? EDITORIAL.granaSoft : EDITORIAL.paperAlt,
                                             alignItems: 'center', justifyContent: 'center',
                                             marginRight: 12,
                                         }}>
-                                            <Feather name={opt.icon as any} size={16} color={isActive ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} />
+                                            <AppIcon name={opt.icon as any} size={16} color={isActive ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>{opt.label}</Text>
-                                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 1 }}>{opt.desc}</Text>
+                                            <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '600' }}>{opt.label}</Text>
+                                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 1 }}>{opt.desc}</Text>
                                         </View>
                                         {/* Toggle */}
                                         <View style={{
                                             width: 44, height: 26, borderRadius: 13,
-                                            backgroundColor: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
+                                            backgroundColor: isActive ? EDITORIAL.grana : EDITORIAL.hairlineStrong,
                                             justifyContent: 'center',
                                             paddingHorizontal: 2,
                                         }}>
@@ -1160,22 +1166,22 @@ export default function BarDashboardScreen() {
                         onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }}
                     />
                     <View style={{
-                        width: '90%', maxWidth: 420, borderRadius: 18,
-                        backgroundColor: '#3a0018',
-                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+                        width: '90%', maxWidth: 420, borderRadius: 8,
+                        backgroundColor: EDITORIAL.card,
+                        borderWidth: 1, borderColor: EDITORIAL.hairline,
                     }}>
                         {/* Capçalera */}
                         <View style={{
                             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                             paddingHorizontal: 20, paddingVertical: 16,
-                            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
+                            borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: EDITORIAL.hairline,
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Feather name="credit-card" size={20} color="#FFFFFF" />
-                                <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Canviar pla</Text>
+                                <AppIcon name="credit-card" size={20} color="#FFFFFF" />
+                                <Text style={{ color: EDITORIAL.ink, fontSize: 18, fontWeight: '700' }}>Canviar pla</Text>
                             </View>
                             <TouchableOpacity onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }} style={styles.headerBtn}>
-                                <Feather name="x" size={18} color="rgba(255,255,255,0.7)" />
+                                <AppIcon name="x" size={18} color="rgba(255,255,255,0.7)" />
                             </TouchableOpacity>
                         </View>
 
@@ -1187,39 +1193,39 @@ export default function BarDashboardScreen() {
                                 gap: 16, marginBottom: 20,
                             }}>
                                 <View style={{
-                                    flex: 1, padding: 12, borderRadius: 12,
-                                    backgroundColor: 'rgba(255,255,255,0.06)',
-                                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+                                    flex: 1, padding: 12, borderRadius: 8,
+                                    backgroundColor: EDITORIAL.card,
+                                    borderWidth: 1, borderColor: EDITORIAL.hairline,
                                     alignItems: 'center',
                                 }}>
-                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>PLA ACTUAL</Text>
-                                    <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[billingCycle].label}</Text>
-                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 2 }}>{BILLING_PLANS[billingCycle].priceLabel}</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>PLA ACTUAL</Text>
+                                    <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[billingCycle].label}</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 2 }}>{BILLING_PLANS[billingCycle].priceLabel}</Text>
                                 </View>
-                                <Feather name="arrow-right" size={20} color="#FFFFFF" />
+                                <AppIcon name="arrow-right" size={20} color="#FFFFFF" />
                                 <View style={{
-                                    flex: 1, padding: 12, borderRadius: 12,
+                                    flex: 1, padding: 12, borderRadius: 8,
                                     backgroundColor: 'rgba(237,187,0,0.1)',
                                     borderWidth: 1, borderColor: 'rgba(237,187,0,0.3)',
                                     alignItems: 'center',
                                 }}>
-                                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>NOU PLA</Text>
-                                    <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[pendingBillingCycle].label}</Text>
-                                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginTop: 2 }}>{BILLING_PLANS[pendingBillingCycle].priceLabel}</Text>
+                                    <Text style={{ color: EDITORIAL.ink, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>NOU PLA</Text>
+                                    <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '700' }}>{BILLING_PLANS[pendingBillingCycle].label}</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 2 }}>{BILLING_PLANS[pendingBillingCycle].priceLabel}</Text>
                                 </View>
                             </View>
 
                             {/* Info de facturació */}
                             <View style={{
-                                padding: 14, borderRadius: 12,
-                                backgroundColor: 'rgba(255,255,255,0.04)',
+                                padding: 14, borderRadius: 8,
+                                backgroundColor: EDITORIAL.card,
                                 marginBottom: 16,
                             }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                    <Feather name="info" size={14} color="rgba(255,255,255,0.5)" style={{ marginRight: 8 }} />
-                                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' }}>Detalls del canvi</Text>
+                                    <AppIcon name="info" size={14} color="rgba(255,255,255,0.5)" style={{ marginRight: 8 }} />
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, fontWeight: '600' }}>Detalls del canvi</Text>
                                 </View>
-                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 18 }}>
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, lineHeight: 18 }}>
                                     {`• Nou preu: ${BILLING_PLANS[pendingBillingCycle].totalLabel}\n`}
                                     {BILLING_PLANS[pendingBillingCycle].saveYear > 0
                                         ? `• Estalvies ${BILLING_PLANS[pendingBillingCycle].saveYear}€/any respecte al pla mensual\n`
@@ -1231,26 +1237,26 @@ export default function BarDashboardScreen() {
 
                             {/* Icona de seguretat Stripe */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
-                                <Feather name="lock" size={12} color="rgba(255,255,255,0.35)" />
-                                <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>Pagament segur via Stripe</Text>
+                                <AppIcon name="lock" size={12} color="rgba(255,255,255,0.35)" />
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12 }}>Pagament segur via Stripe</Text>
                             </View>
 
                             {/* Botons */}
                             <View style={{ flexDirection: 'row', gap: 10 }}>
                                 <TouchableOpacity
                                     style={{
-                                        flex: 1, paddingVertical: 14, borderRadius: 12,
-                                        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                        flex: 1, paddingVertical: 14, borderRadius: 8,
+                                        borderWidth: 1, borderColor: EDITORIAL.hairline,
                                         alignItems: 'center',
                                     }}
                                     onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600', fontSize: 14 }}>Cancel·lar</Text>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 14 }}>Cancel·lar</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={{
-                                        flex: 2, paddingVertical: 14, borderRadius: 12,
+                                        flex: 2, paddingVertical: 14, borderRadius: 8,
                                         backgroundColor: '#FFFFFF', alignItems: 'center',
                                         opacity: isChangingPlan ? 0.6 : 1,
                                     }}
@@ -1276,7 +1282,7 @@ export default function BarDashboardScreen() {
                                     {isChangingPlan ? (
                                         <ActivityIndicator color="white" size="small" />
                                     ) : (
-                                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>Confirmar canvi</Text>
+                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>Confirmar canvi</Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -1299,8 +1305,8 @@ export default function BarDashboardScreen() {
                         onPress={() => { if (!isDeleting) { setShowDeleteModal(false); setDeleteStep(1); setDeleteConfirmText(''); } }}
                     />
                     <View style={{
-                        width: '90%', maxWidth: 420, borderRadius: 18,
-                        backgroundColor: '#3a0018',
+                        width: '90%', maxWidth: 420, borderRadius: 8,
+                        backgroundColor: EDITORIAL.card,
                         borderWidth: 1, borderColor: 'rgba(165,0,68,0.4)',
                     }}>
                         {/* Capçalera */}
@@ -1310,14 +1316,14 @@ export default function BarDashboardScreen() {
                             borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(165,0,68,0.3)',
                         }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Feather name="alert-triangle" size={20} color="#a50044" />
+                                <AppIcon name="alert-triangle" size={20} color="#a50044" />
                                 <Text style={{ color: '#a50044', fontSize: 18, fontWeight: '700' }}>
                                     {deleteStep === 1 ? 'Eliminar compte' : 'Confirmació final'}
                                 </Text>
                             </View>
                             {!isDeleting && (
                                 <TouchableOpacity onPress={() => { setShowDeleteModal(false); setDeleteStep(1); setDeleteConfirmText(''); }} style={styles.headerBtn}>
-                                    <Feather name="x" size={18} color="rgba(255,255,255,0.7)" />
+                                    <AppIcon name="x" size={18} color="rgba(255,255,255,0.7)" />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -1326,15 +1332,15 @@ export default function BarDashboardScreen() {
                         {deleteStep === 1 && (
                             <View style={{ paddingHorizontal: 20, paddingVertical: 20 }}>
                                 <View style={{
-                                    padding: 16, borderRadius: 14,
+                                    padding: 16, borderRadius: 8,
                                     backgroundColor: 'rgba(165,0,68,0.1)',
                                     borderWidth: 1, borderColor: 'rgba(165,0,68,0.2)',
                                     marginBottom: 20,
                                 }}>
-                                    <Text style={{ color: 'white', fontSize: 15, fontWeight: '600', marginBottom: 12 }}>
+                                    <Text style={{ color: EDITORIAL.ink, fontSize: 16, fontWeight: '600', marginBottom: 12 }}>
                                         Estàs segur que vols eliminar el teu compte?
                                     </Text>
-                                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 20 }}>
+                                    <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, lineHeight: 20 }}>
                                         Aquesta acció és <Text style={{ color: '#a50044', fontWeight: '700' }}>irreversible</Text> i comportarà:
                                     </Text>
                                     <View style={{ marginTop: 12 }}>
@@ -1345,8 +1351,8 @@ export default function BarDashboardScreen() {
                                             { icon: 'user-x', text: 'Eliminació permanent del compte' },
                                         ].map((item, i) => (
                                             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
-                                                <Feather name={item.icon as any} size={14} color="#a50044" style={{ marginRight: 10 }} />
-                                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, flex: 1 }}>{item.text}</Text>
+                                                <AppIcon name={item.icon as any} size={14} color="#a50044" style={{ marginRight: 10 }} />
+                                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, flex: 1 }}>{item.text}</Text>
                                             </View>
                                         ))}
                                     </View>
@@ -1355,18 +1361,18 @@ export default function BarDashboardScreen() {
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
                                     <TouchableOpacity
                                         style={{
-                                            flex: 1, paddingVertical: 14, borderRadius: 12,
-                                            borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                            flex: 1, paddingVertical: 14, borderRadius: 8,
+                                            borderWidth: 1, borderColor: EDITORIAL.hairline,
                                             alignItems: 'center',
                                         }}
                                         onPress={() => { setShowDeleteModal(false); setDeleteStep(1); }}
                                         activeOpacity={0.7}
                                     >
-                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600', fontSize: 14 }}>No, mantenir</Text>
+                                        <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 14 }}>No, mantenir</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={{
-                                            flex: 1, paddingVertical: 14, borderRadius: 12,
+                                            flex: 1, paddingVertical: 14, borderRadius: 8,
                                             backgroundColor: 'rgba(165,0,68,0.15)',
                                             borderWidth: 1, borderColor: 'rgba(165,0,68,0.3)',
                                             alignItems: 'center',
@@ -1383,22 +1389,22 @@ export default function BarDashboardScreen() {
                         {/* Pas 2: Confirmació escrivint ELIMINAR */}
                         {deleteStep === 2 && (
                             <View style={{ paddingHorizontal: 20, paddingVertical: 20 }}>
-                                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
                                     Per confirmar l'eliminació, escriu <Text style={{ color: '#a50044', fontWeight: '700' }}>ELIMINAR</Text> al camp de sota:
                                 </Text>
                                 <TextInput
                                     style={{
-                                        width: '100%', padding: 14, borderRadius: 12,
-                                        backgroundColor: 'rgba(255,255,255,0.06)',
+                                        width: '100%', padding: 14, borderRadius: 8,
+                                        backgroundColor: EDITORIAL.card,
                                         borderWidth: 1,
                                         borderColor: deleteConfirmText === 'ELIMINAR' ? 'rgba(165,0,68,0.5)' : 'rgba(255,255,255,0.1)',
-                                        color: 'white', fontSize: 16, fontWeight: '700',
-                                        textAlign: 'center', letterSpacing: 2,
+                                        color: EDITORIAL.ink, fontSize: 16, fontWeight: '700',
+                                        textAlign: 'center', letterSpacing: 0,
                                     }}
                                     value={deleteConfirmText}
                                     onChangeText={setDeleteConfirmText}
                                     placeholder="ELIMINAR"
-                                    placeholderTextColor="rgba(255,255,255,0.2)"
+                                    placeholderTextColor={EDITORIAL.inkMuted}
                                     autoCapitalize="characters"
                                     autoFocus
                                 />
@@ -1406,19 +1412,19 @@ export default function BarDashboardScreen() {
                                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
                                     <TouchableOpacity
                                         style={{
-                                            flex: 1, paddingVertical: 14, borderRadius: 12,
-                                            borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+                                            flex: 1, paddingVertical: 14, borderRadius: 8,
+                                            borderWidth: 1, borderColor: EDITORIAL.hairline,
                                             alignItems: 'center',
                                         }}
                                         onPress={() => { setDeleteStep(1); setDeleteConfirmText(''); }}
                                         disabled={isDeleting}
                                         activeOpacity={0.7}
                                     >
-                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600', fontSize: 14 }}>← Enrere</Text>
+                                        <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 14 }}>← Enrere</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={{
-                                            flex: 2, paddingVertical: 14, borderRadius: 12,
+                                            flex: 2, paddingVertical: 14, borderRadius: 8,
                                             backgroundColor: deleteConfirmText === 'ELIMINAR' ? '#a50044' : 'rgba(165,0,68,0.2)',
                                             alignItems: 'center',
                                             opacity: isDeleting ? 0.6 : 1,
@@ -1441,10 +1447,10 @@ export default function BarDashboardScreen() {
                                         {isDeleting ? (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                                 <ActivityIndicator color="white" size="small" />
-                                                <Text style={{ color: 'white', fontWeight: '600', fontSize: 14 }}>Eliminant...</Text>
+                                                <Text style={{ color: EDITORIAL.ink, fontWeight: '600', fontSize: 14 }}>Eliminant...</Text>
                                             </View>
                                         ) : (
-                                            <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>
+                                            <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>
                                                 Eliminar definitivament
                                             </Text>
                                         )}
