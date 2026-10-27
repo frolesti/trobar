@@ -56,6 +56,7 @@ export interface Bar {
     googlePlaceId?: string;
     /** Tier del bar: 'premium' = perfil de pagament amb pin destacat, 'free' = per defecte */
     tier?: 'free' | 'premium';
+    isTestData?: boolean;
 
     // ── Camps premium ──────────────────────────────────
     /** Xarxes socials del bar */

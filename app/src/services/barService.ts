@@ -1,34 +1,29 @@
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, query, where, limit as firestoreLimit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp, query, where, limit as firestoreLimit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Bar, BarAmenity } from '../models/Bar';
 import { OSMBar } from './osmService';
 import { executeRequest } from '../api/core';
 import { mapOSMTagsToAmenities } from './osmService';
 import { PlaceDetails, mapGooglePlaceTypesToAmenities, mergeAmenities } from './placesService';
+import { getBarCoordinates } from '../utils/barNavigation';
+import { barShowsMatch, isRegisteredBar } from '../utils/matchBroadcast';
 
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
-const mapDocToBar = (doc: any): Bar => {
+const mapDocToBar = (doc: any): Bar | null => {
     const data = doc.data();
-    
-    // Intentem obtenir lat/lng de diferents formats possibles (GeoPoint o camps solts)
-    let lat = 41.3874;
-    let lng = 2.1686;
-
-    if (data.location && data.location.latitude) {
-        lat = data.location.latitude;
-        lng = data.location.longitude;
-    } else if (data.latitude && data.longitude) {
-        lat = data.latitude;
-        lng = data.longitude;
+    const coordinates = getBarCoordinates(data);
+    if (!coordinates) {
+        console.warn('Bar omitted: missing valid coordinates', doc.id);
+        return null;
     }
 
     return {
         id: doc.id,
         name: data.name || doc.id, // Si no té nom, usem l'ID (ex: 'bar-mut')
         address: data.address || '',
-        latitude: lat,
-        longitude: lng,
-        rating: data.rating || 4.0,
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        rating: data.rating ?? 4.0,
         isOpen: data.isOpen ?? true,
         image: (data.image && data.image.startsWith('http')) ? data.image : undefined, 
         tags: data.amenities || [], // Mapegem 'amenities' a 'tags'
@@ -37,6 +32,7 @@ const mapDocToBar = (doc: any): Bar => {
         usuallyShowsBarca: data.usuallyShowsBarca ?? false,
         googlePlaceId: data.googlePlaceId || undefined,
         tier: data.tier || 'free',
+        isTestData: data.isTestData === true,
         // Camps premium
         socialMedia: data.socialMedia || undefined,
         description: data.description || undefined,
@@ -62,6 +58,7 @@ export const fetchBars = async (): Promise<Bar[]> => {
         
         querySnapshot.forEach((doc) => {
             const bar = mapDocToBar(doc);
+            if (!bar) return;
             if (!seenNames.has(bar.name)) {
                 seenNames.add(bar.name);
                 bars.push(bar);
@@ -105,6 +102,7 @@ export const fetchBarsInBounds = async (
         const seen = new Set<string>();
         snap1.forEach((d) => {
             const bar = mapDocToBar(d);
+            if (!bar) return;
             if (bar.longitude < minLng || bar.longitude > maxLng) return;
             if (seen.has(bar.id)) return;
             seen.add(bar.id);
@@ -119,31 +117,23 @@ export const fetchBarsInBounds = async (
 
 /**
  * Retorna el set d'IDs de partits que almenys un bar emet.
- * - Bars amb `usuallyShowsBarca: true` → compten per TOTS els matchIds passats
- * - Bars amb `broadcastingMatches` → compten només pels IDs explícits
+ * El proper partit global és elegible per a tots els bars registrats.
+ * La resta requereix una emissió explícita.
  */
-export const fetchBroadcastMatchIds = async (allMatchIds: string[]): Promise<Set<string>> => {
+export const fetchBroadcastMatchIds = async (allMatchIds: string[], nextMatchId: string | null = null): Promise<Set<string>> => {
     const result = await executeRequest(async () => {
         const querySnapshot = await getDocs(collection(db, 'bars'));
         const broadcastIds = new Set<string>();
-        let hasUsuallyShowsBarca = false;
-
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            // Bars que "normalment fan el Barça" → compten per tots els partits
-            if (data.usuallyShowsBarca === true) {
-                hasUsuallyShowsBarca = true;
-            }
-            // Bars verificats amb partits explícits
+            if (!isRegisteredBar({ ...data, id: doc.id })) return;
+            if (nextMatchId) broadcastIds.add(nextMatchId);
             if (Array.isArray(data.broadcastingMatches)) {
-                data.broadcastingMatches.forEach((id: string) => broadcastIds.add(id));
+                data.broadcastingMatches.forEach((id: string) => {
+                    if (allMatchIds.includes(id)) broadcastIds.add(id);
+                });
             }
         });
-
-        // Si hi ha algun bar "usually shows Barça", tots els partits tenen emissor
-        if (hasUsuallyShowsBarca) {
-            allMatchIds.forEach(id => broadcastIds.add(id));
-        }
 
         return broadcastIds;
     }, 'fetchBroadcastMatchIds');
@@ -153,13 +143,9 @@ export const fetchBroadcastMatchIds = async (allMatchIds: string[]): Promise<Set
 
 /**
  * Retorna els bars que emeten un partit concret.
- * Només bars premium que han confirmat explícitament l'emissió del matchId
- * a la seva llista `broadcastingMatches`.
- * 
- * Nota: `usuallyShowsBarca` ja NO s'usa aquí — els bars han d'anunciar
- * cada partit individualment per aparèixer en el flux "Trobar bars".
+ * Aplica la mateixa elegibilitat que el botó i el filtre del mapa.
  */
-export const fetchBarsForMatch = async (matchId: string): Promise<Bar[]> => {
+export const fetchBarsForMatch = async (matchId: string, nextMatchId: string | null = null): Promise<Bar[]> => {
     const result = await executeRequest(async () => {
         const querySnapshot = await getDocs(collection(db, 'bars'));
         const matchBars: Bar[] = [];
@@ -167,14 +153,9 @@ export const fetchBarsForMatch = async (matchId: string): Promise<Bar[]> => {
 
         querySnapshot.forEach((doc) => {
             const data = doc.data();
-            // Només bars premium que han confirmat que emeten AQUEST partit
-            const isPremium = data.tier === 'premium';
-            const broadcastsThisMatch =
-                Array.isArray(data.broadcastingMatches) &&
-                data.broadcastingMatches.includes(matchId);
-            
-            if (isPremium && broadcastsThisMatch) {
+            if (barShowsMatch({ ...data, id: doc.id }, matchId, nextMatchId)) {
                 const bar = mapDocToBar(doc);
+                if (!bar) return;
                 if (!seenNames.has(bar.name)) {
                     seenNames.add(bar.name);
                     matchBars.push(bar);
@@ -197,28 +178,37 @@ export const fetchBarById = async (id: string): Promise<Bar | null> => {
     return result.data;
 };
 
-export const addUserReportedBar = async (osmBar: OSMBar, userId: string): Promise<void> => {
-    // @ts-ignore
-    return await executeRequest(async () => {
-        const barRef = doc(db, 'bars', osmBar.id); // Usar l'ID d'OSM com a ID de document
-        await setDoc(barRef, {
-            name: osmBar.name,
-            location: { latitude: osmBar.lat, longitude: osmBar.lon },
-            address: '',
-            amenities: osmBar.amenities && osmBar.amenities.length > 0
-                ? osmBar.amenities
-                : mapOSMTagsToAmenities(osmBar.tags || {}),
-            source: 'user_reported',
-            reportedBy: userId,
-            createdAt: serverTimestamp(),
-            isActive: false, // "estat desactivat" — Cal confirmació d'admin/propietari per ser verificat complet
-            isOpen: true,
-            rating: 0, // Sense puntuació encara
-            usuallyShowsBarca: true, // Reportat per un usuari → compta per tots els partits
-            broadcastingMatches: [],
-        }, { merge: true });
-    }, 'addUserReportedBar').then(res => {
-        if (!res.success) throw res.error;
+export const addUserReportedBar = async (osmBar: OSMBar, userId?: string): Promise<void> => {
+    await executeRequest(async () => {
+        const barRef = doc(db, 'bars', osmBar.id);
+        const amenities = osmBar.amenities && osmBar.amenities.length > 0
+            ? osmBar.amenities
+            : mapOSMTagsToAmenities(osmBar.tags || {});
+
+        await runTransaction(db, async (transaction) => {
+            const existingBar = await transaction.get(barRef);
+            if (existingBar.exists()) {
+                transaction.update(barRef, { usuallyShowsBarca: true });
+                return;
+            }
+
+            transaction.set(barRef, {
+                name: osmBar.name,
+                location: { latitude: osmBar.lat, longitude: osmBar.lon },
+                address: '',
+                amenities,
+                source: 'user_reported',
+                ...(userId ? { reportedBy: userId } : {}),
+                createdAt: serverTimestamp(),
+                isActive: false,
+                isOpen: true,
+                rating: 0,
+                usuallyShowsBarca: true,
+                broadcastingMatches: [],
+            });
+        });
+    }, 'addUserReportedBar').then((result) => {
+        if (!result.success) throw new Error(result.error || 'No s’ha pogut desar el report del bar.');
     });
 };
 
