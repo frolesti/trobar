@@ -115,8 +115,10 @@ function getFriendlyAuthError(err: unknown): string {
       return "Format d'email invàlid"
     case 'auth/weak-password':
       return 'Contrasenya massa feble. Fes-la més robusta (8+ caràcters, majúscula, número i símbol).'
+    case 'auth/admin-restricted-operation':
+      return 'Firebase té restringida la creació de comptes. Revisa Authentication > Settings > User actions i habilita Create (sign-up).'
     case 'auth/operation-not-allowed':
-      return 'El registre amb email/contrasenya no està habilitat al projecte Firebase.'
+      return 'El proveïdor email/contrasenya no està habilitat a Authentication > Sign-in method del projecte Firebase.'
     case 'auth/too-many-requests':
       return 'Massa intents seguits. Espera uns minuts i torna-ho a provar.'
     case 'auth/network-request-failed':

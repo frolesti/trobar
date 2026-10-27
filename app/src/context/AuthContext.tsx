@@ -14,22 +14,27 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { getUserProfile, UserProfile, deleteUserProfile } from '../services/userService';
-import { Platform, Alert, AppState } from 'react-native';
+import { Platform, Alert, TurboModuleRegistry, AppState } from 'react-native';
 import { registerPushNotifications, unregisterPushNotifications, clearNotificationArea } from '../services/notificationService';
+import Constants from 'expo-constants';
 import { showAlert } from '../components/AlertBanner';
 import { executeRequest, executeOrThrow } from '../api/core';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as AuthSession from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
 
 // Configurem l'idioma de les notificacions d'auth a Català
 auth.languageCode = 'ca';
+const GOOGLE_WEB_CLIENT_ID = '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com';
+const EXPO_GOOGLE_PROXY_REDIRECT_URI = 'https://auth.expo.io/@frolesti/trobar-ios';
 
 interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   loginEmail: (email: string, pass: string) => Promise<void>;
   registerEmail: (email: string, pass: string, name: string) => Promise<void>;
-  loginGoogle: () => Promise<void>;
+  loginGoogle: () => Promise<boolean>;
   loginApple: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -45,12 +50,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAndSetUser = async (firebaseUser: FirebaseUser) => {
+    const defaultAvatar = firebaseUser.photoURL || firebaseUser.providerData?.find(provider => provider.providerId === 'google.com')?.photoURL || undefined;
     try {
         // Reforçar seguretat: refrescar el token assegura que tenim les últimes claims i l'usuari no està desactivat
         // Aquest token s'utilitza internament per les SDKs de Firebase (Firestore/Storage) per validar la seguretat
         await firebaseUser.getIdToken(true);
+        const tokenResult = await firebaseUser.getIdTokenResult();
 
         const firestoreProfile = await getUserProfile(firebaseUser.uid);
+        const roleClaim = tokenResult.claims.role;
         
         const combinedUser: UserProfile = {
             id: firebaseUser.uid,
@@ -58,10 +66,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             surname: firestoreProfile?.surname || '',
             email: firebaseUser.email || '',
             // Prioritzar avatar de Firestore si existeix; si no, foto de Google; si no, undefined
-            avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : (firebaseUser.photoURL || undefined),
+            avatar: (firestoreProfile?.avatar) ? firestoreProfile.avatar : defaultAvatar,
             favoriteTeam: firestoreProfile?.favoriteTeam,
             favoriteSport: firestoreProfile?.favoriteSport,
-            role: firestoreProfile?.role,
+            role: firestoreProfile?.role || (roleClaim === 'bar_owner' || roleClaim === 'admin' ? roleClaim : undefined),
             ownedBars: firestoreProfile?.ownedBars,
         };
         setUser(combinedUser);
@@ -73,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             name: firebaseUser.displayName || 'Usuari',
             surname: '',
             email: firebaseUser.email || '',
-            avatar: firebaseUser.photoURL || undefined
+            avatar: defaultAvatar
         });
     }
   };
@@ -144,10 +152,95 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const loginGoogleWithExpoProxy = async (): Promise<boolean> => {
+      const proxyRedirectUri = EXPO_GOOGLE_PROXY_REDIRECT_URI;
+      const appReturnUrl = AuthSession.getDefaultReturnUrl('google');
+      const nonce = Crypto.randomUUID();
+      const discovery = {
+          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+      };
+      const request = new AuthSession.AuthRequest({
+          clientId: GOOGLE_WEB_CLIENT_ID,
+          redirectUri: proxyRedirectUri,
+          responseType: AuthSession.ResponseType.IdToken,
+          scopes: ['openid', 'email', 'profile'],
+          usePKCE: false,
+          prompt: AuthSession.Prompt.SelectAccount,
+          extraParams: { nonce },
+      });
+
+      const googleAuthUrl = await request.makeAuthUrlAsync(discovery);
+        console.info('[GoogleAuth] OAuth request', {
+          clientId: GOOGLE_WEB_CLIENT_ID,
+          redirectUri: proxyRedirectUri,
+        });
+      const proxyStartUrl = new URL(`${proxyRedirectUri.replace(/\/$/, '')}/start`);
+      proxyStartUrl.searchParams.set('authUrl', googleAuthUrl);
+      proxyStartUrl.searchParams.set('returnUrl', appReturnUrl);
+
+      const browserResult = await WebBrowser.openAuthSessionAsync(
+          proxyStartUrl.toString(),
+          appReturnUrl,
+      );
+      if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') return false;
+      if (browserResult.type !== 'success') {
+          throw new Error('No s’ha pogut completar l’inici de sessió amb Google.');
+      }
+
+      const result = request.parseReturnUrl(browserResult.url);
+      if (result.type === 'error') {
+          throw new Error(result.error?.description || 'Google ha rebutjat l’inici de sessió.');
+      }
+        if (result.type !== 'success') {
+          throw new Error('Google no ha completat l’autenticació. Torna-ho a provar.');
+        }
+
+      const idToken = result.params.id_token;
+      if (!idToken) {
+          throw new Error('Google no ha retornat cap ID token. Comprova que el redirect auth.expo.io estigui autoritzat al client OAuth web.');
+      }
+
+      const encodedPayload = idToken.split('.')[1];
+      if (!encodedPayload) throw new Error('El ID token retornat per Google no és vàlid.');
+      const base64Payload = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+      const decodedPayload = globalThis.atob(base64Payload.padEnd(Math.ceil(base64Payload.length / 4) * 4, '='));
+      const jsonPayload = decodeURIComponent(Array.from(decodedPayload, (char) =>
+          `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
+      ).join(''));
+      const tokenClaims = JSON.parse(jsonPayload);
+      if (tokenClaims.nonce !== nonce) {
+          throw new Error('La verificació de seguretat del login de Google no coincideix. Torna-ho a provar.');
+      }
+
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+      return true;
+  };
+
   // Nota: Eliminem els Alerts interns. La UI (LoginModal) s'encarrega de mostrar l'error que llancem.
-  const loginGoogle = async () => {
+  const loginGoogle = async (): Promise<boolean> => {
       setIsLoading(true);
       try {
+        if (Platform.OS !== 'web' && !TurboModuleRegistry.get('RNGoogleSignin')) {
+        const startedAt = Date.now();
+        try {
+          const signedIn = await loginGoogleWithExpoProxy();
+          if (signedIn) {
+            console.log(`[API OK] loginGoogleExpoProxy ${Date.now() - startedAt}ms`);
+          } else {
+            console.log(`[API CANCEL] loginGoogleExpoProxy ${Date.now() - startedAt}ms`);
+          }
+          return signedIn;
+        } catch (error: any) {
+          console.error('[API FAIL] loginGoogleExpoProxy:', {
+            name: error?.name,
+            message: error?.message,
+            code: error?.code,
+            status: error?.status,
+          });
+          throw error;
+        }
+        }
+
         await executeOrThrow(async () => {
             // Web: utilitzem el popup de Firebase Auth
             if (Platform.OS === 'web') {
@@ -159,8 +252,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             // Flux natiu Android/iOS via Google Play Services
             const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+
             GoogleSignin.configure({
-              webClientId: '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com',
+              webClientId: GOOGLE_WEB_CLIENT_ID,
             });
 
             // 1. Comprovar si Google Play Services està disponible
@@ -179,6 +273,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const credential = GoogleAuthProvider.credential(idToken);
                 await signInWithCredential(auth, credential);
         }, 'loginGoogle');
+        return true;
       } finally {
           setIsLoading(false);
       }
@@ -199,7 +294,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (Platform.OS === 'ios') {
             const isAvailable = await AppleAuthentication.isAvailableAsync();
             if (!isAvailable) {
-              throw new Error("Apple Authentication is not available on this device.");
+              const runtime = {
+                executionEnvironment: Constants.executionEnvironment,
+                appOwnership: Constants.appOwnership,
+              };
+              console.error('[AppleAuth] Native module unavailable', runtime);
+              throw new Error(
+                `Apple Sign-In no està disponible en aquest runtime iOS (${runtime.executionEnvironment}, ownership: ${runtime.appOwnership ?? 'none'}). El mòdul és inclòs a Expo Go SDK 57; comprova el runtime registrat al log i que Expo Go estigui actualitzat.`,
+              );
             }
 
             // 1. Generar nonce

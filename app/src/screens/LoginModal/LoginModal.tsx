@@ -1,19 +1,11 @@
+import { EDITORIAL } from '../../theme/editorialTheme';
 import React, { useEffect, useState, useRef } from 'react';
-import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    PanResponder,
-    Image,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, TextInput, TouchableOpacity, View, PanResponder, Image } from 'react-native';
+import Text from '../../components/AppText';
 import { LoadingIndicator } from '../../components/LoadingIndicator';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Feather, AntDesign, Ionicons } from '@expo/vector-icons';
+import AppIcon from '../../components/AppIcon';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
@@ -22,13 +14,15 @@ import { auth as fbAuth } from '../../config/firebase';
 import { fetchSignInMethodsForEmail, sendPasswordResetEmail } from 'firebase/auth';
 import { showAlert } from '../../components/AlertBanner';
 import styles from './LoginModal.styles';
+import { useIsFocused } from '@react-navigation/native';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Login'>;
 };
 
 const LoginModal = ({ navigation }: Props) => {
-    const { loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
+    const { user, loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
+    const isFocused = useIsFocused();
 
     // Gest de lliscar a la dreta per tornar enrere
     const panResponder = useRef(
@@ -53,6 +47,12 @@ const LoginModal = ({ navigation }: Props) => {
     const [localError, setLocalError] = useState<string | null>(null);
     const [authInProgress, setAuthInProgress] = useState(false);
 
+    useEffect(() => {
+        if (isFocused && user && !isLoading && !authInProgress) {
+            navigation.replace(user.role === 'bar_owner' ? 'BarDashboard' : 'Map');
+        }
+    }, [isFocused, user?.id, user?.role, isLoading, authInProgress, navigation]);
+
     // Estat del formulari
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -75,15 +75,16 @@ const LoginModal = ({ navigation }: Props) => {
                 return;
             }
         }
-        navigation.goBack();
+        if (navigation.canGoBack()) navigation.goBack();
+        else navigation.replace('Map');
     };
 
     const handleGoogleLogin = async () => {
         setLocalError(null);
         setAuthInProgress(true);
         try {
-            await loginGoogle();
-            await postLoginRedirect();
+            const signedIn = await loginGoogle();
+            if (signedIn) await postLoginRedirect();
         } catch (e: any) {
             setLocalError(getUserFriendlyError(e));
         } finally {
@@ -227,7 +228,7 @@ const LoginModal = ({ navigation }: Props) => {
 
     const renderVerificationMessage = () => (
         <View style={{ width: '100%', alignItems: 'center' }}>
-            <Feather name="mail" size={64} color={SKETCH_THEME.colors.primary} style={{ marginBottom: 20 }} />
+            <AppIcon name="mail" size={64} color={SKETCH_THEME.colors.primary} style={{ marginBottom: 20 }} />
             <Text style={styles.title}>Revisa el teu correu</Text>
             <Text style={[styles.subtitle, { marginBottom: 30 }]}>
                 T'hem enviat un missatge de confirmació a <Text style={{ fontWeight: 'bold' }}>{email}</Text>. Recorda mirar la carpeta de correu brossa si no el trobes!
@@ -307,7 +308,7 @@ const LoginModal = ({ navigation }: Props) => {
 
             {!isRegistering && (
                 <TouchableOpacity onPress={handlePasswordReset} style={[styles.inlineLink, { marginTop: 4 }]}>
-                    <Text style={[styles.inlineLinkText, { fontSize: 13 }]}>
+                    <Text style={[styles.inlineLinkText, { fontSize: 14 }]}>
                         Has oblidat la contrasenya?
                     </Text>
                 </TouchableOpacity>
@@ -351,7 +352,7 @@ const LoginModal = ({ navigation }: Props) => {
                                 }
                             }}
                         >
-                            <Feather name="arrow-left" size={16} color={SKETCH_THEME.colors.textMuted} />
+                            <AppIcon name="arrow-left" size={16} color={EDITORIAL.onBackgroundMuted} />
                             <Text style={styles.closeText}>Tornar</Text>
                         </TouchableOpacity>
                     </View>
@@ -387,7 +388,7 @@ const LoginModal = ({ navigation }: Props) => {
                                     disabled={isLoading}
                                     activeOpacity={0.85}
                                 >
-                                    <AntDesign name="google" size={20} color="#EA4335" style={styles.buttonIcon} />
+                                    <AppIcon name="google" size={20} color="#EA4335" style={styles.buttonIcon} />
                                     <Text style={[styles.buttonText, { color: SKETCH_THEME.colors.text }]}>
                                         {isLoading ? 'Carregant…' : 'Continuar amb Google'}
                                     </Text>
@@ -399,7 +400,7 @@ const LoginModal = ({ navigation }: Props) => {
                                     disabled={isLoading}
                                     activeOpacity={0.85}
                                 >
-                                    <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+                                    <AppIcon name="logo-apple" size={20} color="#FFFFFF" style={styles.buttonIcon} />
                                     <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>Continuar amb Apple</Text>
                                 </TouchableOpacity>
 
@@ -439,19 +440,19 @@ const LoginModal = ({ navigation }: Props) => {
                     </View>
                 </View>
             )}
-            <StatusBar style="dark" />
+            <StatusBar style="light" />
 
             {/* Overlay de bloqueig durant autenticació externa */}
             {authInProgress && (
                 <View style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(255,255,255,0.85)',
+                    backgroundColor: EDITORIAL.background,
                     justifyContent: 'center', alignItems: 'center', zIndex: 100,
                 }}>
                     <LoadingIndicator size={100} />
                     <Text style={{
-                        marginTop: 16, fontSize: 16, fontFamily: 'Lora',
-                        color: SKETCH_THEME.colors.text, textAlign: 'center',
+                        marginTop: 16, fontSize: 16, fontFamily: EDITORIAL.fontRegular,
+                        color: EDITORIAL.onBackground, textAlign: 'center',
                     }}>Iniciant sessió...</Text>
                 </View>
             )}
