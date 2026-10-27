@@ -1,10 +1,11 @@
+import { EDITORIAL } from '../theme/editorialTheme';
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, Platform } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, TouchableOpacity, Image, Platform } from 'react-native';
+import Text from './AppText';
+import AppIcon from './AppIcon';
 import { SKETCH_THEME } from '../theme/sketchTheme';
 import { Bar } from '../models/Bar';
 
-const DEFAULT_BAR_IMAGE = require('../../assets/img/bar-fallout.jpg');
 
 interface BarListItemProps {
     bar: Bar;
@@ -23,7 +24,7 @@ const getBarImageSource = (img: string | undefined | null) => {
     if (img && typeof img === 'string' && img.startsWith('http') && img !== 'null' && img !== 'undefined' && img.trim() !== '') {
         return { uri: img };
     }
-    return DEFAULT_BAR_IMAGE;
+    return null;
 };
 
 const BarListItem: React.FC<BarListItemProps> = ({
@@ -33,14 +34,15 @@ const BarListItem: React.FC<BarListItemProps> = ({
     imageError,
     onImageError,
 }) => {
+    const imageSource = imageError ? null : getBarImageSource(bar.gallery?.[0] || bar.image);
     return (
         <TouchableOpacity
             style={{
                 flexDirection: 'row', padding: 10, marginBottom: 8,
-                backgroundColor: SKETCH_THEME.colors.bg, borderRadius: 12,
-                borderWidth: 1, borderColor: '#D7CCC8',
+                backgroundColor: EDITORIAL.card, borderRadius: 8,
+                borderWidth: 1, borderColor: EDITORIAL.hairline,
                 ...Platform.select({
-                    web: { boxShadow: '2px 2px 0px rgba(62,39,35,0.1)' },
+                    web: { boxShadow: '0 2px 8px rgba(32,38,49,0.06)' },
                     default: {
                         shadowColor: '#3E2723', shadowOffset: { width: 1, height: 1 },
                         shadowOpacity: 0.1, shadowRadius: 2, elevation: 2
@@ -49,44 +51,44 @@ const BarListItem: React.FC<BarListItemProps> = ({
             }}
             onPress={onPress}
         >
-            <Image
-                source={imageError ? DEFAULT_BAR_IMAGE : getBarImageSource(bar.image)}
-                style={{ width: 60, height: 60, borderRadius: 8, backgroundColor: '#eee', borderWidth: 1, borderColor: '#D7CCC8' }}
+            {imageSource ? <Image
+                source={imageSource}
+                style={{ width: 80, height: 88, borderRadius: 8, backgroundColor: EDITORIAL.paperAlt }}
                 resizeMode="cover"
                 onError={onImageError}
-            />
+            /> : <View style={{ width: 80, height: 88, borderRadius: 8, backgroundColor: EDITORIAL.granaSoft, alignItems: 'center', justifyContent: 'center' }}><AppIcon name="tv" size={40} /></View>}
             <View style={{ marginLeft: 12, justifyContent: 'center', flex: 1 }}>
                 <Text style={{
-                    fontWeight: 'bold', fontSize: 16, fontFamily: 'Lora',
+                    fontWeight: 'bold', fontSize: 22, fontFamily: EDITORIAL.fontSport,
                     color: SKETCH_THEME.colors.text, marginBottom: 2
                 }}>
                     {getCleanBarName(bar.name)}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Feather name="map-pin" size={10} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 4 }} />
-                    <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora' }}>
+                    <AppIcon name="map-pin" size={10} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 4 }} />
+                    <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.textMuted, fontFamily: EDITORIAL.fontRegular }}>
                         {distanceKm.toFixed(1)} km
                     </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialCommunityIcons name="star" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
-                    <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: 'Lora', fontWeight: 'bold' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                    <AppIcon name="star" size={14} color="#FFFFFF" style={{ marginRight: 2 }} />
+                    <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.text, fontFamily: EDITORIAL.fontRegular, fontWeight: 'bold' }}>
                         {bar.rating}
                     </Text>
                     {(bar.usuallyShowsBarca || (bar.broadcastingMatches && bar.broadcastingMatches.length > 0)) && (
                         <View style={{
-                            flexDirection: 'row', alignItems: 'center', marginLeft: 12,
-                            backgroundColor: SKETCH_THEME.colors.primary,
-                            paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4
+                            flexDirection: 'row', alignItems: 'center', marginLeft: 4,
+                            backgroundColor: EDITORIAL.matchdaySoft,
+                            paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8
                         }}>
-                            <Feather name="tv" size={10} color="white" style={{ marginRight: 4 }} />
-                            <Text style={{ fontSize: 10, color: 'white', fontFamily: 'Lora', fontWeight: 'bold' }}>PARTIT</Text>
+                            <AppIcon name="tv" size={10} color="white" style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 12, color: EDITORIAL.ink, fontFamily: EDITORIAL.fontBold }}>PARTITS</Text>
                         </View>
                     )}
                 </View>
             </View>
             <View style={{ justifyContent: 'center' }}>
-                <Feather name="chevron-right" size={20} color={SKETCH_THEME.colors.accent} />
+                <AppIcon name="chevron-right" size={20} color={SKETCH_THEME.colors.accent} />
             </View>
         </TouchableOpacity>
     );

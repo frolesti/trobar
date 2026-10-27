@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
-import { View, Text, TextInput, TouchableOpacity, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, PanResponder, Animated, Easing, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, Image, Keyboard, ScrollView, Linking, useWindowDimensions, Animated, Easing, ActivityIndicator, Alert, StatusBar as RNStatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as Location from 'expo-location';
@@ -27,16 +27,20 @@ import { sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
 import { CUSTOM_MAP_STYLE } from '../../theme/mapStyle';
 
 import { executeRequest } from '../../api/core';
+import { fetchWithTimeout } from '../../api/core';
 
 import { fetchAllMatches, Match } from '../../services/matchService';
+import { barShowsMatch, nextBroadcastMatchId } from '../../utils/matchBroadcast';
 
-import { fetchBarsFromOSM, fetchBarsFromOSMBounds, OSMBar } from '../../services/osmService';
+import { discoverUnregisteredBars, OSMBar, OSMSearchError } from '../../services/osmService';
+import { openBarMaps } from '../../services/mapAppService';
 
 import { getUserPreferences } from '../../services/userService';
 
 import styles from './MapScreen.styles';
 
-import MatchCard from '../../components/MatchCard';
+import MatchCardStack from '../../components/MatchCardStack';
+import VerifiedBarBadge, { isVerifiedBar } from '../../components/VerifiedBarBadge';
 import { showAlert } from '../../components/AlertBanner';
 import { EDITORIAL } from '../../theme/editorialTheme';
 import { useClusters, ClusterablePoint } from '../../hooks/useClusters';
@@ -126,54 +130,35 @@ const decodePolyline = (encoded: string) => {
 const CAMP_NOU_FALLBACK = { latitude: 41.3809, longitude: 2.1228 };
 const EMULATOR_DEFAULT_LOC = { latitude: 37.4219983, longitude: -122.084 };
 const MAP_PIN_3D = require('../../../../assets/app/img/map-icons/map-pin-3d.png');
-const MAP_STAR_3D = require('../../../../assets/app/img/map-icons/star-3d.png');
 // Pin diferent (xinxeta) per a bars trobats a Google Maps encara no confirmats
 const MAP_PIN_SCANNED_3D = require('../../../../assets/app/img/map-icons/pin-scanned-3d.png');
 // Icones 3D consistents per als controls flotants i el badge de clúster
 const MAP_TARGET_3D = require('../../../../assets/app/img/map-icons/target-3d.png');
 const MAP_ZOOM_3D = require('../../../../assets/app/img/map-icons/zoom-3d.png');
-const MAP_SPHERE_3D = require('../../../../assets/app/img/map-icons/sphere-3d.png');
+const MAP_MAX_ZOOM = 18;
 
-/**
- * Marcador d'un bar registrat/premium al mapa.
- *
- * `tracksViewChanges` es manté a `true` fins que la imatge ha carregat de
- * veritat (`onLoad`): si el desactivéssim d'entrada, react-native-maps podria
- * capturar la instantània ABANS que el PNG estigués decodificat i el pin
- * quedaria en blanc fins que l'usuari fes zoom (forçant un remount). Un cop
- * carregat, el desactivem per rendiment, excepte quan està seleccionat
- * (canvia de mida i cal tornar-lo a capturar).
- */
 const ConfirmedBarMarker: React.FC<{
     bar: Bar;
     isPremium: boolean;
     isSelected: boolean;
+    zoom: number;
     onPress: () => void;
-}> = React.memo(({ bar, isPremium, isSelected, onPress }) => {
+}> = React.memo(({ bar, isPremium, isSelected, zoom = 15, onPress }) => {
     const [loaded, setLoaded] = useState(false);
+    const [crestLoaded, setCrestLoaded] = useState(false);
+    const scale = Math.min(1, Math.max(0.32, Math.pow(2, (zoom - 15) / 4)));
+    const size = Math.round((isSelected ? 64 : 52) * scale);
     return (
         <Marker
             coordinate={{ latitude: bar.latitude, longitude: bar.longitude }}
-            title={getCleanBarName(bar.name)}
             anchor={{ x: 0.5, y: 1.0 }}
-            tracksViewChanges={!loaded || isSelected}
+            tracksViewChanges={!loaded || (isVerifiedBar(bar) && !crestLoaded) || isSelected}
             onPress={onPress}
             zIndex={isPremium ? 100 : 1}
         >
-            <View style={styles.markerContainer}>
-                <Image
-                    source={MAP_PIN_3D}
-                    style={isSelected ? styles.markerPinSelected3d : styles.markerPin3d}
-                    resizeMode="contain"
-                    onLoad={() => setLoaded(true)}
-                />
-                {isPremium && (
-                    <Image
-                        source={MAP_STAR_3D}
-                        style={styles.markerPremiumStar3d}
-                        resizeMode="contain"
-                    />
-                )}
+            <View style={[styles.markerContainer, { width: size, height: size }]}>
+                <Image source={MAP_PIN_3D} style={[isSelected ? styles.markerPinSelected3d : styles.markerPin3d, { width: size, height: size }]} resizeMode="contain" onLoad={() => setLoaded(true)} />
+                <VerifiedBarBadge bar={bar} scale={scale} onLoad={() => setCrestLoaded(true)} />
             </View>
         </Marker>
     );
@@ -184,31 +169,24 @@ const ScannedBarMarker: React.FC<{
     osmBar: OSMBar;
     onPress: () => void;
 }> = React.memo(({ osmBar, onPress }) => {
-    const [loaded, setLoaded] = useState(false);
     return (
         <Marker
             coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
-            anchor={{ x: 0.5, y: 1.0 }}
-            tracksViewChanges={!loaded}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
             onPress={onPress}
             zIndex={1}
         >
-            <Image
-                source={MAP_PIN_SCANNED_3D}
-                style={styles.markerPinScanned}
-                resizeMode="contain"
-                onLoad={() => setLoaded(true)}
-            />
+            <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#8B8E93', borderWidth: 2, borderColor: '#FFFFFF' }} />
+            </View>
         </Marker>
     );
 });
 
 /**
- * Marcador de clúster: badge 3D (esfera + número), consistent amb la resta
- * d'icones del mapa. `muted` s'aplica als clústers de bars escanejats/no
- * confirmats (opacitat reduïda + anell gris). Igual que els pins de bar,
- * `tracksViewChanges` espera que la imatge carregui de veritat abans de
- * desactivar-se, si no el badge pot quedar en blanc fins a fer zoom.
+ * Bombolla numèrica dels clústers. Els bars escanejats es mostren en gris;
+ * els registats fan servir grana per diferenciar-los dels pins individuals.
  */
 const ClusterMarker: React.FC<{
     coordinate: { latitude: number; longitude: number };
@@ -218,29 +196,31 @@ const ClusterMarker: React.FC<{
     zIndex: number;
     onPress: () => void;
 }> = React.memo(({ coordinate, count, size, muted, zIndex, onPress }) => {
-    const [loaded, setLoaded] = useState(false);
     const label = count < 100 ? String(count) : `${Math.floor(count / 10) * 10}+`;
     return (
         <Marker
             coordinate={coordinate}
             anchor={{ x: 0.5, y: 0.5 }}
             zIndex={zIndex}
-            tracksViewChanges={!loaded}
+            tracksViewChanges={false}
             onPress={onPress}
         >
-            <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-                <Image
-                    source={MAP_SPHERE_3D}
-                    style={{ position: 'absolute', width: size, height: size, opacity: muted ? 0.55 : 1 }}
-                    resizeMode="contain"
-                    onLoad={() => setLoaded(true)}
-                />
-                {muted && (
-                    <View style={{
-                        position: 'absolute', width: size, height: size, borderRadius: size / 2,
-                        borderWidth: 2, borderColor: EDITORIAL.hairlineStrong,
-                    }} />
-                )}
+            <View style={{
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: muted ? '#64748B' : EDITORIAL.grana,
+                borderWidth: 2,
+                borderColor: '#FFFFFF',
+                opacity: muted ? 0.82 : 1,
+                shadowColor: '#0F1B2D',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 3,
+                elevation: 5,
+            }}>
                 <Text style={{
                     color: '#FFFFFF',
                     fontFamily: 'Lora_700Bold',
@@ -274,13 +254,9 @@ const getCleanBarName = (name: string) => {
 
 // -- Constants de posicionament de càmera i bafarada --
 
-// En seleccionar un bar, desplacem la càmera amunt perquè el pin quedi sota el centre.
+// En seleccionar un bar, desplacem la càmera perquè quedi espai per a la targeta sota el pin.
 
-// La bafarada es posiciona dinàmicament perquè el triangle apunti al pin.
-
-// Petit offset positiu: el centre de la càmera puja una mica al nord del bar
-// perquè el pin del bar quedi just per sobre de la bafarada inferior, no enrere.
-const CAMERA_LAT_OFFSET = 0.0008;
+// La bafarada es posiciona dinàmicament perquè el triangle de dalt apunti al pin.
 
 const MAP_REGION_DELTA   = 0.008;  // latitudeDelta de la regió animada
 
@@ -354,6 +330,7 @@ const MapScreen = () => {
     const [visibleBounds, setVisibleBounds] = useState<{ minLat: number, maxLat: number, minLng: number, maxLng: number } | null>(null);
 
     const [currentZoom, setCurrentZoom] = useState(14);
+    const [scanMessage, setScanMessage] = useState<string | null>(null);
     const lastRegionRef = useRef<{ latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null>(null);
 
 
@@ -506,9 +483,13 @@ const MapScreen = () => {
 
     
 
-    // Posició del mapa abans d'obrir ReportBar (per restaurar al tancar)
-    const preReportPositionRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
-    const shouldRestoreAfterReportRef = useRef(false);
+    // Regió exacta del mapa abans d'obrir ReportBar, per restaurar-la en qualsevol tancament.
+    const preReportPositionRef = useRef<{
+        latitude: number;
+        longitude: number;
+        latitudeDelta: number;
+        longitudeDelta: number;
+    } | null>(null);
 
     // Animació d'instruccions
 
@@ -548,50 +529,6 @@ const MapScreen = () => {
     const bottomSheetTranslateY = useRef(new Animated.Value(500)).current; // Comença ocult
 
     const lastHeight = useRef(120);
-
-    // Resposta a lliscament des de la vora per navegar al Login (vora esquerra -> dreta)
-
-    const edgeSwipeResponder = useRef(
-
-        PanResponder.create({
-
-            onMoveShouldSetPanResponder: (evt, gestureState) => {
-
-                // Ha de començar a la vora (x < 50) I ser un lliscament a la dreta (dx > 20)
-
-                // No usem Capture perquè volem cedir a les vistes de scroll internes si cal,
-
-                // però com que és absolut, no hauria de ser problema.
-
-                // Usem pageX per a coordenades absolutes de pantalla.
-
-                return evt.nativeEvent.pageX < 60 && gestureState.dx > 10 && Math.abs(gestureState.dy) < Math.abs(gestureState.dx);
-
-            },
-
-            onPanResponderMove: () => {
-
-                // Podríem animar alguna cosa aquí per donar retroalimentació
-
-            },
-
-            onPanResponderRelease: (_, gestureState) => {
-
-                if (gestureState.dx > 50) {
-
-                    // Lliscament vàlid
-
-                    navigation.navigate('Login');
-
-                }
-
-            }
-
-        })
-
-    ).current;
-
-
 
     // --- EFECTES ---
 
@@ -773,7 +710,6 @@ const MapScreen = () => {
     // (useFocusEffect no es dispara perquè ReportBar és un transparentModal)
     useEffect(() => {
         if (refreshParam) {
-            shouldRestoreAfterReportRef.current = true;
             loadBars();
         }
     }, [refreshParam]);
@@ -818,19 +754,29 @@ const MapScreen = () => {
 
     // Navegar a ReportBar centrant el mapa sobre el bar
     const navigateToReportBar = useCallback((osmBar: any) => {
-        shouldRestoreAfterReportRef.current = false;
-        // Guardar posici\u00f3 actual del mapa (per restaurar-la quan tornem)
-        if (mapRefNative.current) {
-            preReportPositionRef.current = {
-                lat: centerLocation?.latitude || osmBar.lat,
-                lng: centerLocation?.longitude || osmBar.lon,
-                zoom: currentZoom,
-            };
-            // Sense zoom for\u00e7at: nom\u00e9s una recol\u00b7locaci\u00f3 suau si el bar
-            // \u00e9s a prop, perqu\u00e8 ja \u00e9s visible. Evitem el "zoom massa b\u00e8stia".
-        }
+        const currentRegion = lastRegionRef.current;
+        const currentDelta = currentRegion?.latitudeDelta ?? radiusToLatDelta(searchRadiusKm);
+        const latitudeDelta = Math.min(Math.max(currentDelta * 1.35, MAP_REGION_DELTA), 0.04);
+        const longitudeDelta = (currentRegion?.longitudeDelta ?? currentDelta) * (latitudeDelta / currentDelta);
+        const originalRegion = currentRegion ?? {
+            latitude: centerLocation?.latitude ?? osmBar.lat,
+            longitude: centerLocation?.longitude ?? osmBar.lon,
+            latitudeDelta: currentDelta,
+            longitudeDelta: currentDelta,
+        };
+        preReportPositionRef.current = originalRegion;
+
+        // La targeta acaba prop del 70% de l'alçada; deixem el pin just a sota,
+        // amb una mica més de camp visible al voltant del local.
+        const pinTargetY = height * 0.72;
+        mapRefNative.current?.animateToRegion({
+            latitude: osmBar.lat + ((pinTargetY - height / 2) / height) * latitudeDelta,
+            longitude: osmBar.lon,
+            latitudeDelta,
+            longitudeDelta,
+        }, 420);
         navigation.navigate('ReportBar' as any, { osmBar });
-    }, [centerLocation, currentZoom, navigation]);
+    }, [centerLocation, height, navigation, searchRadiusKm]);
 
     // Restaurar posició del mapa quan ReportBar es tanca (detectat via canvi d'estat de navegació)
     useEffect(() => {
@@ -842,26 +788,16 @@ const MapScreen = () => {
             if (!hasReportBar && preReportPositionRef.current) {
                 const saved = preReportPositionRef.current;
                 preReportPositionRef.current = null;
-                if (!shouldRestoreAfterReportRef.current) {
-                    return;
-                }
-                shouldRestoreAfterReportRef.current = false;
-                // Restaurar posició amb un petit retard per permetre l'animació de tancament
+                // Restaurar també en cancel·lar, després que la bafarada s'hagi tancat.
                 setTimeout(() => {
                     if (mapRefNative.current) {
-                        const delta = 360 / (Math.pow(2, saved.zoom) * 256) * height;
-                        mapRefNative.current.animateToRegion({
-                            latitude: saved.lat,
-                            longitude: saved.lng,
-                            latitudeDelta: delta || MAP_REGION_DELTA,
-                            longitudeDelta: delta || MAP_REGION_DELTA,
-                        }, 500);
+                        mapRefNative.current.animateToRegion(saved, 420);
                     }
-                }, 300);
+                }, 220);
             }
         });
         return unsubscribe;
-    }, [navigation, height]);
+    }, [navigation]);
 
     useFocusEffect(
 
@@ -918,7 +854,7 @@ const MapScreen = () => {
         // Si hi ha un partit seleccionat (filtre overlay), pre-filtrar per bars que l'emeten
         const activeMatchId = selectedMatch?.id ?? null;
         const barsPool = activeMatchId
-            ? bars.filter(b => b.broadcastingMatches?.includes(activeMatchId))
+            ? bars.filter(bar => barShowsMatch(bar, activeMatchId, nextBroadcastMatchId(upcomingMatches)))
             : bars;
 
 
@@ -955,7 +891,7 @@ const MapScreen = () => {
 
 
 
-    }, [centerLocation, visibleBounds, bars, selectedMatch, currentZoom, activeFilters]);
+    }, [centerLocation, visibleBounds, bars, selectedMatch, upcomingMatches, currentZoom, activeFilters]);
 
 
 
@@ -1101,17 +1037,20 @@ const MapScreen = () => {
 
     async function handleManualScan() {
 
-        if (!centerLocation) return;
+        if (!centerLocation || isScanning) return;
 
         setIsScanning(true);
+        setScanMessage('Buscant bars sense registrar…');
 
         try {
 
             // Usar els bounds visibles del mapa si estan disponibles, sinó radi
 
-            const osmData = visibleBounds
-                ? await fetchBarsFromOSMBounds(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.maxLat, visibleBounds.maxLng)
-                : await fetchBarsFromOSM(centerLocation.latitude, centerLocation.longitude, searchRadiusKm);
+            const discovery = await discoverUnregisteredBars(
+                centerLocation.latitude, centerLocation.longitude, searchRadiusKm,
+                visibleBounds ? { south: visibleBounds.minLat, west: visibleBounds.minLng, north: visibleBounds.maxLat, east: visibleBounds.maxLng } : undefined,
+            );
+            const osmData = discovery.bars;
 
             
 
@@ -1134,6 +1073,9 @@ const MapScreen = () => {
                 return !alreadyExists;
 
             });
+            setScanMessage(discovery.limitedArea
+                ? `${newScanned.length} locals sense registrar · Zona central del mapa`
+                : `${newScanned.length} locals sense registrar · Pins grisos`);
 
             
 
@@ -1154,15 +1096,9 @@ const MapScreen = () => {
 
 
         } catch (e) {
-
-            console.error(e);
-
-            showAlert({
-                tone: 'error',
-                eyebrow: 'Servei no disponible',
-                message: "No hem pogut connectar amb el servidor de mapes. Torna-ho a provar d'aquí uns segons.",
-                duration: 6000,
-            });
+            setScanMessage(e instanceof OSMSearchError && e.code === 'OSM_AREA_TOO_LARGE'
+                    ? 'Apropa el mapa per cercar bars en una zona de menys de 10 km.'
+                    : 'Cerca no disponible. Conservem els locals carregats. Torna-ho a provar.');
 
         } finally {
 
@@ -1181,22 +1117,30 @@ const MapScreen = () => {
         if (scannedBars.length > 0) {
 
             setScannedBars([]); // Amagar/Netejar
+            setScanMessage(null);
 
         } else {
 
-            // Avisar de la convenció de marcadors grisos abans/durant la cerca
-            showAlert({
-                tone: 'info',
-                eyebrow: 'Avís',
-                message: "En gris trobar\u00e0s bars sense confirmar. Clica'ls per avisar si donen el partit!",
-                duration: 5000,
-                position: 'top',
-                offset: mobileDropdownTop + 12,
-            });
             handleManualScan(); // Cercar
 
         }
 
+    };
+
+    const getAlternativeMatch = (current: Match | null) => {
+        if (!current) return null;
+        const isWomen = (match: Match) => match.category === 'femenino' || /women|femen|liga f|uwcl|reina/i.test(`${match.competition?.name || ''} ${typeof match.homeTeam === 'string' ? match.homeTeam : match.homeTeam?.name || ''} ${typeof match.awayTeam === 'string' ? match.awayTeam : match.awayTeam?.name || ''}`);
+        return upcomingMatches.find(match => isWomen(match) !== isWomen(current) && match.date.getTime() > Date.now()) || null;
+    };
+
+    const toggleMatchCategory = () => {
+        const alternative = getAlternativeMatch(selectedMatch || nextMatch);
+        if (!alternative) {
+            showAlert({ tone: 'info', message: 'Encara no hi ha partits programats de l’altra categoria.' });
+            return;
+        }
+        setNextMatch(alternative);
+        if (selectedMatch) setSelectedMatch(alternative);
     };
 
     // 3. Carregar partits per al bàner
@@ -1430,14 +1374,16 @@ const MapScreen = () => {
          // Natiu: Centrar exactament sobre el bar
 
          if (selectedBar && mapRefNative.current) {
+                 const pinGap = 42;
+                 const reservedCardHeight = Math.max(barCardHeight, height * 0.5);
+                 const minPinY = mobileHeaderTop + 100;
+                 const maxPinY = height - reservedCardHeight - mobileFabBottom - pinGap;
+                 const targetPinY = Math.max(minPinY, Math.min(height * 0.31, maxPinY));
+                 const cameraLatOffset = ((targetPinY - height / 2) / height) * MAP_REGION_DELTA;
 
              const newRegion = {
-
-                // Desplacem el centre de la càmera "amunt" (valors de latitud positius)
-
-                // perquè el pin en si quedi arrossegat cap a la part "més baixa" de la pantalla
-
-                latitude: selectedBar.latitude + CAMERA_LAT_OFFSET,
+                     // El bar queda a la part superior del mapa per reservar espai a sota.
+                     latitude: selectedBar.latitude + cameraLatOffset,
 
                 longitude: selectedBar.longitude,
 
@@ -1449,8 +1395,7 @@ const MapScreen = () => {
 
              mapRefNative.current.animateToRegion(newRegion, 500);
 
-             // Un cop la càmera s'ha assentat, calculem on ha quedat el pin en
-             // pantalla per ancorar la targeta just a sobre seu.
+             // Un cop la càmera s'ha assentat, calculem on ha quedat el pin.
              setTimeout(() => { updateBarCardAnchor(); }, 520);
 
              // Obtenir info de ruta (distància / temps caminant)
@@ -1476,6 +1421,11 @@ const MapScreen = () => {
              getBarReviewStats(selectedBar.id)
                  .then(stats => setSelectedBarReviewStats(stats))
                  .catch(() => {});
+
+             if (selectedBar.isTestData) {
+                 setLoadingPlaceDetails(false);
+                 return;
+             }
 
              const cleanName = getCleanBarName(selectedBar.name);
 
@@ -1557,9 +1507,11 @@ const MapScreen = () => {
     const searchNominatim = useCallback(async (query: string) => {
         if (query.length < 3) { setGeoSuggestions([]); return; }
         try {
-            const res = await fetch(
+            const res = await fetchWithTimeout(
                 `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=es&accept-language=ca`,
-                { headers: { 'User-Agent': 'troBar/1.3 (contact@trobar.app)' } }
+                { headers: { 'User-Agent': 'troBar/1.3 (contact@trobar.app)' } },
+                'nominatim.search',
+                10000,
             );
             const data = await res.json();
             setGeoSuggestions(data);
@@ -1605,7 +1557,7 @@ const MapScreen = () => {
 
         await executeRequest(async () => {
 
-            const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+            const response = await fetchWithTimeout('https://routes.googleapis.com/directions/v2:computeRoutes', {
 
                 method: 'POST',
 
@@ -1635,7 +1587,7 @@ const MapScreen = () => {
 
                 })
 
-            });
+            }, 'routes.compute', 15000);
 
             const result = await response.json();
 
@@ -1653,7 +1605,7 @@ const MapScreen = () => {
 
                     : `${Math.floor(durationSeconds/60)} min`;
 
-                const distanceKm = (route.distanceMeters / 1000).toFixed(1) + ' km';
+                const distanceKm = ((route.distanceMeters ?? 0) / 1000).toFixed(1) + ' km';
 
                 setRouteInfo({ distance: distanceKm, duration: durationText });
 
@@ -1723,127 +1675,7 @@ const MapScreen = () => {
 
 
      const openExternalMaps = (bar: Bar) => {
-
-        const lat = bar.latitude;
-
-        const lng = bar.longitude;
-
-
-
-        // Origen (si disponible)
-
-        const originLat = userLocation?.coords.latitude ?? centerLocation?.latitude;
-
-        const originLng = userLocation?.coords.longitude ?? centerLocation?.longitude;
-
-
-
-        // URLs per a cada app
-
-        const googleUrl = (() => {
-            const destinationQuery = encodeURIComponent(
-                `${getCleanBarName(bar.name)}, ${bar.address || ''}`
-            );
-            let u = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}&travelmode=walking`;
-
-            if (bar.googlePlaceId) u += `&destination_place_id=${encodeURIComponent(bar.googlePlaceId)}`;
-
-            if (originLat != null && originLng != null) u += `&origin=${originLat},${originLng}`;
-
-            return u;
-
-        })();
-
-
-
-        const wazeUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
-
-
-
-        // Apple Maps (només iOS)
-
-        const appleMapsUrl = originLat != null
-
-            ? `http://maps.apple.com/?daddr=${lat},${lng}&saddr=${originLat},${originLng}&dirflg=w`
-
-            : `http://maps.apple.com/?daddr=${lat},${lng}&dirflg=w`;
-
-
-
-        if (Platform.OS === 'web') {
-
-            // Al web, Alert.alert amb m\u00faltiples bot\u00f3 no exposa callbacks; obrim
-
-            // directament Google Maps en una pestanya nova.
-
-            try {
-
-                if (typeof window !== 'undefined' && window.open) {
-
-                    window.open(googleUrl, '_blank', 'noopener,noreferrer');
-
-                } else {
-
-                    Linking.openURL(googleUrl);
-
-                }
-
-            } catch {
-
-                Linking.openURL(googleUrl);
-
-            }
-
-            return;
-
-        }
-
-
-
-        if (Platform.OS === 'ios') {
-
-            Alert.alert(
-
-                'Obrir amb…',
-
-                `Navegar a ${bar.name}`,
-
-                [
-
-                    { text: 'Google Maps', onPress: () => Linking.openURL(googleUrl) },
-
-                    { text: 'Apple Maps', onPress: () => Linking.openURL(appleMapsUrl) },
-
-                    { text: 'Waze', onPress: () => Linking.openURL(wazeUrl) },
-
-                    { text: 'Cancel·la', style: 'cancel' },
-
-                ],
-
-            );
-
-        } else {
-
-            Alert.alert(
-
-                'Obrir amb…',
-
-                `Navegar a ${bar.name}`,
-
-                [
-
-                    { text: 'Google Maps', onPress: () => Linking.openURL(googleUrl) },
-
-                    { text: 'Waze', onPress: () => Linking.openURL(wazeUrl) },
-
-                    { text: 'Cancel·la', style: 'cancel' },
-
-                ],
-
-            );
-
-        }
-
+        void openBarMaps(bar).catch(() => Alert.alert('Mapes no disponibles', 'No s’ha pogut obrir l’aplicació de mapes.'));
     };
 
     const handleSelectBar = useCallback((bar: Bar) => {
@@ -1944,6 +1776,8 @@ const MapScreen = () => {
                     longitude={selectedBar.longitude}
 
                     placeDetails={placeDetails}
+
+                    gallery={selectedBar.gallery}
 
                     loadingPlaceDetails={loadingPlaceDetails}
 
@@ -2368,29 +2202,27 @@ const MapScreen = () => {
 
                 <View style={{ marginTop: 8, marginHorizontal: 4 }}>
 
-                    {selectedMatch ? (
-                        <MatchCard
-                            match={selectedMatch}
-                            compact={true}
-                            isFilter={true}
+                    {(selectedMatch || nextMatch) && (
+                        <MatchCardStack
+                            match={(selectedMatch || nextMatch)!}
+                            alternativeMatch={getAlternativeMatch(selectedMatch || nextMatch)}
+                            onSwitchMatch={toggleMatchCategory}
+                            isFilter={!!selectedMatch}
                             showDismiss={!!matchIdFromNav}
                             onToggleFilter={() => {
-                                setSelectedMatch(null);
-                                navigation.setParams({ matchId: undefined });
+                                if (selectedMatch) {
+                                    setSelectedMatch(null);
+                                    navigation.setParams({ matchId: undefined });
+                                } else {
+                                    setSelectedMatch(nextMatch);
+                                }
                             }}
                             onDismissFilter={() => {
                                 setSelectedMatch(null);
                                 navigation.setParams({ matchId: undefined });
                             }}
                         />
-                    ) : nextMatch ? (
-                        <MatchCard
-                            match={nextMatch}
-                            compact={true}
-                            isNextMatch={true}
-                            onToggleFilter={() => setSelectedMatch(nextMatch)}
-                        />
-                    ) : null}
+                    )}
 
                 </View>
 
@@ -2428,6 +2260,11 @@ const MapScreen = () => {
     return (
 
         <View style={[styles.container, { position: 'relative' }, isDesktop && { flexDirection: 'row' }]}>
+            {scannedBars.length > 0 && (
+                <TouchableOpacity onPress={() => { void Linking.openURL('https://www.openstreetmap.org/copyright'); }} accessibilityRole="link" accessibilityLabel="Atribucio OpenStreetMap" style={{ position: 'absolute', bottom: user ? 88 : 36, left: 12, zIndex: 40, backgroundColor: EDITORIAL.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 11, color: EDITORIAL.ink }}>© OpenStreetMap contributors</Text>
+                </TouchableOpacity>
+            )}
             {/* BARRA LATERAL D'ESCRIPTORI */}
 
             {isDesktop && (
@@ -2440,11 +2277,17 @@ const MapScreen = () => {
                         {renderSearchDropdownOverlay()}
                     </View>
 
-                    <View style={{flex: 1, paddingHorizontal: 16}}>
-
-                        {renderContentPanel()}
-
-                    </View>
+                    {selectedBar ? (
+                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+                            <View style={{ backgroundColor: EDITORIAL.background, padding: 16, borderRadius: 8, borderWidth: selectedBar.tier === 'premium' ? 2 : 1, borderColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground }}>
+                                {renderContentPanel()}
+                            </View>
+                        </ScrollView>
+                    ) : (
+                        <View style={{ flex: 1, paddingHorizontal: 16 }}>
+                            {renderContentPanel()}
+                        </View>
+                    )}
 
                 </View>
 
@@ -2455,6 +2298,13 @@ const MapScreen = () => {
              {/* ÀREA DEL MAPA */}
 
              <View style={styles.mapContainer}>
+                    {scanMessage && (
+                        <View accessibilityLiveRegion="polite" style={{ position: 'absolute', bottom: mobileFabBottom + 4, left: 52, right: 76, zIndex: 50, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: EDITORIAL.card, borderWidth: 1, borderColor: EDITORIAL.hairline, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            {isScanning && <ActivityIndicator size="small" color={EDITORIAL.grana} />}
+                            <Text style={{ flex: 1, fontFamily: EDITORIAL.fontRegular, fontSize: 12, color: EDITORIAL.ink }}>{scanMessage}</Text>
+                            {!isScanning && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tancar estat de cerca" onPress={() => setScanMessage(null)}><Feather name="x" size={16} color={EDITORIAL.ink} /></TouchableOpacity>}
+                        </View>
+                    )}
 
                     <MapView
                         ref={mapRefNative}
@@ -2469,6 +2319,8 @@ const MapScreen = () => {
                         }}
                         showsUserLocation={true}
                         showsMyLocationButton={false}
+                        showsCompass={false}
+                        maxZoomLevel={MAP_MAX_ZOOM}
                         toolbarEnabled={false}
                         onLayout={() => {
                             if (!mapReady) {
@@ -2530,7 +2382,7 @@ const MapScreen = () => {
                                  const onlyScanned = props.clusterKind === 'scanned';
                                  return (
                                      <ClusterMarker
-                                         key={`cluster-${props.clusterKind}-${props.cluster_id}`}
+                                         key={`cluster-${props.clusterKind}-${props.cluster_id}-${count}`}
                                          coordinate={{ latitude: lat, longitude: lng }}
                                          count={count}
                                          size={size}
@@ -2538,7 +2390,7 @@ const MapScreen = () => {
                                          zIndex={onlyScanned ? 30 : 50}
                                          onPress={() => {
                                              // En clicar el clúster, ampliem zoom cap al centre del clúster
-                                             const next = Math.min(20, Math.max(currentZoom + 2, 14));
+                                             const next = Math.min(MAP_MAX_ZOOM, Math.max(currentZoom + 2, 14));
                                              const newDelta = 360 / Math.pow(2, next);
                                              const region = {
                                                  latitude: lat,
@@ -2572,8 +2424,9 @@ const MapScreen = () => {
                              const isSelected = selectedBar?.id === bar.id;
                              return (
                                 <ConfirmedBarMarker
-                                    key={`bar-${bar.id}`}
+                                    key={`bar-${bar.id}-${Math.round(currentZoom * 2)}`}
                                     bar={bar}
+                                    zoom={currentZoom}
                                     isPremium={isPremium}
                                     isSelected={isSelected}
                                     onPress={() => handleSelectBar(bar)}
@@ -2672,26 +2525,17 @@ const MapScreen = () => {
 
 
 
-                    {/* Targeta de detall del bar (mòbil) — bafarada flotant que apareix
-                        quan s'ha seleccionat un bar. Reutilitza renderContentPanel(),
-                        que ja sap dibuixar la BarCard si selectedBar != null.
-                        S'ancora just a sobre del pin seleccionat (via barCardAnchorY);
-                        si encara no sabem la posició en pantalla, cau a baix per defecte. */}
-                    {selectedBar && (() => {
-                        const GAP_ABOVE_PIN = 14;
-                        const cardTop = barCardAnchorY != null
-                            ? Math.max(
-                                mobileHeaderTop + 66,
-                                Math.min(barCardAnchorY - barCardHeight - GAP_ABOVE_PIN, height - barCardHeight - mobileFabBottom)
-                              )
-                            : null;
+                    {/* Targeta de detall del bar (mòbil), situada sempre sota el pin seleccionat. */}
+                    {selectedBar && barCardAnchorY != null && (() => {
+                        const GAP_BELOW_PIN = 42;
+                        const cardTop = barCardAnchorY + GAP_BELOW_PIN;
                         // Triangle de bafarada: centrat sobre el pin (barCardAnchorX),
                         // acotat perquè no surti fora dels marges de la targeta.
                         const TRIANGLE_HALF = 9;
                         const triangleX = barCardAnchorX != null
                             ? Math.min(Math.max(barCardAnchorX - TRIANGLE_HALF, 12 + 14), width - 12 - 14 - TRIANGLE_HALF * 2)
                             : null;
-                        const showTriangle = cardTop != null && triangleX != null;
+                        const showTriangle = triangleX != null;
                         return (
                         <View
                             pointerEvents="box-none"
@@ -2711,19 +2555,15 @@ const MapScreen = () => {
                                 position: 'absolute',
                                 left: 12,
                                 right: 12,
-                                bottom: mobileFabBottom + 10,
+                                top: cardTop,
                                 opacity: 1,
                                 transform: [{ scale: 1 }],
                                 zIndex: 100,
-                                backgroundColor: EDITORIAL.paper,
+                                backgroundColor: EDITORIAL.background,
                                 borderRadius: 8,
                                 padding: 16,
-                                borderWidth: 1,
-                                borderColor: EDITORIAL.hairlineStrong,
-                                ...(selectedBar.tier === 'premium' && {
-                                    borderLeftWidth: 4,
-                                    borderLeftColor: EDITORIAL.grana,
-                                }),
+                                borderWidth: selectedBar.tier === 'premium' ? 2 : 1,
+                                borderColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground,
                                 ...Platform.select({
                                     web: { boxShadow: '0 8px 24px rgba(15,27,45,0.18)' } as any,
                                     ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 },
@@ -2731,25 +2571,6 @@ const MapScreen = () => {
                                 }),
                             }}
                         >
-                            {/* Botó tancar */}
-                            <TouchableOpacity
-                                onPress={() => closeBarBubble()}
-                                style={{
-                                    position: 'absolute',
-                                    top: 8,
-                                    right: 8,
-                                    width: 28,
-                                    height: 28,
-                                    borderRadius: 14,
-                                    backgroundColor: EDITORIAL.granaSoft,
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    zIndex: 30,
-                                }}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                                <Feather name="x" size={16} color={EDITORIAL.grana} />
-                            </TouchableOpacity>
                             {renderContentPanel()}
                         </Animated.View>
                         {showTriangle && (
@@ -2760,14 +2581,14 @@ const MapScreen = () => {
                                     style={{
                                         position: 'absolute',
                                         left: (triangleX as number) - 1,
-                                        top: (cardTop as number) + barCardHeight - 1,
+                                        top: cardTop - TRIANGLE_HALF - 1,
                                         width: 0, height: 0,
                                         borderLeftWidth: TRIANGLE_HALF + 1,
                                         borderRightWidth: TRIANGLE_HALF + 1,
-                                        borderTopWidth: TRIANGLE_HALF + 1,
+                                        borderBottomWidth: TRIANGLE_HALF + 1,
                                         borderLeftColor: 'transparent',
                                         borderRightColor: 'transparent',
-                                        borderTopColor: EDITORIAL.hairlineStrong,
+                                        borderBottomColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground,
                                         zIndex: 19,
                                     }}
                                 />
@@ -2777,14 +2598,14 @@ const MapScreen = () => {
                                     style={{
                                         position: 'absolute',
                                         left: triangleX as number,
-                                        top: (cardTop as number) + barCardHeight - 2,
+                                        top: cardTop - TRIANGLE_HALF,
                                         width: 0, height: 0,
                                         borderLeftWidth: TRIANGLE_HALF,
                                         borderRightWidth: TRIANGLE_HALF,
-                                        borderTopWidth: TRIANGLE_HALF,
+                                        borderBottomWidth: TRIANGLE_HALF,
                                         borderLeftColor: 'transparent',
                                         borderRightColor: 'transparent',
-                                        borderTopColor: EDITORIAL.paper,
+                                        borderBottomColor: EDITORIAL.background,
                                         zIndex: 20,
                                     }}
                                 />
@@ -2811,13 +2632,13 @@ const MapScreen = () => {
 
                             right: 0,
 
-                            backgroundColor: EDITORIAL.paper,
+                            backgroundColor: EDITORIAL.granaDeep,
 
                             borderTopWidth: 1,
 
-                            borderTopColor: EDITORIAL.hairline,
+                            borderTopColor: 'rgba(255,255,255,0.2)',
 
-                            paddingBottom: 20,
+                            paddingBottom: safeBottomInset,
 
                             paddingTop: 8,
 
@@ -2843,9 +2664,9 @@ const MapScreen = () => {
 
                         >
 
-                            <Ionicons name="calendar-outline" size={24} color={EDITORIAL.inkMuted} />
+                            <Ionicons name="calendar-outline" size={26} color="#FFFFFF" />
 
-                            <Text style={{ fontSize: 10, color: EDITORIAL.inkMuted, marginTop: 4, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
+                            <Text style={{ fontSize: 12, color: '#FFFFFF', marginTop: 4, fontFamily: EDITORIAL.fontBold, letterSpacing: 0 }}>
 
                                 Partits
 
@@ -2859,43 +2680,15 @@ const MapScreen = () => {
 
                             style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}
 
-                            onPress={() => {}}
+                            onPress={centerMapToGPS}
+                            accessibilityRole="button"
+                            accessibilityLabel="Centrar el mapa a la meva ubicació"
 
                         >
 
-                            <View style={{
+                            <Feather name="map-pin" size={26} color="#FFFFFF" />
 
-                                backgroundColor: EDITORIAL.grana,
-
-                                width: 56,
-
-                                height: 56,
-
-                                borderRadius: 28,
-
-                                justifyContent: 'center',
-
-                                alignItems: 'center',
-
-                                marginTop: -28,
-
-                                borderWidth: 4,
-
-                                borderColor: EDITORIAL.paper,
-
-                                ...Platform.select({
-                                    web: { boxShadow: '0 4px 12px rgba(165,0,68,0.25)' } as any,
-                                    ios: { shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.2, shadowRadius: 8 },
-                                    android: { elevation: 6 }
-                                })
-
-                            }}>
-
-                                <Feather name="map-pin" size={26} color="#FFFFFF" />
-
-                            </View>
-
-                            <Text style={{ fontSize: 10, color: EDITORIAL.grana, marginTop: 8, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
+                            <Text style={{ fontSize: 12, color: '#FFFFFF', marginTop: 4, fontFamily: EDITORIAL.fontBold, letterSpacing: 0 }}>
 
                                 Mapa
 
@@ -2929,7 +2722,7 @@ const MapScreen = () => {
 
                                         borderWidth: 1,
 
-                                        borderColor: EDITORIAL.hairlineStrong
+                                        borderColor: 'rgba(255,255,255,0.6)'
 
                                     }} 
 
@@ -2937,11 +2730,11 @@ const MapScreen = () => {
 
                             ) : (
 
-                                <Feather name="user" size={24} color={EDITORIAL.inkMuted} />
+                                <Feather name="user" size={26} color="#FFFFFF" />
 
                             )}
 
-                            <Text style={{ fontSize: 10, color: EDITORIAL.inkMuted, marginTop: 4, fontFamily: 'Lora_700Bold', letterSpacing: 1.6, textTransform: 'uppercase' }}>
+                            <Text style={{ fontSize: 12, color: '#FFFFFF', marginTop: 4, fontFamily: EDITORIAL.fontBold, letterSpacing: 0 }}>
 
                                 Perfil
 
@@ -3010,7 +2803,6 @@ const MapScreen = () => {
 
              <View 
 
-                {...edgeSwipeResponder.panHandlers}
 
                 style={{
 

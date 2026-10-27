@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
+import { sketchShadow } from '../theme/sketchTheme';
 import { EDITORIAL } from '../theme/editorialTheme';
 import { PlaceDetails } from '../services/placesService';
 
@@ -19,6 +19,7 @@ export interface BarCardProps {
     placeDetails: PlaceDetails | null;
     /** Si els detalls de Place encara s'estan carregant */
     loadingPlaceDetails: boolean;
+    gallery?: string[];
     /** És un bar verificat/registrat? Determina quins botons d'acció es mostren */
     verified: boolean;
 
@@ -42,7 +43,7 @@ export interface BarCardProps {
     /** Si la confirmació està en curs */
     isSubmitting?: boolean;
 
-    /** Nivell del bar: 'premium' mostra targeta ampliada, 'free' mostra la mínima */
+    /** Premium conserva la mateixa targeta i permet obrir totes les dades. */
     tier?: 'free' | 'premium';
 
     /** Obre el modal de perfil premium a pantalla completa */
@@ -65,13 +66,14 @@ const BarCard: React.FC<BarCardProps> = (props) => {
         name, address,
         placeDetails: pd, loadingPlaceDetails, verified,
         fallbackRating, fallbackIsOpen,
-        distanceText, onNavigate,
+        distanceText, onNavigate, onClose,
         onConfirm, onCancel, isSubmitting,
         tier, onProfileOpen, reviewAvgRating, reviewCount,
     } = props;
 
     const displayName = getCleanBarName(name);
     const displayAddress = pd?.formattedAddress || address || 'Barcelona';
+    const photos = [...new Set([...(props.gallery || []), ...(pd?.photoUrls || [])])];
     // Prioritat: 1) Google Places real-time, 2) fallback local (períodes cachejats)
     // NO usem bar.isOpen de Firestore (sempre true, no fiable) → evitem flicker Obert→Tancat
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
@@ -85,26 +87,32 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
     const isPremium = tier === 'premium';
 
-    // ── Paleta editorial unificada (paper + ink + grana) per a totes les targetes.
-    //    Premium només afegeix un eyebrow GRANA "PREMIUM" + estrella; el fons es
-    //    manté cremos per coherència editorial i llegibilitat.
     const C = {
-        text: EDITORIAL.ink,
-        muted: EDITORIAL.inkMuted,
-        icon: EDITORIAL.grana,
+        text: EDITORIAL.onBackground,
+        muted: EDITORIAL.onBackgroundMuted,
+        icon: EDITORIAL.onBackground,
         // Obert = pastilla grana subtil (positiu, en paleta).
         // Tancat = aspecte "deshabilitat" (ink atenuat sobre paperAlt, sense vermell).
-        badgeOpen:   { bg: EDITORIAL.granaSoft,                          color: EDITORIAL.grana,    border: 'rgba(165,0,68,0.18)' },
-        badgeClosed: { bg: EDITORIAL.paperAlt,                           color: EDITORIAL.inkMuted, border: EDITORIAL.hairline },
-        btnBg: EDITORIAL.grana,
-        btnText: '#FFFFFF',
-        btnIcon: '#FFFFFF',
+        badgeOpen:   { bg: 'rgba(255,255,255,0.16)', color: EDITORIAL.onBackground, border: EDITORIAL.borderOnBackground },
+        badgeClosed: { bg: 'rgba(255,255,255,0.06)', color: EDITORIAL.onBackgroundMuted, border: EDITORIAL.borderOnBackground },
+        btnBg: EDITORIAL.onBackground,
+        btnText: EDITORIAL.background,
     };
 
     // ── BAR VERIFICAT (free o premium) — mateixa estructura, colors diferenciats ──
     if (verified) {
         return (
-            <View>
+            <View style={{ backgroundColor: EDITORIAL.background }}>
+                {onClose && (
+                    <TouchableOpacity
+                        onPress={onClose}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Tancar la fitxa de ${displayName}`}
+                        style={{ position: 'absolute', top: -8, right: -8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
+                    >
+                        <Feather name="x" size={18} color={C.icon} />
+                    </TouchableOpacity>
+                )}
                 {/* Nom */}
                 <Text
                     numberOfLines={2}
@@ -112,33 +120,18 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     minimumFontScale={0.75}
                     style={{
                         fontSize: 20, color: C.text,
-                        fontFamily: EDITORIAL.fontBold, marginBottom: isPremium ? 4 : 8, lineHeight: 26,
-                        letterSpacing: -0.2,
+                        fontFamily: EDITORIAL.fontBold, marginBottom: 8, lineHeight: 26,
+                        letterSpacing: 0, paddingRight: 28,
                     }}
                 >
                     {displayName}
                 </Text>
 
-                {/* Eyebrow PREMIUM + Veure perfil (només premium) */}
-                {isPremium && (
-                    <TouchableOpacity
-                        onPress={onProfileOpen}
-                        activeOpacity={0.7}
-                        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
-                    >
-                        <MaterialCommunityIcons name="star" size={12} color={EDITORIAL.grana} style={{ marginRight: 6 }} />
-                        <Text style={{ fontSize: 11, color: EDITORIAL.grana, fontFamily: EDITORIAL.fontBold, letterSpacing: 2.0, textTransform: 'uppercase' }}>
-                            Premium · Veure perfil
-                        </Text>
-                        <Feather name="chevron-right" size={13} color={EDITORIAL.grana} style={{ marginLeft: 4 }} />
-                    </TouchableOpacity>
-                )}
-
                 {/* Puntuació interna + Obert/Tancat */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
                     {(reviewAvgRating != null && reviewAvgRating > 0) && (
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <MaterialCommunityIcons name="star" size={16} color={EDITORIAL.grana} style={{ marginRight: 4 }} />
+                            <MaterialCommunityIcons name="star" size={16} color={EDITORIAL.matchday} style={{ marginRight: 4 }} />
                             <Text style={{ fontSize: 14, color: C.text, fontFamily: EDITORIAL.fontBold }}>
                                 {reviewAvgRating.toFixed(1)}
                             </Text>
@@ -153,7 +146,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         <Text style={{
                             paddingHorizontal: 10, paddingVertical: 3, borderRadius: 4, fontSize: 11,
                             overflow: 'hidden', fontFamily: EDITORIAL.fontBold, borderWidth: 1,
-                            letterSpacing: 1.4, textTransform: 'uppercase',
+                            letterSpacing: 0,
                             backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
                             color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
                             borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
@@ -164,7 +157,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 </View>
 
                 {/* Fotos del bar (Google Places) */}
-                {renderPhotos(pd)}
+                {renderPhotos(photos)}
 
                 {/* Adreça */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -192,9 +185,26 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                         alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
                     }}
                     onPress={onNavigate}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Com arribar a ${displayName}`}
                 >
-                    <Text style={{ color: C.btnText, fontSize: 13, fontFamily: EDITORIAL.fontBold, letterSpacing: 2.0, textTransform: 'uppercase' }}>Com arribar-hi</Text>
+                    <Text style={{ color: C.btnText, fontSize: 14, fontFamily: EDITORIAL.fontBold, letterSpacing: 0 }}>Com arribar-hi</Text>
                 </TouchableOpacity>
+                {isPremium && onProfileOpen && (
+                    <TouchableOpacity
+                        onPress={onProfileOpen}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Veure totes les dades de ${displayName}`}
+                        accessibilityHint="Obre la fitxa completa del bar"
+                        activeOpacity={0.7}
+                        style={{ minHeight: 44, marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    >
+                        <Text style={{ color: C.icon, fontSize: 14, fontFamily: EDITORIAL.fontBold, flexShrink: 1 }}>
+                            Veure totes les dades
+                        </Text>
+                        <Feather name="chevron-down" size={18} color={C.icon} />
+                    </TouchableOpacity>
+                )}
             </View>
         );
     }
@@ -207,8 +217,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                 adjustsFontSizeToFit
                 minimumFontScale={0.75}
                 style={{
-                    fontSize: 18, fontWeight: 'bold', color: SKETCH_THEME.colors.text,
-                    fontFamily: 'Lora', marginBottom: 8, paddingRight: 28, lineHeight: 24
+                    fontSize: 18, color: EDITORIAL.grana,
+                    fontFamily: EDITORIAL.fontBold, marginBottom: 8, paddingRight: 28, lineHeight: 24
                 }}
             >
                 {displayName}
@@ -216,8 +226,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
             {/* Adreça */}
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                <Feather name="map-pin" size={15} color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 8, marginTop: 2 }} />
-                <Text style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', flex: 1, lineHeight: 20 }}>
+                <Feather name="map-pin" size={15} color={EDITORIAL.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={{ fontSize: 14, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular, flex: 1, lineHeight: 20 }}>
                     {displayAddress}
                 </Text>
             </View>
@@ -225,26 +235,26 @@ const BarCard: React.FC<BarCardProps> = (props) => {
             {/* Carregant */}
             {loadingPlaceDetails && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                    <ActivityIndicator size="small" color={SKETCH_THEME.colors.textMuted} style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: 12, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora' }}>Carregant detalls...</Text>
+                    <ActivityIndicator size="small" color={EDITORIAL.inkMuted} style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular }}>Carregant detalls...</Text>
                 </View>
             )}
 
             {/* Fotos */}
-            {renderPhotos(pd)}
+            {renderPhotos(photos)}
 
-            <View style={{ height: 1, backgroundColor: SKETCH_THEME.colors.border, marginVertical: 14 }} />
+            <View style={{ height: 1, backgroundColor: EDITORIAL.hairline, marginVertical: 14 }} />
 
             {/* Acció de report */}
             <View>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', fontFamily: 'Lora', marginBottom: 15, textAlign: 'center', color: SKETCH_THEME.colors.primary }}>
+                <Text style={{ fontSize: 16, fontFamily: EDITORIAL.fontBold, marginBottom: 15, textAlign: 'center', color: EDITORIAL.grana }}>
                     Es poden veure partits aquí?
                 </Text>
 
                 <TouchableOpacity
                     style={{
-                        backgroundColor: SKETCH_THEME.colors.primary,
-                        paddingVertical: 14, borderRadius: 12,
+                        backgroundColor: EDITORIAL.grana,
+                        paddingVertical: 14, borderRadius: EDITORIAL.radius.md,
                         alignItems: 'center', marginBottom: 12,
                         ...sketchShadow()
                     }}
@@ -256,7 +266,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                             <Feather name="check-circle" size={18} color="white" style={{ marginRight: 8 }} />
-                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16, fontFamily: 'Lora' }}>Sí, avisa tothom!</Text>
+                            <Text style={{ color: 'white', fontSize: 16, fontFamily: EDITORIAL.fontBold }}>Sí, avisa tothom!</Text>
                         </View>
                     )}
                 </TouchableOpacity>
@@ -265,7 +275,7 @@ const BarCard: React.FC<BarCardProps> = (props) => {
                     onPress={onCancel}
                     style={{ alignItems: 'center', padding: 10 }}
                 >
-                    <Text style={{ color: SKETCH_THEME.colors.textMuted, textDecorationLine: 'underline', fontFamily: 'Lora' }}>No n'estic segur</Text>
+                    <Text style={{ color: EDITORIAL.inkMuted, textDecorationLine: 'underline', fontFamily: EDITORIAL.fontRegular }}>No n'estic segur</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -274,9 +284,8 @@ const BarCard: React.FC<BarCardProps> = (props) => {
 
 // ── Sub-renderitzat de fotos ──────────────────────────────────
 
-const renderPhotos = (pd: PlaceDetails | null) => {
-    const hasGooglePhotos = pd?.photoUrls && pd.photoUrls.length > 0;
-    if (!hasGooglePhotos) return null;
+const renderPhotos = (photos: string[]) => {
+    if (photos.length === 0) return null;
 
     return (
         <ScrollView
@@ -285,11 +294,11 @@ const renderPhotos = (pd: PlaceDetails | null) => {
             style={{ marginBottom: 14, marginTop: 4 }}
             contentContainerStyle={{ gap: 10 }}
         >
-            {pd!.photoUrls.map((url, i) => (
+            {photos.map((url, i) => (
                 <Image
                     key={i}
                     source={{ uri: url }}
-                    style={{ width: 150, height: 110, borderRadius: 12, backgroundColor: '#eee' }}
+                    style={{ width: 150, height: 110, borderRadius: 8, backgroundColor: EDITORIAL.paperAlt }}
                     resizeMode="cover"
                 />
             ))}

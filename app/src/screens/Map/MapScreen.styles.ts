@@ -57,7 +57,6 @@ export default StyleSheet.create({
     markerPin3d: { width: 52, height: 52 },
     markerPinSelected3d: { width: 64, height: 64, transform: [{ scale: 1.06 }] },
     markerPinScanned: { width: 44, height: 44 },
-    markerPremiumStar3d: { position: 'absolute', width: 25, height: 25, top: 1, right: -4 },
     // Legat (no utilitzat)
     markerBubble: {
         backgroundColor: SKETCH_THEME.colors.bg, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
@@ -97,10 +96,11 @@ export default StyleSheet.create({
 
     // Botó flotant (Fab)
     fabGps: {
-        position: 'absolute', right: 20, width: 44, height: 44, borderRadius: 22,
-        backgroundColor: SKETCH_THEME.colors.card, borderWidth: 2, borderColor: SKETCH_THEME.colors.primary,
+        position: 'absolute', right: 20, width: 48, height: 48, borderRadius: 24,
+        backgroundColor: 'rgba(255,255,255,0.01)',
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
-        ...Platform.select({ web: { boxShadow: '2px 2px 0px rgba(0,0,0,0.1)', cursor: 'pointer' } })
+        shadowColor: '#0F1B2D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, elevation: 5,
+        ...Platform.select({ web: { boxShadow: '0 3px 8px rgba(15,27,45,0.28)', cursor: 'pointer' } })
     },
     fabSettings: {
         position: 'absolute', right: 16, bottom: 190, width: 44, height: 44, borderRadius: 22, 

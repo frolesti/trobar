@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, ScrollView, useWindowDimensions, Animated, Easing, Text } from 'react-native';
+import { View, TouchableOpacity, ScrollView, useWindowDimensions, Animated, Easing } from 'react-native';
+import Text from '../../components/AppText';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { RouteProp } from '@react-navigation/native';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { EDITORIAL } from '../../theme/editorialTheme';
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
-import { auth as fbAuth } from '../../config/firebase';
-import { signInAnonymously } from 'firebase/auth';
 import BarCard from '../../components/BarCard';
 import { showAlert } from '../../components/AlertBanner';
-import { Feather } from '@expo/vector-icons';
+import AppIcon from '../../components/AppIcon';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'ReportBar'>;
@@ -94,25 +94,14 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
     const handleConfirm = async () => {
         setIsSubmitting(true);
         try {
-            // Si l'usuari no està autenticat, fem un login anònim transparent
-            // perquè les regles de Firestore permetin l'escriptura.
-            let reporterId = user?.id;
-            if (!reporterId) {
-                if (!fbAuth.currentUser) {
-                    const cred = await signInAnonymously(fbAuth);
-                    reporterId = cred.user.uid;
-                } else {
-                    reporterId = fbAuth.currentUser.uid;
-                }
-            }
-            await addUserReportedBar(osmBar, reporterId!);
+            await addUserReportedBar(osmBar, user?.id);
             setSubmitSuccess(true);
             showAlert({ tone: 'success', message: 'Bar registrat! Gràcies per ajudar la comunitat.' });
             setTimeout(() => {
                 navigation.navigate('Map', { refresh: Date.now() });
             }, 1800);
         } catch (error) {
-            console.error(error);
+            console.error('[ReportBar] No s’ha pogut registrar el bar:', error);
             showAlert({ tone: 'error', message: "No s'ha pogut guardar. Torna-ho a provar." });
         } finally {
             setIsSubmitting(false);
@@ -142,7 +131,7 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                 {/* Cos de la targeta blanca */}
                 <View style={{
                     backgroundColor: 'white',
-                    borderRadius: 16,
+                    borderRadius: 8,
                     padding: 14,
                     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10,
                     elevation: 12,
@@ -155,12 +144,12 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                         {submitSuccess ? (
                             <View style={{ alignItems: 'center', paddingVertical: 24 }}>
                                 <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: SKETCH_THEME.colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                                    <Feather name="check" size={32} color="white" />
+                                    <AppIcon name="check" size={32} color="white" />
                                 </View>
-                                <Text style={{ fontSize: 20, fontWeight: 'bold', color: SKETCH_THEME.colors.text, fontFamily: 'Lora', marginTop: 4, textAlign: 'center' }}>
+                                <Text style={{ fontSize: 20, color: EDITORIAL.grana, fontFamily: EDITORIAL.fontBold, marginTop: 4, textAlign: 'center' }}>
                                     Bar registrat correctament
                                 </Text>
-                                <Text style={{ fontSize: 14, color: SKETCH_THEME.colors.textMuted, fontFamily: 'Lora', marginTop: 6, textAlign: 'center' }}>
+                                <Text style={{ fontSize: 14, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular, marginTop: 6, textAlign: 'center' }}>
                                     Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.
                                 </Text>
                             </View>

@@ -16,7 +16,8 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import Text from '../components/AppText';
 import { GoogleMap, OverlayView, useJsApiLoader } from '@react-google-maps/api';
 
 const API_KEY = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined) || '';
@@ -51,6 +52,9 @@ const MapView = forwardRef<any, any>((props, ref) => {
         onRegionChangeComplete,
         onPress,
         customMapStyle,
+        onMapReady,
+        maxZoomLevel,
+        minZoomLevel,
     } = props;
 
     const { isLoaded, loadError } = useJsApiLoader({
@@ -74,6 +78,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
         mapRef.current = map;
         try { containerRef.current = map.getDiv() as HTMLDivElement; } catch {}
         setMapReady(true);
+        onMapReady?.();
         // Some webview/layout combinations leave the GoogleMap with a stale
         // size on first paint (tiles look blank until the user interacts).
         // Force a sequence of resize+recenter calls to cover late-mount layouts.
@@ -90,7 +95,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
                 t === 0 ? requestAnimationFrame(recenter) : setTimeout(recenter, t)
             );
         }
-    }, [initialCenter]);
+    }, [initialCenter, onMapReady]);
 
     // Observe container size; when it actually changes (e.g. layout settles
     // after fonts load or panels mount) re-trigger a Google Maps resize so
@@ -249,6 +254,8 @@ const MapView = forwardRef<any, any>((props, ref) => {
                 options={{
                     disableDefaultUI: true,
                     zoomControl: true,
+                    maxZoom: maxZoomLevel,
+                    minZoom: minZoomLevel,
                     // Els botons +/- de Google a baix-esquerra perqu\u00e8 els nostres
                     // FABs (GPS + cercar) viuen a baix-dreta.
                     zoomControlOptions: {
@@ -397,6 +404,6 @@ const styles = StyleSheet.create({
     },
     errorSub: {
         color: 'rgba(255,255,255,0.7)',
-        fontSize: 13,
+        fontSize: 14,
     },
 });
