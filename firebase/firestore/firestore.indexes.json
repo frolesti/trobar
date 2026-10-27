@@ -1,4 +1,7 @@
 {
   "indexes": [],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "notificationDeliveries", "fieldPath": "retryAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
+    { "collectionGroup": "notificationDeliveries", "fieldPath": "receiptAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
+  ]
 }

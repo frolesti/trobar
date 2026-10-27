@@ -59,6 +59,25 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+      match /pushDevices/{deviceId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() <= 256
+          && request.resource.data.token.matches('^(ExponentPushToken|ExpoPushToken)\\[[A-Za-z0-9_-]+\\]$')
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.platform in ['ios', 'android'];
+      }
+      match /notificationPrivate/{documentId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId && documentId == 'area'
+          && request.resource.data.keys().hasOnly(['latitude', 'longitude', 'consent', 'updatedAt'])
+          && request.resource.data.consent == 'foreground'
+          && request.resource.data.latitude is number && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90
+          && request.resource.data.longitude is number && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180
+          && request.resource.data.updatedAt == request.time;
+      }
     }
 
     // Reviews

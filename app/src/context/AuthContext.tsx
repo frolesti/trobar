@@ -14,7 +14,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { getUserProfile, UserProfile, deleteUserProfile } from '../services/userService';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState } from 'react-native';
+import { registerPushNotifications, unregisterPushNotifications, clearNotificationArea } from '../services/notificationService';
 import { showAlert } from '../components/AlertBanner';
 import { executeRequest, executeOrThrow } from '../api/core';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -98,6 +99,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           await fetchAndSetUser(auth.currentUser);
       }
   };
+
+  useEffect(() => {
+      if (!user || Platform.OS === 'web') return;
+      const refresh = () => { void registerPushNotifications(user.id, false); };
+      refresh();
+      const subscription = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+      return () => subscription.remove();
+  }, [user?.id]);
 
   /**
    * Obté el token de sessió actual (JWT) de manera segura.
@@ -243,6 +252,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     setIsLoading(true);
     try {
+        if (auth.currentUser) await unregisterPushNotifications(auth.currentUser.uid);
         await executeRequest(() => signOut(auth), 'logout');
     } finally {
         setIsLoading(false);
@@ -254,6 +264,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setIsLoading(true);
     try {
+      await unregisterPushNotifications(auth.currentUser.uid);
+      await clearNotificationArea(auth.currentUser.uid);
         // 1. Cancel·lar subscripció de Stripe
         try {
             const { cancelSubscription } = await import('../services/subscriptionService');
