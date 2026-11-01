@@ -1,5 +1,6 @@
 import StoreBadges from './StoreBadges'
 import Logo from './Logo'
+import BackgroundVideo from './BackgroundVideo'
 
 export default function Hero() {
   return (
@@ -18,21 +19,12 @@ export default function Hero() {
         padding: '132px 24px 48px',
       }}
     >
-      {/* ── Fons: substituir per foto/vídeo ── */}
+      {/* ── Fons ── */}
       <div
         style={{ position: 'absolute', inset: 0, zIndex: 0 }}
         aria-hidden="true"
       >
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        >
-          <source src="/assets/videos/canopy.mp4" type="video/mp4" />
-        </video>
+        <BackgroundVideo name="canopy" />
       </div>
 
       {/* Overlay fosc per llegibilitat */}
@@ -54,7 +46,7 @@ export default function Hero() {
           <Logo size={220} visualScale={1.08} variant="white" maskCircle={false} animated />
         </div>
 
-        <h1 className="hero-title" style={{ marginBottom: 20, fontSize: 'clamp(48px, 10vw, 112px)' }}>
+        <h1 className="hero-title" style={{ marginBottom: 20 }}>
           Troba on veure<br />el Barça
         </h1>
 

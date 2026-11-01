@@ -56,7 +56,7 @@ export default function Footer() {
           <p style={{
             fontFamily: 'var(--font-display)',
             fontSize: 22,
-            fontWeight: 700,
+            fontWeight: 400,
             color: 'var(--cream)',
             margin: '0 0 16px',
           }}>

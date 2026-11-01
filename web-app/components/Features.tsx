@@ -41,7 +41,7 @@ export default function Features() {
           }}>
             {String(i + 1).padStart(2, '0')}
           </p>
-          <h3 style={{ marginBottom: 16, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22 }}>
+          <h3 style={{ marginBottom: 16 }}>
             {it.title}
           </h3>
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7 }}>{it.desc}</p>

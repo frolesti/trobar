@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 
+// Also cover hosts that invoke next build directly, bypassing npm prebuild.
+require('./scripts/sync-shared-assets.js')
+
 // Carreguem les env vars de Firebase des del .env del projecte arrel
 // (compartides amb l'app Expo — EXPO_PUBLIC_FIREBASE_*)
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') })

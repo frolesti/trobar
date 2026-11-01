@@ -2,6 +2,18 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..', '..');
+const publicAssets = path.resolve(__dirname, '..', 'public', 'assets');
+// Windows junctions are local-only: materialize every web asset for deployment.
+for (const directory of ['img', 'logos', 'videos', 'gif']) {
+  const destination = path.join(publicAssets, directory);
+  if (fs.existsSync(destination) && fs.lstatSync(destination).isSymbolicLink()) {
+    fs.unlinkSync(destination);
+  }
+}
+for (const directory of ['img', 'logos', 'videos']) {
+  const sourceDirectory = path.join(root, 'assets', 'web', directory);
+  fs.cpSync(sourceDirectory, path.join(publicAssets, directory), { recursive: true });
+}
 const webPublicGifDir = path.resolve(__dirname, '..', 'public', 'assets', 'gif');
 
 // Canonical source priority:

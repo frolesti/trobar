@@ -14,7 +14,7 @@ export default function Header() {
 
   useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth > 768) setMenuOpen(false)
+      if (window.innerWidth > 900) setMenuOpen(false)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -36,8 +36,9 @@ export default function Header() {
       borderBottom: scrolled ? '1px solid var(--hairline)' : '1px solid transparent',
       transition: 'background .4s ease, border-color .4s ease',
     }}>
-      <Link href="/" aria-label="troBar — inici" style={{ display: 'flex' }}>
-        <Logo size={38} variant="red" />
+      <Link href="/" aria-label="troBar — inici" className="site-header-brand">
+        <Logo size={40} visualScale={1} variant="red" maskCircle={false} />
+        <span className="site-header-wordmark" aria-hidden="true">troBar</span>
       </Link>
 
       <button

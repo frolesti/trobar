@@ -5,6 +5,7 @@ import Hero from '../components/Hero'
 import Features from '../components/Features'
 import Footer from '../components/Footer'
 import StoreBadges from '../components/StoreBadges'
+import BackgroundVideo from '../components/BackgroundVideo'
 
 export default function Home() {
   return (
@@ -51,8 +52,7 @@ export default function Home() {
         </section>
 
         {/* ══════════════════════════════════════════
-            Secció 3 — Split: foto esquerra / text dreta
-            Placeholder multimedia a l'esquerra.
+            Secció 3 — Split: vídeo esquerra / text dreta
         ══════════════════════════════════════════ */}
         <section id="app" style={{ background: 'var(--black)' }}>
           <div style={{
@@ -62,21 +62,12 @@ export default function Home() {
           }} className="split-grid">
 
             {/* Esquerra — video glasses beer */}
-            <div style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              >
-                <source src="/assets/videos/glasses-beer.mp4" type="video/mp4" />
-              </video>
+            <div className="split-media" style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
+              <BackgroundVideo name="glasses-beer" />
             </div>
 
             {/* Dreta — text */}
-            <div style={{
+            <div className="split-copy" style={{
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
@@ -99,31 +90,22 @@ export default function Home() {
         </section>
 
         {/* ══════════════════════════════════════════
-            Secció 4 — Split: text esquerra / foto dreta
+            Secció 4 — Split: text esquerra / vídeo dreta
         ══════════════════════════════════════════ */}
         <section id="comunitat" style={{ background: 'var(--dark)' }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             minHeight: '90vh',
-          }} className="split-grid">
+          }} className="split-grid split-grid--reverse">
 
-            {/* Esquerra — video */}
-            <div style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              >
-                <source src="/assets/videos/community.mp4" type="video/mp4" />
-              </video>
+            {/* Dreta a escriptori; primer a mòbil */}
+            <div className="split-media" style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
+              <BackgroundVideo name="community" />
             </div>
 
-            {/* Dreta — text */}
-            <div style={{
+            {/* Esquerra — text */}
+            <div className="split-copy" style={{
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
@@ -180,9 +162,9 @@ export default function Home() {
                 }}>
                   <span className="step-num" style={{
                     display: 'block',
-                    fontFamily: 'var(--font-display)',
+                    fontFamily: 'var(--font-body)',
                     fontSize: 'clamp(56px, 6vw, 96px)',
-                    fontWeight: 900,
+                    fontWeight: 600,
                     color: 'var(--gold)',
                     lineHeight: 0.9,
                     marginBottom: 32,

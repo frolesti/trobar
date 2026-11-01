@@ -49,6 +49,27 @@ Les migracions són explícites: `npm run db:migrate:status`,
 migracions. Aquestes ordres consulten la base configurada a l'entorn i
 `db:migrate` hi escriu; revisa el projecte abans d'executar-les.
 
+## Web Next.js de trobar.cat
+
+El web públic es construeix des de `web-app`, no des de l'export d'Expo.
+`next.config.js` sincronitza els logos, imatges, vídeos i GIF originals
+d'`assets/web` a `web-app/public/assets`, fins i tot amb `next build` directe.
+Els directoris generats no es versionen; els originals sí.
+
+Els blocs «L'app» i «Comunitat» alternen vídeo esquerra/dreta en escriptori.
+Fins a 900 px s'apilen, amb el vídeo abans del text en tots dos blocs.
+Els vídeos tenen posters locals i conserven la marca d'aigua existent.
+El propietari ha confirmat permís de publicació del material d'Artlist.
+
+```powershell
+node --test tests\testWebVisuals.cjs
+npm --prefix web-app run build
+npm --prefix web-app run dev
+```
+
+Després de publicar, verifica imatges i vídeos a trobar.cat: un HTTP 200/206
+amb `Content-Type: text/html` pot ser una pàgina d'error, no un asset vàlid.
+
 ## 🚀 Funcionalitats
 
 - **Mapa Interactiu**: Visualitza bars propers amb un estil personalitzat (tipus esbós/llegible).
