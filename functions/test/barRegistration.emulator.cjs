@@ -46,6 +46,8 @@ test('owner registration persists in real local Auth/Firestore and survives sign
     const bar = await admin.firestore().collection('bars').doc(barId).get();
     assert.equal(bar.data().ownerId, uid);
     assert.equal(bar.data().premium, false);
+    assert.equal(bar.data().status, 'pending_checkout');
+    assert.equal(bar.data().isActive, false);
     assert.equal(bar.data().location.latitude, 41.38);
     assert.equal('nif' in bar.data(), false);
     assert.equal(owner.data().nif, 'B12345674');

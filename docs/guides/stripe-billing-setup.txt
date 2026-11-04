@@ -2,7 +2,36 @@
   troBar — Guia pas a pas de la integració de facturació amb Stripe
 ═══════════════════════════════════════════════════════════════════════════
 
-Última actualització: 19 de març de 2026
+Última actualització: 4 de novembre de 2026
+
+  Estat verificat i bloquejos del web Next: WEB_BAR_BETA.md.
+  Les ordres que creen secrets, recursos Stripe o despleguen requereixen
+  autorització explícita. La revisió inicial no les va executar; el setup
+  sandbox posterior autoritzat es detalla a continuació.
+
+  Configuració sandbox autoritzada (4 de novembre de 2026):
+    • Clau de proves comprovada contra el compte "troBar sandbox".
+    • Preus actius verificats: 39 EUR/mes, 99 EUR/3 mesos, 348 EUR/any.
+    • Secrets STRIPE_SECRET_KEY i STRIPE_WEBHOOK_SECRET a Secret Manager.
+    • Webhook de proves creat amb els sis esdeveniments de la secció 2,
+      API 2026-02-25.clover, a l'URL de stripeWebhook indicada més avall.
+    • Desplegats només registerBar i les cinc funcions de facturació.
+      No s'han desplegat altres funcions, regles ni el frontend.
+    • STRIPE_ALLOW_LIVE_BILLING=false i preus sandbox configurats.
+      functions/.env és local, ignorat per Git i no conté claus secretes.
+    • Compilació correcta i 20 proves de registre/Checkout/webhook correctes.
+      Quatre casos del harness antic subscriptionBilling.test.cjs fallen
+      perquè no carreguen els helpers actuals; no s'han modificat.
+    • HTTP verificat: Checkout/status sense sessió retornen 401; webhook
+      sense signatura retorna 400 i GET retorna 405.
+    • Pendent: alta pública amb email verificat, Checkout amb targeta test,
+      lliurament real d'esdeveniments Stripe i sincronització a Firestore.
+      L'alta conserva 14 dies de trial: completar Checkout no prova un
+      cobrament no nul; cal provar també el final del trial al sandbox.
+
+  ATENCIÓ: el web públic utilitza Firebase real amb Stripe sandbox.
+  Les altes creen documents reals, però no cobren diners reals. Aquesta
+  configuració no és apta per obrir contractacions de pagament en producció.
 
 
 ╔═══════════════════════════════════════════════════════════════════════╗
@@ -18,11 +47,46 @@
                                                                           │
                                                                     Firestore (actualitza estat)
 
+  Web Next (web-app):
+    ContactForm → registerBar → esborrany pendent i inactiu → Checkout.
+    "Continuar a Stripe" prepara i redirigeix en una sola acció. El bar no
+    apareix al mapa ni a emissions fins a active/trialing confirmat per Stripe.
+    El retorn /registra-bar comprova l'estat al servidor, no confirma un
+    pagament només pel paràmetre de redirecció. Trial mantingut a 14 dies.
+    Cancel·lar o fallar no mostra alta completada; permet recuperar dades
+    i reintentar sense duplicar bar/client/subscripció. Revisió UX local:
+    cal publicar web, registerBar, stripeWebhook i filtre de l'app junts.
+
   Plans:
+    Un únic Premium amb les mateixes funcionalitats en totes les periodicitats.
     • Mensual:    39€/mes
     • Trimestral: 33€/mes (99€/3 mesos, estalvi 72€/any → -15%)
     • Anual:      29€/mes (348€/any, estalvi 120€/any → -25%)
     • Trial:      14 dies gratuïts
+
+  Panell del bar:
+    • Configuració → Canviar subscripció → periodicitat → confirmació.
+    • Els locals isTestData simulen el canvi només durant la sessió:
+      no creen checkout, no canvien Stripe i no modifiquen dades de facturació.
+    • Els callables també rebutgen facturació real per a locals de prova.
+    • Els comptes actius canvien el cicle amb prorrateig; les altes obren
+      Checkout i no es presenten com a pagades abans de la confirmació.
+    • Es comprova l'estat en recuperar l'app després de tornar de Stripe.
+      Una fallada de consulta NO equival a una subscripció inactiva.
+
+  Sincronització:
+    • Stripe és la font de l'estat i del preu actual. Les metadades antigues
+      no substitueixen el price_id del producte contractat.
+    • active i trialing habiliten Premium; els estats inactius el retiren.
+    • El període es llegeix de l'element de la subscripció (Stripe SDK 20).
+    • El webhook llegeix la subscripció actual i actualitza barOwners/bars
+      en una transacció. Ignora esdeveniments anteriors als ja processats.
+    • Una subscripció existent no pot crear un altre checkout paral·lel.
+
+  Aquests canvis requereixen desplegar explícitament els callables de
+  facturació i stripeWebhook. Cal configurar els tres STRIPE_PRICE_* i els
+  secrets segons els passos següents. Canviar la UI no activa Stripe ni
+  configura aquests valors automàticament.
 
   Fitxers implicats:
     • functions/src/index.ts          — Cloud Functions (Stripe backend)
@@ -56,8 +120,10 @@
         https://europe-west1-trobar-1123f.cloudfunctions.net/stripeWebhook
      4. Events a escoltar (selecciona aquests):
         • checkout.session.completed
+        • customer.subscription.created
         • customer.subscription.updated
         • customer.subscription.deleted
+        • invoice.paid
         • invoice.payment_failed
      5. Clica "Add endpoint"
      6. Un cop creat, clica a l'endpoint → "Signing secret" → "Reveal"
@@ -93,20 +159,20 @@
 
   Pas 2: Configurar els Price IDs
   ────────────────────────────────
-  Edita el fitxer functions/src/index.ts i actualitza les constants:
+  Configura les variables d'entorn de Functions (functions/.env.<project-id>
+  o l'entorn de desplegament autoritzat):
 
-    const STRIPE_PRICE_IDS: Record<string, string> = {
-      monthly: "price_XXXXXXXXXXXXXX",      // ← ID del preu mensual
-      quarterly: "price_XXXXXXXXXXXXXX",     // ← ID del preu trimestral
-      annual: "price_XXXXXXXXXXXXXX",        // ← ID del preu anual
-    };
+    STRIPE_PRICE_MONTHLY
+    STRIPE_PRICE_QUARTERLY
+    STRIPE_PRICE_ANNUAL
 
-  Alternativament, configura-les com a variables d'entorn:
-
-    firebase functions:config:set \
-      stripe.price_monthly="price_XXX" \
-      stripe.price_quarterly="price_XXX" \
-      stripe.price_annual="price_XXX"
+  No incorporis IDs ni secrets reals al codi. functions:config:set amb
+  stripe.price_* no alimenta process.env.STRIPE_PRICE_* en aquest backend.
+  Es comproven imports, EUR, recurrència i estat actiu del preu. Sense
+  configuració, Checkout i change-plan fallen explícitament.
+  STRIPE_ALLOW_LIVE_BILLING=true només després d'autoritzar activació live.
+  STRIPE_ALLOWED_RETURN_ORIGINS admet orígens HTTPS addicionals explícits;
+  per defecte es permeten trobar.cat i www.trobar.cat.
 
 
 ╔═══════════════════════════════════════════════════════════════════════╗
@@ -133,13 +199,15 @@
 
   A) PRIMERA SUBSCRIPCIÓ (Checkout)
      1. L'usuari es registra via web-app (ja implementat)
-     2. Es crida createCheckoutSession amb el billingCycle triat
+     2. Es desa l'esborrany pending_checkout (isActive=false) i s'obre
+        createCheckoutSession amb el billingCycle triat, en la mateixa acció
      3. Stripe obre una pàgina de checkout amb targeta de crèdit
      4. L'usuari paga (o inicia trial de 14 dies)
      5. Stripe envia event checkout.session.completed al webhook
      6. El webhook actualitza Firestore:
         - barOwners/{uid}.stripeSubscriptionId = sub_XXX
-        - barOwners/{uid}.subscriptionStatus = "active"
+        - barOwners/{uid}.subscriptionStatus = estat actual (active/trialing)
+        - bars/{barId}.status = "registered", isActive = true
         - bars/{barId}.tier = "premium"
 
   B) CANVI DE PLA
@@ -165,7 +233,8 @@
   D) PAGAMENT FALLAT
      1. Stripe intenta cobrar però falla (targeta caducada, etc.)
      2. Stripe envia invoice.payment_failed al webhook
-     3. El webhook marca subscriptionStatus = "payment_failed" a Firestore
+     3. El webhook consulta l'estat actual Stripe (p. ex. past_due/unpaid)
+        i retira Premium quan ja no és active/trialing
      4. El dashboard mostra el badge "INACTIU" en vermell
      5. L'usuari ha d'actualitzar les dades de pagament via Stripe
 
@@ -181,9 +250,10 @@
      • Pagament fallit: 4000 0000 0000 0002
      Data: qualsevol futura | CVC: qualsevol de 3 dígits
   3. Webhook local (per testejar):
-     stripe listen --forward-to localhost:5001/trobar-1123f/europe-west1/stripeWebhook
+     stripe listen --forward-to localhost:5001/demo-trobar-beta/europe-west1/stripeWebhook
   4. Emulador Firebase (opcional):
-     firebase emulators:start --only functions
+     firebase emulators:start --only "auth,firestore,functions" --project demo-trobar-beta
+     Configura només claus test per a aquestes proves; no reutilitzis secrets live.
 
 
 ╔═══════════════════════════════════════════════════════════════════════╗
@@ -193,11 +263,15 @@
   barOwners/{uid}:
     ├── stripeCustomerId:     "cus_XXXX"
     ├── stripeSubscriptionId: "sub_XXXX"
-    ├── subscriptionStatus:   "active" | "trialing" | "cancelled" | "payment_failed"
+    ├── subscriptionStatus:   estat Stripe ("active", "trialing", "past_due", "unpaid", "canceled", etc.)
     ├── billingCycle:         "monthly" | "quarterly" | "annual"
-    ├── subscribedAt:         Timestamp
+    ├── currentPeriodEnd:     segons Unix (de l'element Stripe)
+    ├── trialEnd:             segons Unix o null
+    ├── lastStripeEventCreated: segons Unix
     ├── cancelledAt:          Timestamp (si cancel·lat)
-    └── lastPaymentError:     Timestamp (si pagament fallit)
+    └── checkoutAttempt / checkoutExpiresAt: reserva idempotent de Checkout
+
+  stripeEvents/{eventId}: registre privat de webhooks ja processats.
 
   bars/{barId}:
     ├── tier:     "premium" | "free"
@@ -215,10 +289,11 @@
   [ ] Configurar webhook a Stripe Dashboard
   [ ] firebase functions:secrets:set STRIPE_SECRET_KEY (sk_live_...)
   [ ] firebase functions:secrets:set STRIPE_WEBHOOK_SECRET (whsec_...)
-  [ ] Actualitzar STRIPE_PRICE_IDS a functions/src/index.ts
+  [ ] Configurar els tres STRIPE_PRICE_* a l'entorn de Functions
   [ ] firebase deploy --only functions
   [ ] Provar amb targeta 4242... en mode test
   [ ] Verificar webhook rep events correctament
   [ ] Provar canvi de pla i cancel·lació
   [ ] Provar eliminació de compte
   [ ] Canviar a claus Live quan tot funcioni
+  [ ] Autorització explícita abans d'activar STRIPE_ALLOW_LIVE_BILLING

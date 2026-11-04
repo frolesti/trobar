@@ -157,6 +157,7 @@ async function syncSubscriptionState(subscription: Stripe.Subscription, eventCre
     transaction.update(barRef, {
       tier: active ? "premium" : "free",
       premium: active,
+      ...(active ? { status: "registered", isActive: true } : {}),
       billing: cycle,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -201,7 +202,7 @@ export const registerBar = onCall(
     return {
       ok: true,
       barId,
-      message: "Compte de bar creat correctament",
+      message: "Dades del bar desades correctament",
     };
   }
 );

@@ -3,7 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { stdnum } from "stdnum";
 
-export function validateBarRegistration(input: unknown): Record<string, unknown> {
+export function validateBarRegistration(input: unknown): Record<string, unknown> & { location: { latitude: number; longitude: number } } {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new HttpsError("invalid-argument", "Dades de registre invàlides.");
   }
@@ -20,7 +20,7 @@ export function validateBarRegistration(input: unknown): Record<string, unknown>
   }
   const taxId = stdnum.ES.nif.validate(result.nif as string);
   if (!taxId.isValid || !taxId.compact) {
-    throw new HttpsError("invalid-argument", "El NIF / CIF / NIE no és vàlid. Revisa el número i el dígit de control.");
+    throw new HttpsError("invalid-argument", "El NIF no és vàlid. Revisa el número i el dígit de control.");
   }
   result.nif = taxId.compact;
   const location = data.location;
@@ -57,7 +57,7 @@ export function validateBarRegistration(input: unknown): Record<string, unknown>
     }
     result[field] = number;
   }
-  return result;
+  return { ...result, location: { latitude, longitude } };
 }
 
 export async function persistBarRegistration(
@@ -86,6 +86,38 @@ export async function persistBarRegistration(
       if (!bar.exists || bar.data()?.ownerId !== uid) {
         throw new HttpsError("failed-precondition", "Cal revisar la vinculació del bar.");
       }
+      if (bar.data()?.status === "pending_checkout") {
+        const savedBar = bar.data()!;
+        const savedOwner = owner.data()!;
+        const paymentPending = !!savedOwner.stripeSubscriptionId || savedOwner.checkoutExpiresAt > Math.floor(Date.now() / 1000);
+        const unchanged = savedBar.name === data.businessName
+          && ["address", "city", "postalCode", "phone", "website", "capacity", "screens", "openingHours", "description"]
+            .every(field => (savedBar[field] ?? null) === data[field])
+          && (savedBar.googlePlaceId ?? null) === data.googlePlaceId
+          && savedBar.location?.latitude === data.location.latitude
+          && savedBar.location?.longitude === data.location.longitude
+          && savedOwner.nif === data.nif && savedOwner.name === data.contactName
+          && (savedOwner.phone ?? null) === data.contactPhone && savedOwner.billingCycle === data.billing
+          && savedOwner.legalName === (data.legalName || data.businessName);
+        if (paymentPending && !unchanged) {
+          throw new HttpsError("failed-precondition", "Ja hi ha un pagament pendent a Stripe. Reprèn-lo o espera que caduqui abans de modificar les dades.");
+        }
+        if (!paymentPending) {
+          transaction.update(barRef, {
+            name: data.businessName, address: data.address, city: data.city, postalCode: data.postalCode,
+            phone: data.phone, website: data.website, location: data.location,
+            googlePlaceId: data.googlePlaceId, legalName: data.legalName || data.businessName,
+            capacity: data.capacity, screens: data.screens, openingHours: data.openingHours,
+            description: data.description, billing: data.billing, updatedAt: FieldValue.serverTimestamp(),
+          });
+          transaction.update(ownerRef, {
+            name: data.contactName, phone: data.contactPhone, barName: data.businessName,
+            billingCycle: data.billing, nif: data.nif, legalName: data.legalName || data.businessName,
+            termsAcceptedAt: FieldValue.serverTimestamp(),
+            taxIdValidation: { method: "checksum", status: "valid", checkedAt: FieldValue.serverTimestamp() },
+          });
+        }
+      }
     } else {
       transaction.set(barRef, {
         name: data.businessName, address: data.address, city: data.city, postalCode: data.postalCode,
@@ -93,7 +125,7 @@ export async function persistBarRegistration(
         ...(data.googlePlaceId ? { googlePlaceId: data.googlePlaceId } : {}),
         legalName: data.legalName || data.businessName, capacity: data.capacity, screens: data.screens,
         openingHours: data.openingHours, description: data.description, ownerId: uid, ownerEmail: email,
-        billing: data.billing, status: "registered", isActive: true, tier: "free", premium: false,
+        billing: data.billing, status: "pending_checkout", isActive: false, tier: "free", premium: false,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });

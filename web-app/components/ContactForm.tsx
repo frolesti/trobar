@@ -12,8 +12,8 @@ import { auth, db, functions } from '../lib/firebase'
    Pas 2: Esperar verificació d'email (polling automàtic)
    Pas 3: Cercar el bar (Google Places) → auto-omple dades
    Pas 4: Dades del negoci (pre-omplert si s'ha cercat)
-   Pas 5: Selecció de facturació + confirmació
-   Pas 6: Benvingut!
+   Pas 5: Selecció de facturació → esborrany pendent → Stripe Checkout
+   Pas 6: Comprovació de subscripció o recuperació del pagament
    ═══════════════════════════════════════════════════════════════════════════ */
 
 type BillingCycle = 'monthly' | 'quarterly' | 'annual'
@@ -83,6 +83,8 @@ interface ContactFormProps {
   onOpenLegal?: (type: 'privacy' | 'terms') => void
 }
 
+type FieldErrors = Partial<Record<keyof FormState | 'email', string>>
+
 interface PasswordChecks {
   minLength: boolean
   hasLower: boolean
@@ -145,9 +147,12 @@ function getFriendlyFunctionError(error: unknown, checkout = false): string {
   if (checkout && code === 'functions/failed-precondition') {
     return 'No podem obrir un Checkout nou: revisa si ja tens una subscripció o un Checkout pendent. Si no, contacta amb suport; la facturació pot estar pendent de configuració.'
   }
+  if (!checkout && code === 'functions/failed-precondition') {
+    return (error as { message?: string }).message || "No podem preparar l'alta. Revisa l'estat del teu compte."
+  }
   return checkout
-    ? "No s'ha pogut iniciar el pagament. El registre s'ha conservat; torna-ho a provar."
-    : "No s'ha pogut confirmar el perfil desat. Reintenta el registre amb el mateix compte i comprova la verificació de l'email."
+    ? "No hem pogut obrir Stripe. Hem guardat les dades perquè puguis reintentar-ho; el bar encara no està activat."
+    : "No s'han pogut preparar les dades de l'alta. Torna-ho a provar amb el mateix compte."
 }
 
 /* ── Estils constants ─────────────────────────────────────────────────── */
@@ -159,7 +164,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%', padding: '12px 14px', marginTop: 6, borderRadius: 12,
   border: '2px solid var(--border)', fontSize: 16, fontFamily: 'inherit',
   transition: 'border-color 0.2s, box-shadow 0.2s',
-  outline: 'none', boxSizing: 'border-box',
+  boxSizing: 'border-box', background: '#fff', color: '#24211d',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -202,6 +207,97 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [checkingEmail, setCheckingEmail] = useState(false)
   const [subscription, setSubscription] = useState<{ active: boolean; status?: string } | null>(null)
   const emailCheckVersion = useRef(0)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [errorAttempt, setErrorAttempt] = useState(0)
+  const [checkingSubscription, setCheckingSubscription] = useState(false)
+  const [subscriptionCheck, setSubscriptionCheck] = useState(0)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const previousStep = useRef(step)
+  const scrollBehavior = (): ScrollBehavior => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+
+  useEffect(() => {
+    if (previousStep.current === step) return
+    previousStep.current = step
+    const heading = cardRef.current?.querySelector('h2')
+    heading?.setAttribute('tabindex', '-1')
+    heading?.focus({ preventScroll: true })
+    cardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+  }, [step])
+
+  useEffect(() => {
+    if (!errorAttempt) return
+    const field = cardRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+    field?.focus({ preventScroll: true })
+    field?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
+  }, [errorAttempt, step])
+
+  useEffect(() => {
+    if (!status || loading || Object.values(fieldErrors).some(Boolean)) return
+    const alert = cardRef.current?.querySelector<HTMLElement>('[role="alert"]')
+    alert?.focus({ preventScroll: true })
+    alert?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
+  }, [status, loading])
+
+  const showFieldErrors = (errors: FieldErrors) => {
+    setFieldErrors(errors)
+    setStatus('Revisa els camps destacats per continuar.')
+    setErrorAttempt(attempt => attempt + 1)
+  }
+
+  const fieldProps = (field: keyof FormState | 'email', required = false) => ({
+    id: `registration-${field}`,
+    required,
+    'aria-invalid': fieldErrors[field] ? true : undefined,
+    'aria-describedby': fieldErrors[field] ? `registration-${field}-error` : undefined,
+  })
+
+  const fieldError = (field: keyof FormState | 'email') => fieldErrors[field] && (
+    <span id={`registration-${field}-error`} className="registration-field-error">{fieldErrors[field]}</span>
+  )
+
+  const handleBackToAccount = async () => {
+    setLoading(true)
+    try {
+      await auth.signOut()
+      setStep(1)
+      setState(s => ({ ...s, password: '' }))
+      setStatus(null)
+      setFieldErrors({})
+    } catch {
+      setStatus("No hem pogut tornar al compte. Comprova la connexió i torna-ho a provar.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const restoreOwnerDetails = async (data: Record<string, unknown>, uid: string) => {
+    const profile = await getDocFromServer(doc(db, 'users', uid))
+    const user = auth.currentUser
+    const token = await user?.getIdTokenResult()
+    if (profile.data()?.role !== 'bar_owner' || !profile.data()?.ownedBars?.includes(data.barId)
+      || token?.claims.role !== 'bar_owner') {
+      setStep(3)
+      return
+    }
+    const bar = typeof data.barId === 'string' ? await getDocFromServer(doc(db, 'bars', data.barId)) : null
+    const details = bar?.data()
+    setState(s => ({
+      ...s, password: '', businessName: typeof data.barName === 'string' ? data.barName : '',
+      contactName: typeof data.name === 'string' ? data.name : s.contactName,
+      billing: typeof data.billingCycle === 'string' && data.billingCycle in CYCLES ? data.billingCycle as BillingCycle : 'quarterly',
+      ...(details ? {
+        address: details.address || '', city: details.city || '', postalCode: details.postalCode || '',
+        phone: details.phone || '', website: details.website || '', location: details.location || null,
+        googlePlaceId: details.googlePlaceId || null, nif: typeof data.nif === 'string' ? data.nif : '',
+        legalName: typeof data.legalName === 'string' ? data.legalName : '',
+        contactPhone: typeof data.phone === 'string' ? data.phone : '',
+        capacity: details.capacity == null ? '' : String(details.capacity),
+        screens: details.screens == null ? '' : String(details.screens),
+        openingHours: details.openingHours || '', description: details.description || '',
+      } : {}),
+    }))
+    setStep(6)
+  }
 
   useEffect(() => {
     const billing = new URLSearchParams(window.location.search).get('billing') as BillingCycle
@@ -216,12 +312,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       setEmail(user.email || '')
       const owner = await getDocFromServer(doc(db, 'barOwners', user.uid))
       if (owner.exists()) {
-        const data = owner.data()
-        const profile = await getDocFromServer(doc(db, 'users', user.uid))
-        const token = await user.getIdTokenResult()
-        setState(s => ({ ...s, businessName: data.barName || '', contactName: data.name || '',
-          billing: Object.keys(CYCLES).includes(data.billingCycle) ? data.billingCycle : 'quarterly' }))
-        setStep(profile.data()?.role === 'bar_owner' && profile.data()?.ownedBars?.includes(data.barId) && token.claims.role === 'bar_owner' ? 6 : 3)
+        await restoreOwnerDetails(owner.data(), user.uid)
       } else {
         setState(s => ({ ...s, contactName: user.displayName || s.contactName }))
         setStep(user.emailVerified ? 3 : 2)
@@ -233,11 +324,32 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   useEffect(() => {
     if (step !== 6) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    setCheckingSubscription(true)
     const check = httpsCallable<Record<string, never>, { active: boolean; status?: string }>(functions, 'getSubscriptionStatus')
-    check({}).then(result => setSubscription(result.data)).catch(() => {
-      setStatus("El bar està registrat, però no s'ha pogut comprovar la subscripció. La redirecció no confirma el pagament.")
-    })
-  }, [step])
+    const refresh = async () => {
+      try {
+        const result = await check({})
+        if (cancelled) return
+        setSubscription(result.data)
+        const returning = new URLSearchParams(window.location.search).get('checkout') === 'success'
+        if (!result.data.active && returning && ++attempts < 10) {
+          timer = setTimeout(() => { void refresh() }, 3000)
+          return
+        }
+        setStatus(result.data.active ? null : returning
+          ? "Encara no tenim la confirmació de Stripe. Pots tornar a comprovar-la sense repetir el pagament."
+          : null)
+      } catch {
+        if (!cancelled) setStatus("No hem pogut comprovar la subscripció. Torna-ho a comprovar abans de repetir el pagament.")
+      }
+      if (!cancelled) setCheckingSubscription(false)
+    }
+    void refresh()
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
+  }, [step, subscriptionCheck])
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
   const emailError = emailTouched && email.trim() !== '' && !isValidEmail(email)
@@ -296,6 +408,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const changesAddress = ['address', 'city', 'postalCode'].includes(key)
     if (changesAddress) setSearchResults([])
+    setFieldErrors(errors => ({ ...errors, [key]: undefined, ...(changesAddress ? { location: undefined } : {}) }))
     setState(s => ({ ...s,
       [key]: (e.target as HTMLInputElement).type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value,
       ...(changesAddress ? { location: null, googlePlaceId: null } : {}),
@@ -311,22 +424,15 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     const name = state.contactName.trim()
     const pwd = state.password
 
-    if (!normalizedEmail || !name || !pwd) {
-      setStatus('Omple tots els camps')
-      return
-    }
-    if (!isValidEmail(normalizedEmail)) {
-      setEmailTouched(true)
-      return
-    }
+    const errors: FieldErrors = {}
+    if (!name) errors.contactName = 'Escriu el teu nom.'
+    if (!isValidEmail(normalizedEmail)) errors.email = 'Introdueix un email vàlid.'
+    if (pwd.length < 8) errors.password = 'La contrasenya ha de tenir com a mínim 8 caràcters.'
+    if (Object.keys(errors).length) { showFieldErrors(errors); return }
     if (existingAccount && existingAccount !== 'password') {
       return
     }
-    if (pwd.length < 8) {
-      setStatus('La contrasenya ha de tenir mínim 8 caràcters')
-      return
-    }
-
+    setFieldErrors({})
     setLoading(true)
     setStatus(null)
 
@@ -355,12 +461,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         await userCred.user.getIdToken(true)
         const owner = await getDocFromServer(doc(db, 'barOwners', userCred.user.uid))
         if (owner.exists()) {
-          const data = owner.data()
-          const profile = await getDocFromServer(doc(db, 'users', userCred.user.uid))
-          const token = await userCred.user.getIdTokenResult()
-          setState(s => ({ ...s, password: '', businessName: data.barName || '',
-            billing: Object.keys(CYCLES).includes(data.billingCycle) ? data.billingCycle : 'quarterly' }))
-          setStep(profile.data()?.role === 'bar_owner' && profile.data()?.ownedBars?.includes(data.barId) && token.claims.role === 'bar_owner' ? 6 : 3)
+          await restoreOwnerDetails(owner.data(), userCred.user.uid)
           return
         }
         setState(s => ({ ...s, password: '' }))
@@ -451,10 +552,11 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   }, [searchQuery, step])
 
   const handleLocateAddress = async () => {
-    if (![state.address, state.city, state.postalCode].every(value => value.trim())) {
-      setStatus('Omple l’adreça, la ciutat i el codi postal abans de localitzar el bar.')
-      return
-    }
+    const errors: FieldErrors = {}
+    if (!state.address.trim()) errors.address = 'Escriu l’adreça del local.'
+    if (!state.city.trim()) errors.city = 'Escriu el municipi.'
+    if (!/^\d{5}$/.test(state.postalCode.trim())) errors.postalCode = 'Introdueix un codi postal de 5 dígits.'
+    if (Object.keys(errors).length) { showFieldErrors(errors); return }
     await searchLocations(`${state.address}, ${state.postalCode} ${state.city}`, ++searchVersion.current)
   }
 
@@ -478,6 +580,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       }))
       searchSession.current = null
       setSearchResults([])
+      setFieldErrors(errors => ({ ...errors, location: undefined }))
       setStep(4)
     } catch (error) {
       if (version === searchVersion.current) setStatus(getFriendlyFunctionError(error))
@@ -505,33 +608,51 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   )
 
   const validateBusinessDetails = () => {
-    if (![state.businessName, state.address, state.city, state.postalCode, state.nif].every(value => value.trim())) {
-      return 'Omple tots els camps obligatoris (*)'
+    const errors: FieldErrors = {}
+    if (!state.businessName.trim()) errors.businessName = 'Escriu el nom del local.'
+    if (!state.address.trim()) errors.address = 'Escriu l’adreça del local.'
+    if (!state.city.trim()) errors.city = 'Escriu el municipi.'
+    if (!/^\d{5}$/.test(state.postalCode.trim())) errors.postalCode = 'Introdueix un codi postal de 5 dígits.'
+    if (!stdnum.ES.nif.validate(state.nif).isValid) errors.nif = 'Revisa el NIF: el número o el dígit de control no és correcte.'
+    if (!state.contactName.trim()) errors.contactName = 'Escriu el nom de la persona de contacte.'
+    if (!state.location) errors.location = 'Localitza l’adreça i selecciona una coincidència per confirmar-la.'
+    for (const field of ['capacity', 'screens'] as const) {
+      if (state[field].trim() && (!Number.isInteger(Number(state[field])) || Number(state[field]) < 0 || Number(state[field]) > 100000)) {
+        errors[field] = 'Introdueix un nombre enter entre 0 i 100.000.'
+      }
     }
-    if (!/^\d{5}$/.test(state.postalCode.trim())) return 'El codi postal ha de tenir 5 dígits.'
-    if (!stdnum.ES.nif.validate(state.nif).isValid) return 'El NIF / CIF / NIE no és vàlid. Revisa el número i el dígit de control.'
-    if (!state.location) return 'Localitza i confirma l’adreça del bar abans de continuar.'
-    return null
+    if (state.website.trim()) {
+      try {
+        const url = new URL(state.website)
+        if (!['https:', 'http:'].includes(url.protocol)) throw new Error('protocol')
+      } catch {
+        errors.website = 'Introdueix una adreça web completa, com https://elteubar.cat.'
+      }
+    }
+    return errors
   }
 
   const handleContinue = () => {
-    const error = validateBusinessDetails()
-    if (error) { setStatus(error); return }
+    const errors = validateBusinessDetails()
+    if (Object.keys(errors).length) { showFieldErrors(errors); return }
     setState(s => ({ ...s, nif: stdnum.ES.nif.compact(s.nif) }))
+    setFieldErrors({})
     setStatus(null)
     setStep(5)
   }
 
   /* ── PAS 5: Enviar registre complet (Firebase Cloud Function) ────────── */
   const handleSubmit = async () => {
-    const validationError = validateBusinessDetails()
-    if (validationError) { setStatus(validationError); return }
+    const errors = validateBusinessDetails()
+    if (Object.keys(errors).length) { setStep(4); showFieldErrors(errors); return }
     if (!state.acceptTerms) {
-      setStatus('Has d\'acceptar les condicions abans de continuar.')
+      showFieldErrors({ acceptTerms: 'Accepta les condicions i la política de privacitat per continuar a Stripe.' })
       return
     }
+    setFieldErrors({})
     setLoading(true)
-    setStatus('Creant compte de bar...')
+    setStatus('Preparant el pagament segur…')
+    let prepared = false
     try {
       const register = httpsCallable<Record<string, unknown>, { ok: boolean; barId?: string; message?: string }>(functions, 'registerBar')
       const { password: _pw, ...barData } = { ...state, nif: stdnum.ES.nif.compact(state.nif) }
@@ -549,34 +670,39 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           || token.claims.role !== 'bar_owner') {
           throw new Error("No s'ha pogut confirmar el perfil desat. Reintenta el registre sense crear un altre compte.")
         }
-        setStep(6)
-        setStatus(null)
+        prepared = true
+        setStatus('Obrint Stripe…')
+        await openCheckout()
       } else {
-        setStatus('Error desconegut')
+        throw new Error('Registration preparation did not return a bar')
       }
 
     } catch (err: unknown) {
-      setStatus(getFriendlyFunctionError(err))
+      setStatus(getFriendlyFunctionError(err, prepared))
     } finally {
       setLoading(false)
     }
   }
 
+  const openCheckout = async () => {
+    const checkout = httpsCallable<Record<string, unknown>, { url?: string }>(functions, 'createCheckoutSession')
+    const origin = window.location.origin
+    const result = await checkout({
+      billingCycle: state.billing,
+      successUrl: `${origin}/registra-bar?checkout=success`,
+      cancelUrl: `${origin}/registra-bar?checkout=cancelled`,
+    })
+    if (!result.data.url || !/^https:\/\/checkout\.stripe\.com\//.test(result.data.url)) {
+      throw new Error("No s'ha pogut obrir el pagament.")
+    }
+    window.location.assign(result.data.url)
+  }
+
   const handleCheckout = async () => {
     setLoading(true)
-    setStatus(null)
+    setStatus('Obrint Stripe…')
     try {
-      const checkout = httpsCallable<Record<string, unknown>, { url?: string }>(functions, 'createCheckoutSession')
-      const origin = window.location.origin
-      const result = await checkout({
-        billingCycle: state.billing,
-        successUrl: `${origin}/registra-bar?checkout=success`,
-        cancelUrl: `${origin}/registra-bar?checkout=cancelled`,
-      })
-      if (!result.data.url || !/^https:\/\/checkout\.stripe\.com\//.test(result.data.url)) {
-        throw new Error("No s'ha pogut obrir el pagament.")
-      }
-      window.location.assign(result.data.url)
+      await openCheckout()
     } catch (error) {
       setStatus(getFriendlyFunctionError(error, true))
     } finally {
@@ -601,7 +727,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const progressSegment = step <= 2 ? 1 : step === 3 ? 2 : step === 4 ? 3 : 4
 
   const progressBar = (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 32 }}>
+    <div aria-label={`Pas ${progressSegment} de 4: ${['Compte', 'Cerca del bar', 'Dades del bar', 'Subscripció'][progressSegment - 1]}`}>
+      <p className="registration-step-label">Pas {progressSegment} de 4 · {['Compte', 'Cerca del bar', 'Dades del bar', 'Subscripció'][progressSegment - 1]}</p>
+      <div aria-hidden="true" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
       {[1, 2, 3, 4].map(s => (
         <div
           key={s}
@@ -612,12 +740,13 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           }}
         />
       ))}
+      </div>
     </div>
   )
 
-  const isError = status ? /error|inv[àa]lid|feble|incorrecte|obligatoris|acceptar|existeix|ja t[eé]/i.test(status) : false
+  const isError = status !== null && !loading
   const statusMessage = status && (
-    <div role="status" aria-live="polite" style={{
+    <div role={isError ? 'alert' : 'status'} tabIndex={-1} aria-live={isError ? 'assertive' : 'polite'} style={{
       color: isError ? '#d97a7a' : formAccent,
       fontWeight: 600, marginTop: 16, textAlign: 'center', fontSize: 14,
     }}>
@@ -627,9 +756,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   /* ── PAS 1: Crear compte ──────────────────────────────────────────── */
   if (step === 1) {
-    const canSubmit = email.trim() && isValidEmail(email) && (!existingAccount || existingAccount === 'password') && state.contactName.trim() && state.password.length >= 8
+    const canSubmit = !existingAccount || existingAccount === 'password'
     return (
-      <div className="contact-form-card" style={cardStyle}>
+      <div ref={cardRef} className="contact-form-card registration-form" style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
           <h2 style={{ margin: '0 0 6px', fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -639,27 +768,32 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             Registra&apos;t per donar d&apos;alta el teu bar. Si ja tens un compte, fes servir el mateix correu i contrasenya.
           </p>
         </div>
+        <p className="registration-field-guide">Els camps amb * són obligatoris.</p>
 
         <div style={{ display: 'grid', gap: 14 }}>
           <label style={labelStyle}>
             Nom complet *
             <input
+              {...fieldProps('contactName', true)}
               value={state.contactName}
               onChange={set('contactName')}
               style={inputStyle}
               placeholder="Joan Garcia"
               autoFocus
             />
+            {fieldError('contactName')}
           </label>
           <label style={labelStyle}>
             Email *
             <input
+              {...fieldProps('email', true)}
               type="email"
               value={email}
               onChange={e => {
                 emailCheckVersion.current++
                 setCheckingEmail(false)
                 setEmail(e.target.value)
+                setFieldErrors(errors => ({ ...errors, email: undefined }))
                 if (status) setStatus(null)
                 if (existingAccount) setExistingAccount(null)
               }}
@@ -673,6 +807,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
               placeholder="joan@barcanpunyetes.cat"
               autoComplete="email"
             />
+            {fieldError('email')}
             {emailError && (
               <span style={{ fontSize: 12, color: '#d97a7a', marginTop: 6, display: 'block' }}>
                 Introdueix un email vàlid (p. ex. nom@domini.cat)
@@ -693,6 +828,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             Contrasenya *
             <div style={{ position: 'relative' }}>
               <input
+                {...fieldProps('password', true)}
                 type={showPassword ? 'text' : 'password'}
                 value={state.password}
                 onChange={set('password')}
@@ -736,6 +872,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
                 )}
               </button>
             </div>
+            {fieldError('password')}
           </label>
           <div style={{ marginTop: -4, position: 'relative' }}>
             <div style={{
@@ -820,7 +957,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   /* ── PAS 2: Esperant verificació d'email ──────────────────────────── */
   if (step === 2) {
     return (
-      <div style={cardStyle}>
+      <div ref={cardRef} className="registration-form" style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -861,11 +998,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         </div>
 
         <button
-          onClick={() => {
-            auth.signOut()
-            setStep(1)
-            setStatus(null)
-          }}
+          onClick={handleBackToAccount}
+          disabled={loading}
           style={{ ...buttonSecondary, marginTop: 16 }}
         >
           Canviar el correu
@@ -879,7 +1013,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   /* ── PAS 3: Cerca del bar ───────────────────────────────────────────── */
   if (step === 3) {
     return (
-      <div style={{ ...cardStyle, maxWidth: 560 }}>
+      <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 560 }}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -959,7 +1093,10 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         >
           Introduir les dades manualment
         </button>
-
+        <button type="button" onClick={handleBackToAccount} disabled={loading} style={buttonSecondary}>
+          Enrere: el meu compte
+        </button>
+        <p className="registration-field-guide">Les dades del local es conservaran mentre no recarreguis la pàgina.</p>
       </div>
     )
   }
@@ -967,7 +1104,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   /* ── PAS 4: Dades del negoci ────────────────────────────────────────── */
   if (step === 4) {
     return (
-      <div style={{ ...cardStyle, maxWidth: 600 }}>
+      <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 600 }}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -977,38 +1114,46 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             ✓ Email verificat: <strong>{email}</strong>
           </p>
         </div>
+        <p className="registration-field-guide">Els camps amb * són obligatoris. La resta són opcionals.</p>
 
         <p style={sectionTitleStyle}>Dades del local</p>
         <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
             Nom del local *
-            <input required value={state.businessName} onChange={set('businessName')} style={inputStyle} placeholder="Bar Can Punyetes" />
+            <input {...fieldProps('businessName', true)} value={state.businessName} onChange={set('businessName')} style={inputStyle} placeholder="Bar Can Punyetes" maxLength={250} />
+            {fieldError('businessName')}
           </label>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
             Adreça *
-            <input required disabled={searching || loading} value={state.address} onChange={set('address')} style={inputStyle} placeholder="Carrer de Sants 123" />
+            <input {...fieldProps('address', true)} disabled={searching || loading} value={state.address} onChange={set('address')} style={inputStyle} placeholder="Carrer de Sants 123" maxLength={250} />
+            {fieldError('address')}
           </label>
           <label style={labelStyle}>
             Ciutat *
-            <input required disabled={searching || loading} value={state.city} onChange={set('city')} style={inputStyle} placeholder="Barcelona" />
+            <input {...fieldProps('city', true)} disabled={searching || loading} value={state.city} onChange={set('city')} style={inputStyle} placeholder="Barcelona" maxLength={250} />
+            {fieldError('city')}
           </label>
           <label style={labelStyle}>
             Codi postal *
-            <input required disabled={searching || loading} value={state.postalCode} onChange={set('postalCode')} style={inputStyle} placeholder="08014" maxLength={5} />
+            <input {...fieldProps('postalCode', true)} disabled={searching || loading} value={state.postalCode} onChange={set('postalCode')} style={inputStyle} placeholder="08014" maxLength={5} inputMode="numeric" />
+            {fieldError('postalCode')}
           </label>
           <label style={labelStyle}>
-            Telèfon del local
+            Telèfon del local <span className="registration-optional">(opcional)</span>
             <input value={state.phone} onChange={set('phone')} style={inputStyle} placeholder="93 123 45 67" type="tel" />
           </label>
           <label style={labelStyle}>
-            Pàgina web
-            <input value={state.website} onChange={set('website')} style={inputStyle} placeholder="https://..." type="url" />
+            Pàgina web <span className="registration-optional">(opcional)</span>
+            <input {...fieldProps('website')} value={state.website} onChange={set('website')} style={inputStyle} placeholder="https://..." type="url" />
+            {fieldError('website')}
           </label>
         </div>
 
-        <button type="button" onClick={handleLocateAddress} disabled={searching || loading} style={buttonSecondary}>
+        <p style={{ ...labelStyle, marginTop: 20, marginBottom: 0 }}>Ubicació al mapa *</p>
+        <button {...fieldProps('location')} type="button" onClick={handleLocateAddress} disabled={searching || loading} style={buttonSecondary}>
           {searching ? 'Localitzant…' : state.location ? 'Tornar a localitzar l’adreça' : 'Localitza l’adreça al mapa'}
         </button>
+        {fieldError('location')}
         <p style={{ fontSize: 12, color: 'var(--muted)' }}>
           {state.location ? 'Ubicació seleccionada. Si canvies l’adreça, cal tornar-la a localitzar.' : 'Cerca l’adreça i selecciona el resultat correcte per situar el bar al mapa.'}
           {' '}Resultats de <a href="https://maps.google.com" target="_blank" rel="noreferrer">Google Maps</a>.
@@ -1018,9 +1163,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Dades legals</p>
         <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
-            NIF / CIF / NIE *
-            <input required value={state.nif} onChange={set('nif')} style={inputStyle} placeholder="NIF del titular o de la societat"
-              maxLength={20} autoCapitalize="characters" spellCheck={false} aria-describedby="tax-id-help"
+            NIF del titular o de la societat *
+            <input {...fieldProps('nif', true)} value={state.nif} onChange={set('nif')} style={inputStyle} placeholder="Ex.: B12345674"
+              maxLength={20} autoCapitalize="characters" spellCheck={false}
               onBlur={() => {
                 const result = stdnum.ES.nif.validate(state.nif)
                 if ('compact' in result && result.compact) {
@@ -1028,60 +1173,66 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
                   setState(s => ({ ...s, nif: normalized }))
                 }
               }} />
+            {fieldError('nif')}
           </label>
           <label style={labelStyle}>
-            Raó social
+            Raó social <span className="registration-optional">(opcional)</span>
             <input value={state.legalName} onChange={set('legalName')} style={inputStyle} placeholder="Bar Can Punyetes S.L." />
           </label>
         </div>
-        <p id="tax-id-help" style={{ fontSize: 12, color: 'var(--muted)' }}>
-          Comprovem el format i el dígit de control. Aquesta validació no confirma l’alta censal ni la titularitat del negoci.
-        </p>
-
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Persona de contacte</p>
         <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
-            Nom
-            <input disabled value={state.contactName} style={{ ...inputStyle, background: 'var(--bg)', color: 'var(--muted)' }} />
+            Nom *
+            <input {...fieldProps('contactName', true)} value={state.contactName} onChange={set('contactName')} style={inputStyle} autoComplete="name" />
+            {fieldError('contactName')}
           </label>
           <label style={labelStyle}>
-            Telèfon de contacte
+            Telèfon de contacte <span className="registration-optional">(opcional)</span>
             <input value={state.contactPhone} onChange={set('contactPhone')} style={inputStyle} placeholder="600 123 456" type="tel" />
           </label>
         </div>
 
         <p style={{ ...sectionTitleStyle, marginTop: 28 }}>Detalls del local</p>
+        <p className="registration-benefit">
+          Ajuda els aficionats a triar el teu bar: explica l’ambient, quantes pantalles tens i quan obres.
+          Un perfil complet els dona més motius per venir. Pots afegir aquests detalls ara o més endavant.
+        </p>
         <div className="contact-step4-grid" style={{ display: 'grid', gap: 14, gridTemplateColumns: '1fr 1fr' }}>
           <label style={labelStyle}>
-            Aforament (persones)
-            <input value={state.capacity} onChange={set('capacity')} style={inputStyle} placeholder="80" type="number" min={1} />
+            Aforament (persones) <span className="registration-optional">(opcional)</span>
+            <input {...fieldProps('capacity')} value={state.capacity} onChange={set('capacity')} style={inputStyle} placeholder="80" type="number" min={0} max={100000} step={1} />
+            {fieldError('capacity')}
           </label>
           <label style={labelStyle}>
-            Nombre de pantalles
-            <input value={state.screens} onChange={set('screens')} style={inputStyle} placeholder="4" type="number" min={0} />
+            Nombre de pantalles <span className="registration-optional">(opcional)</span>
+            <input {...fieldProps('screens')} value={state.screens} onChange={set('screens')} style={inputStyle} placeholder="4" type="number" min={0} max={100000} step={1} />
+            {fieldError('screens')}
           </label>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
-            Horari d&apos;obertura
+            Horari d&apos;obertura <span className="registration-optional">(opcional)</span>
             <input value={state.openingHours} onChange={set('openingHours')} style={inputStyle} placeholder="Dl-Dv: 10-02h / Ds-Dg: 11-03h" />
           </label>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
-            Descripció breu del local
+            Descripció breu del local <span className="registration-optional">(opcional)</span>
             <textarea value={state.description} onChange={set('description')} style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} placeholder="Bar de barri amb ambient futboler, tapes casolanes i bon rotllo..." maxLength={500} />
           </label>
         </div>
 
         <div className="contact-actions" style={{ display: 'flex', gap: 12, marginTop: 28 }}>
           <button
-            onClick={() => { setStep(3); setStatus(null) }}
+            onClick={() => { setStep(3); setStatus(null); setFieldErrors({}) }}
+            disabled={searching || loading}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
           >
             Enrere
           </button>
           <button
             onClick={handleContinue}
+            disabled={searching || loading}
             style={{ ...buttonPrimary, flex: 2 }}
           >
-            Continuar
+            Continuar: subscripció
           </button>
         </div>
         {statusMessage}
@@ -1092,7 +1243,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   /* ── PAS 5: Facturació + confirmació ─────────────────────────────── */
   if (step === 5) {
     const sel = CYCLES[state.billing]
-    const priceLabel = `${sel.price}€/mes`
     const totalLabel = state.billing === 'monthly'
       ? `${sel.price}€/mes`
       : state.billing === 'quarterly'
@@ -1100,7 +1250,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         : `${sel.price * 12}€/any`
 
     return (
-      <div style={cardStyle}>
+      <div ref={cardRef} className="registration-form" style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -1108,6 +1258,10 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
             Un sol pla, tot inclòs. Estalvia triant trimestral o anual.
+          </p>
+          <p className="registration-benefit">
+            A continuació aniràs a Stripe per introduir la targeta i confirmar els 14 dies de prova.
+            El bar no s’activarà fins que Stripe confirmi la subscripció.
           </p>
         </div>
 
@@ -1119,6 +1273,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             return (
               <button
                 key={key}
+                disabled={loading}
+                aria-pressed={active}
                 onClick={() => setState(s => ({ ...s, billing: key }))}
                 style={{
                   flex: 1, padding: '14px 8px', borderRadius: 12,
@@ -1146,8 +1302,10 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           cursor: 'pointer', fontSize: 13, color: 'var(--muted)', marginBottom: 20,
         }}>
           <input
+            {...fieldProps('acceptTerms', true)}
             type="checkbox" checked={state.acceptTerms}
-            onChange={set('acceptTerms') as unknown as React.ChangeEventHandler<HTMLInputElement>}
+            disabled={loading}
+            onChange={set('acceptTerms')}
             style={{ marginTop: 2, width: 18, height: 18, accentColor: formAccent } as React.CSSProperties}
           />
           <span>
@@ -1160,9 +1318,10 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             <button type="button" onClick={() => onOpenLegal?.('privacy')} style={{
               color: formAccent, textDecoration: 'underline', background: 'none',
               border: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', padding: 0,
-            }}>Política de Privacitat</button>.
+            }}>Política de Privacitat</button>. *
           </span>
         </label>
+        {fieldError('acceptTerms')}
 
         {/* Resum */}
         <div style={{
@@ -1172,7 +1331,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>Resum</p>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
             <span style={{ color: 'var(--text)' }}>{state.businessName || '—'}</span>
-            <span style={{ fontWeight: 700, color: 'var(--text)' }}>{priceLabel}</span>
+            <span style={{ fontWeight: 700, color: 'var(--text)' }}>{totalLabel}</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {state.address}{state.city ? `, ${state.city}` : ''} · {email}
@@ -1181,21 +1340,22 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
         <div className="contact-actions" style={{ display: 'flex', gap: 12 }}>
           <button
-            onClick={() => setStep(4)}
+            onClick={() => { setStep(4); setStatus(null); setFieldErrors({}) }}
+            disabled={loading}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
           >
             Enrere
           </button>
           <button
             onClick={handleSubmit}
-            disabled={loading || !state.acceptTerms}
+            disabled={loading}
             style={{
               ...buttonPrimary, flex: 2,
-              opacity: loading || !state.acceptTerms ? 0.5 : 1,
-              cursor: loading || !state.acceptTerms ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+              cursor: loading ? 'wait' : 'pointer',
             }}
           >
-            {loading ? 'Processant…' : `Confirmar · ${priceLabel}`}
+            {loading ? 'Obrint Stripe…' : 'Continuar a Stripe'}
           </button>
         </div>
         {statusMessage}
@@ -1205,29 +1365,48 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   /* ── PAS 6: Confirmació final ───────────────────────────────────────── */
   return (
-    <div style={cardStyle}>
+    <div ref={cardRef} className="registration-form" style={cardStyle}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
-          Benvingut a troBar!
+          {checkingSubscription ? 'Comprovant la subscripció…'
+            : subscription?.active ? 'El teu bar ja està activat!'
+            : 'Falta confirmar la subscripció'}
         </h2>
         <p style={{ color: 'var(--muted)', fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
-          El teu bar <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong> ha estat registrat correctament.
+          {checkingSubscription ? 'Estem consultant Stripe. No cal que tornis a introduir la targeta.'
+            : subscription?.active
+              ? <>La subscripció de <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong> està confirmada.</>
+              : <>Hem conservat les dades de <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong>.
+                Completa el pas de Stripe per activar-lo. Si encara no has completat cap subscripció, el bar no està publicat.</>}
         </p>
-        <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 8 }}>
-          El registre s&apos;ha desat. La comprovació del NIF és de format i dígit de control, no censal. Cap pagament es confirma només amb una redirecció.
-        </p>
-        <p style={{ fontSize: 14 }}>
-          {subscription?.active
-            ? subscription.status === 'trialing' ? 'Subscripció en període de prova (confirmada pel servidor).' : 'Subscripció activa (confirmada pel servidor).'
-            : 'La subscripció encara no està activa.'}
-        </p>
-        {!subscription?.active && (
-          <button onClick={handleCheckout} disabled={loading} style={buttonPrimary}>
-            {loading ? 'Obrint Stripe…' : 'Activar subscripció amb Stripe · 14 dies de prova'}
-          </button>
+        {subscription?.active && !checkingSubscription && (
+          <p style={{ fontSize: 14 }}>
+            {subscription.status === 'trialing' ? 'Ja han començat els 14 dies de prova. El primer cobrament serà en acabar aquest període.' : 'La subscripció està activa.'}
+          </p>
+        )}
+        {!subscription?.active && !checkingSubscription && (
+          <>
+            {subscription && (!subscription.status || ['canceled', 'incomplete_expired'].includes(subscription.status)) && (
+              <>
+                <button onClick={handleCheckout} disabled={loading} style={buttonPrimary}>
+                  {loading ? 'Obrint Stripe…' : 'Continuar a Stripe'}
+                </button>
+                <button disabled={loading} onClick={() => { setStep(4); setStatus(null); setFieldErrors({}) }} style={buttonSecondary}>
+                  Enrere: revisar les dades
+                </button>
+              </>
+            )}
+            {subscription?.status && !['canceled', 'incomplete_expired'].includes(subscription.status) && (
+              <p>La subscripció necessita una revisió. No iniciïs un altre pagament; contacta amb suport si no es resol.</p>
+            )}
+            <button disabled={loading} onClick={() => { setStatus(null); setSubscriptionCheck(value => value + 1) }} style={buttonSecondary}>
+              Tornar a comprovar la subscripció
+            </button>
+          </>
         )}
         {statusMessage}
 
+        {subscription?.active && !checkingSubscription && (
         <div style={{
           marginTop: 28, padding: 20, borderRadius: 14,
           background: formAccentSoft, border: `1px solid ${formAccentBorder}`,
@@ -1239,6 +1418,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             Inicia sessió amb <strong>{email}</strong> i la contrasenya que has creat.
           </p>
         </div>
+        )}
       </div>
     </div>
   )

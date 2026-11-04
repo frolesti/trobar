@@ -1,9 +1,10 @@
 import { Bar } from '../models/Bar';
 import { Match } from '../models/Match';
 
-type BroadcastBar = Pick<Bar, 'id' | 'source' | 'ownerId' | 'verifiedAt' | 'broadcastingMatches'>;
+type BroadcastBar = Pick<Bar, 'id' | 'source' | 'ownerId' | 'verifiedAt' | 'broadcastingMatches'> & { status?: string };
 
 export function isRegisteredBar(bar: BroadcastBar): boolean {
+    if (bar.status === 'pending_checkout') return false;
     return !!bar.ownerId || !!bar.verifiedAt || bar.source === 'verified' || (bar.source !== 'user_reported' && !bar.id.startsWith('osm_'));
 }
 

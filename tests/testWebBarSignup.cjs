@@ -15,6 +15,7 @@ function formHarness(options = {}) {
   let timeoutId = 0;
   const timers = [];
   const calls = [];
+  const location = { search: options.searchParams || '', origin: 'http://localhost:3000', assign: url => calls.push(['redirect', url]) };
   let cursor, subscriber;
   const user = {
     uid: 'owner', email: 'owner@example.test', displayName: 'Propietari',
@@ -26,15 +27,15 @@ function formHarness(options = {}) {
       return { claims: server.claims.at(-1)?.data || options.claims || {} };
     },
   };
-  const auth = { currentUser: null };
+  const auth = { currentUser: null, signOut: async () => { calls.push(['signOut']); auth.currentUser = null; } };
   const jsx = (type, props) => ({ type, props });
   const module = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../web-app/components/ContactForm.tsx'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
-    module, exports: module.exports, URLSearchParams,
+    module, exports: module.exports, URLSearchParams, URL,
     window: { crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' },
-      location: { search: '', origin: 'http://localhost:3000', assign: url => calls.push(['redirect', url]) } },
+      location },
     setInterval: callback => { timers.push(callback); return 1; }, clearInterval() {},
     setTimeout: (callback, delay) => { timeouts.set(++timeoutId, { callback, delay }); return timeoutId; },
     clearTimeout: id => timeouts.delete(id),
@@ -84,7 +85,11 @@ function formHarness(options = {}) {
         httpsCallable: (client, operation) => async data => {
           calls.push([operation, data]);
           if (operation === 'searchRegistrationLocations' && options.search) return { data: await options.search(data) };
-          if (operation === 'getSubscriptionStatus') return { data: { active: false } };
+          if (operation === 'getSubscriptionStatus') {
+            if (options.statusError) throw { code: 'functions/unavailable' };
+            return { data: options.subscriptionResponse || { active: false } };
+          }
+          if (operation === 'createCheckoutSession' && options.checkoutError) throw { code: 'functions/unavailable' };
           if (options.fakeSuccess) return { data: { ok: true, barId: 'unpersisted' } };
           return { data: await server.api[operation](request(data)) };
         },
@@ -97,6 +102,20 @@ function formHarness(options = {}) {
   function render() {
     cursor = 0;
     const tree = module.exports.default({});
+    for (const node of nodes(tree, node => node.props?.ref && typeof node.props.ref === 'object')) {
+      node.props.ref.current = {
+        scrollIntoView: settings => calls.push(['scrollCard', settings]),
+        querySelector: selector => {
+          if (selector === 'h2') return { setAttribute() {}, focus: () => calls.push(['focusHeading']) };
+          const target = nodes(tree, node => selector === '[aria-invalid="true"]' ? node.props?.['aria-invalid'] === true
+            : node.props?.role === 'alert')[0];
+          return target ? {
+            focus: () => calls.push(['focusField', target.props.id]),
+            scrollIntoView: settings => calls.push(['scrollField', target.props.id, settings]),
+          } : null;
+        },
+      };
+    }
     while (effects.length) effects.shift()();
     return tree;
   }
@@ -107,7 +126,8 @@ function formHarness(options = {}) {
   }
   render();
   return {
-    server, user, slots, calls, options, render,
+    server, user, slots, calls, options, location, render,
+    settle: async () => { render(); await new Promise(resolve => setImmediate(resolve)); render(); },
     elements: predicate => nodes(render(), predicate),
     debounce: async () => {
       for (const [id, timer] of [...timeouts]) {
@@ -206,23 +226,112 @@ test('completed registration restores persisted owner session after reload; part
   assert.equal(h.slots[0], 3);
 });
 
-test('signup success requires server profile, ownership and refreshed claims, not a success flag', async () => {
+test('final confirmation verifies the draft then opens Stripe directly without a premature success screen', async () => {
   const bar = { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
     nif: 'B12345674', contactName: 'Propietari', billing: 'quarterly', acceptTerms: true,
     location: { latitude: 41.38, longitude: 2.17 } };
-  const h = formHarness();
+  const h = formHarness({ server: { env: { FUNCTIONS_EMULATOR: 'true' } } });
   await h.restore();
   h.prepare(5, bar);
   await h.click('handleSubmit');
-  assert.equal(h.slots[0], 6);
+  assert.equal(h.slots[0], 5);
   assert.equal(h.server.documents.get('users/owner').ownedBars.length, 1);
   assert.equal('password' in h.calls.find(call => call[0] === 'registerBar')[1], false);
+  assert.equal(h.server.documents.get('bars/bar1').status, 'pending_checkout');
+  assert.equal(h.server.documents.get('bars/bar1').isActive, false);
+  assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
+  assert.match(h.calls.find(call => call[0] === 'redirect')[1], /^https:\/\/checkout\.stripe\.com\//);
+  assert.doesNotMatch(h.text(), /registrat correctament|Benvingut|Creant compte de bar/);
   const fake = formHarness({ fakeSuccess: true });
   await fake.restore();
   fake.prepare(5, bar);
   await fake.click('handleSubmit');
   assert.equal(fake.slots[0], 5);
-  assert.match(fake.text(), /confirmar el perfil desat/);
+  assert.match(fake.text(), /preparar les dades/);
+  assert.equal(fake.calls.some(call => call[0] === 'createCheckoutSession'), false);
+});
+
+test('Checkout failure preserves the pending draft and exposes a retry without claiming activation', async () => {
+  const h = formHarness({ checkoutError: true });
+  await h.restore();
+  h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
+    nif: 'B12345674', acceptTerms: true, location: { latitude: 41.38, longitude: 2.17 } });
+  await h.click('handleSubmit');
+  assert.equal(h.slots[0], 5);
+  assert.equal(h.server.documents.get('bars/bar1').isActive, false);
+  assert.match(h.text(), /servei no està disponible/);
+  assert.equal(h.calls.some(call => call[0] === 'redirect'), false);
+});
+
+test('missing fields are identified individually, focused and scrolled into view in form order', async () => {
+  const h = formHarness();
+  await h.restore();
+  h.prepare(4);
+  await h.click('handleContinue');
+  assert.equal(h.slots[0], 4);
+  assert.equal(h.elements(node => node.props?.['aria-invalid'] === true).length, 6);
+  assert.ok(h.calls.some(call => call[0] === 'focusField' && call[1] === 'registration-businessName'));
+  assert.ok(h.calls.some(call => call[0] === 'scrollField' && call[1] === 'registration-businessName' && call[2].block === 'center'));
+  const field = h.elements(node => node.props?.id === 'registration-businessName')[0];
+  assert.equal(field.props.required, true);
+  assert.equal(field.props['aria-describedby'], 'registration-businessName-error');
+  const focused = h.calls.filter(call => call[0] === 'focusField').length;
+  h.change('Bar Can Punyetes', 'Bar corregit');
+  assert.equal(h.elements(node => node.props?.id === 'registration-businessName')[0].props['aria-invalid'], undefined);
+  assert.equal(h.calls.filter(call => call[0] === 'focusField').length, focused, 'typing must not move focus to another error');
+});
+
+test('terms rejection focuses the checkbox and does not create a draft or payment', async () => {
+  const h = formHarness();
+  await h.restore();
+  h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
+    nif: 'B12345674', location: { latitude: 41.38, longitude: 2.17 } });
+  await h.click('handleSubmit');
+  assert.ok(h.calls.some(call => call[0] === 'focusField' && call[1] === 'registration-acceptTerms'));
+  assert.equal(h.calls.some(call => call[0] === 'registerBar'), false);
+});
+
+test('search offers a working way back to the account without losing local draft fields', async () => {
+  const h = formHarness();
+  await h.restore();
+  h.prepare(3, { businessName: 'El meu bar', description: 'Ambient de partit' });
+  await h.click('handleBackToAccount');
+  assert.equal(h.slots[0], 1);
+  assert.ok(h.calls.some(call => call[0] === 'signOut'));
+  assert.equal(h.slots[2].businessName, 'El meu bar');
+  assert.equal(h.slots[2].description, 'Ambient de partit');
+});
+
+test('cancelled Checkout restores the draft without a success claim and active trials alone show activation', async () => {
+  const documents = { 'barOwners/owner': { barId: 'bar', barName: 'Bar pendent', billingCycle: 'annual', nif: 'B12345674' },
+    'users/owner': { role: 'bar_owner', ownedBars: ['bar'] },
+    'bars/bar': { address: 'Carrer 1', city: 'Barcelona', postalCode: '08001', description: 'Ambient de partit',
+      location: { latitude: 41.38, longitude: 2.17 }, status: 'pending_checkout' } };
+  const h = formHarness({ searchParams: '?checkout=cancelled', claims: { role: 'bar_owner' }, server: { documents } });
+  await h.restore();
+  await h.settle();
+  assert.equal(h.slots[0], 6);
+  assert.match(h.text(), /Falta confirmar/);
+  assert.doesNotMatch(h.text(), /ja està activat|registrat correctament|Descarrega/);
+  assert.equal(h.slots[2].description, 'Ambient de partit');
+  assert.equal(h.slots[2].nif, 'B12345674');
+  h.options.subscriptionResponse = { active: true, status: 'trialing' };
+  const retry = h.elements(node => node.type === 'button' && node.props.children === 'Tornar a comprovar la subscripció')[0];
+  retry.props.onClick();
+  h.render();
+  await h.settle();
+  assert.match(h.text(), /ja està activat/);
+  assert.match(h.text(), /primer cobrament serà en acabar/);
+});
+
+test('a success query parameter and unknown subscription state cannot claim activation or offer duplicate payment', async () => {
+  const h = formHarness({ statusError: true, searchParams: '?checkout=success' });
+  h.prepare(6);
+  h.render();
+  await h.settle();
+  assert.match(h.text(), /No hem pogut comprovar/);
+  assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleCheckout').length, 0);
+  assert.doesNotMatch(h.text(), /ja està activat|Descarrega/);
 });
 
 test('invalid NIF is rejected before submit and cannot advance business details', async () => {

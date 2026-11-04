@@ -29,7 +29,8 @@ export default function RegisterBar() {
             Fes créixer el teu <em style={{ color: 'var(--gold)', fontWeight: 500 }}>negoci</em>
           </h1>
           <p style={{ fontSize: 18, maxWidth: 520, margin: '0 auto' }}>
-            Crea el teu compte ara i comença a atraure centenars de culers cada dia de partit.
+            Prepara el perfil del teu bar i confirma la subscripció a Stripe.
+            Tens 14 dies de prova per donar-te a conèixer entre els aficionats.
           </p>
         </div>
       </section>

@@ -19,9 +19,13 @@ test('checkout relies on Stripe subscription state, preserving the advertised 14
         metadata: { firebaseUid: 'owner', barId: 'bar' }, subscription: 'sub', payment_status: 'unpaid',
       } } },
     });
+    h.documents.get('bars/bar').status = 'pending_checkout';
+    h.documents.get('bars/bar').isActive = false;
     assert.equal((await dispatch(h)).status, 200);
     assert.equal(h.documents.get('bars/bar').premium, ['active', 'trialing'].includes(state));
     assert.equal(h.documents.get('barOwners/owner').subscriptionStatus, state);
+    assert.equal(h.documents.get('bars/bar').status, ['active', 'trialing'].includes(state) ? 'registered' : 'pending_checkout');
+    assert.equal(h.documents.get('bars/bar').isActive, ['active', 'trialing'].includes(state));
   }
 });
 

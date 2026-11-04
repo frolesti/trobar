@@ -14,7 +14,8 @@ test('bar, owner and app profile persist atomically without granting unpaid prem
   assert.equal(result.ok, true);
   assert.equal(h.documents.get(`bars/${result.barId}`).premium, false);
   assert.equal(h.documents.get(`bars/${result.barId}`).tier, 'free');
-  assert.equal(h.documents.get(`bars/${result.barId}`).status, 'registered');
+  assert.equal(h.documents.get(`bars/${result.barId}`).status, 'pending_checkout');
+  assert.equal(h.documents.get(`bars/${result.barId}`).isActive, false);
   assert.equal(h.documents.get(`bars/${result.barId}`).location.latitude, 41.38);
   assert.equal('nif' in h.documents.get(`bars/${result.barId}`), false);
   assert.equal(h.documents.get('barOwners/owner').nif, 'B12345674');
@@ -35,6 +36,33 @@ test('retry and partial claims failure reuse the same persisted bar', async () =
   assert.equal(result.barId, id);
   assert.equal([...h.documents.keys()].filter(key => key.startsWith('bars/')).length, 1);
   assert.equal(h.claims.length, 1);
+});
+
+test('pending drafts can be corrected without creating a second bar or activating them', async () => {
+  const h = harness();
+  const first = await h.api.registerBar(request(data()));
+  const corrected = await h.api.registerBar(request({ ...data(), businessName: 'Bar corregit', description: 'Ambient de partit', billing: 'annual' }));
+  assert.equal(corrected.barId, first.barId);
+  const bar = h.documents.get(`bars/${first.barId}`);
+  assert.equal(bar.name, 'Bar corregit');
+  assert.equal(bar.description, 'Ambient de partit');
+  assert.equal(bar.status, 'pending_checkout');
+  assert.equal(bar.isActive, false);
+  assert.equal(h.documents.get('barOwners/owner').billingCycle, 'annual');
+  assert.equal([...h.documents.keys()].filter(key => key.startsWith('bars/')).length, 1);
+});
+
+test('a pending Stripe reservation blocks draft changes, while active bars are not overwritten by registration retries', async () => {
+  const h = harness();
+  const first = await h.api.registerBar(request(data()));
+  const owner = h.documents.get('barOwners/owner');
+  owner.checkoutExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+  assert.equal((await h.api.registerBar(request(data()))).barId, first.barId, 'identical retry must be able to resume Checkout');
+  await assert.rejects(h.api.registerBar(request({ ...data(), businessName: 'No canviar' })), { code: 'failed-precondition' });
+  assert.equal(h.documents.get(`bars/${first.barId}`).name, 'Bar Beta');
+  h.documents.get(`bars/${first.barId}`).status = 'registered';
+  await h.api.registerBar(request({ ...data(), businessName: 'No canviar' }));
+  assert.equal(h.documents.get(`bars/${first.barId}`).name, 'Bar Beta');
 });
 
 test('failed transaction writes neither a partial profile nor claims', async () => {

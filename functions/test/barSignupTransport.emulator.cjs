@@ -56,7 +56,8 @@ test('signup callables work over HTTP with local Auth, Firestore, refreshed clai
     const bar = (await getDocFromServer(doc(firestore, 'bars', barId))).data();
     assert.equal(bar.location.latitude, 41.38);
     assert.equal(bar.googlePlaceId, 'ChIJlocal');
-    assert.equal(bar.status, 'registered');
+    assert.equal(bar.status, 'pending_checkout');
+    assert.equal(bar.isActive, false);
     assert.equal('nif' in bar, false);
     const { data: subscription } = await httpsCallable(functions, 'getSubscriptionStatus')({});
     assert.equal(subscription.active, false);

@@ -1,6 +1,62 @@
 # Beta web: registre de propietaris de bars
 
-## Alta immediata: NIF i localització
+## Revisió UX i confirmació a Stripe (4 de novembre de 2026)
+
+- Navegació enrere també des de la cerca i la verificació del correu.
+  Les dades escrites es conserven durant la navegació del formulari; no es
+  persisteixen contrasenyes ni esborranys personals al navegador.
+- Camps obligatoris amb `*`, opcionals identificats explícitament i ubicació
+  al mapa marcada com a obligatòria. Placeholders grisos en cursiva, valors
+  foscos sobre blanc i estat d'error amb text, vora i `aria-invalid`.
+- Continuar destaca tots els camps incorrectes, associa cada explicació amb
+  `aria-describedby` i fa focus/scroll al primer error. Escriure no mou el
+  focus a un altre camp. Els canvis de pas enfoquen el títol i tornen a la
+  capçalera del formulari; es respecta `prefers-reduced-motion`.
+- Etiqueta fiscal única: «NIF del titular o de la societat». S'elimina de la
+  UI el paràgraf tècnic de validació, no la validació de format/control ni
+  el suport als NIF de persones i societats. Els detalls opcionals expliquen
+  com ajuden els aficionats a triar el local, sense prometre clients.
+- El botó final «Continuar a Stripe» prepara les dades i obre Checkout en
+  la mateixa acció. No mostra benvinguda ni registre complet abans de Stripe.
+  El resum mostra l'import real del cicle (39, 99 o 348 EUR), no només
+  l'equivalent mensual.
+- `registerBar` desa un esborrany `status=pending_checkout`, `isActive=false`,
+  `tier=free`, `premium=false`. El mapa, els enllaços a bars i les emissions
+  exclouen aquests esborranys. El webhook només els activa i passa a
+  `registered` quan Stripe confirma `active` o `trialing`.
+- Els esborranys es poden corregir sense duplicar el bar. Amb una reserva de
+  Checkout oberta, un reintent idèntic es permet, però no canviar les dades
+  o el pla fins que caduqui. No se sobreescriuen bars ja activats.
+- En tornar o recarregar, es recuperen les dades des del servidor. Una
+  cancel·lació permet reprendre o revisar les dades; un retorn `success`
+  només inicia una consulta d'estat amb reintents acotats. Un error de
+  consulta no equival a una subscripció inactiva ni ofereix repetir el
+  pagament a cegues. Es mantenen els 14 dies de prova.
+
+Validació d'aquesta revisió: **60 proves dirigides correctes**, builds de
+Next i Functions i type-check de l'app correctes. **Dues proves amb emuladors
+correctes**, una amb el handler i una amb el transport HTTP real dels callables:
+esborrany inactiu, propietat, NIF privat, claims, reintents i denegació a un
+altre usuari. Emuladors aturats i fixtures/secrets ficticis temporals retirats.
+
+Navegador local sobre projecte `demo-trobar-beta`: alta i verificació local,
+navegació enrere, dades conservades, errors de camps/condicions i focus/scroll,
+pas directe al destí Checkout simulat i recuperació en cancel·lar. Lectura
+independent de Firestore confirma `pending_checkout`, `isActive=false`,
+`premium=false`. Amplades CSS reals 360, 390, 767 i 1440 sense desbordament
+dels controls. Google Places i Checkout s'han simulat només en aquesta prova
+visual; **no acredita un pagament ni un webhook real de Stripe**.
+
+Publicació autoritzada posterior: `registerBar` i `stripeWebhook` desplegats
+a `trobar-1123f`, regió `europe-west1`. El web i el filtre de descobriment
+es publiquen amb el commit de la revisió pel circuit Git/Vercel existent.
+Cal verificar els dos projectes Vercel (landing Next i web Expo) i el domini
+públic. Això no distribueix una versió nova a App Store o Google Play.
+No s'han modificat secrets ni activat cobraments live; Stripe continua en
+sandbox. La [campanya de correus de trial](TRIAL_EMAIL_CAMPAIGN.md) està
+dissenyada, però encara no està implementada ni activada.
+
+## NIF i localització
 
 - El formulari i `registerBar` fan servir [`stdnum`](https://github.com/koblas/stdnum-js)
   per validar NIF (DNI, NIE i casos K/L/M) i CIF: format i dígit de control.
@@ -11,9 +67,9 @@
 - El NIF i la constància `taxIdValidation.method=checksum` es desen al document
   **privat** `barOwners/{uid}`, no al bar de lectura pública. No s'afegeix
   `verifiedAt`. Això no migra NIF públics de registres antics.
-- L'alta nova és immediata (`status=registered`, `isActive=true`), sense
-  revisió manual obligatòria. Continua sent gratuïta fins a una subscripció
-  confirmada; un NIF vàlid no concedeix premium. No es limita a un bar per NIF:
+- L'alta nova queda pendent de Stripe (`status=pending_checkout`,
+  `isActive=false`), sense revisió manual obligatòria. Un NIF vàlid no
+  publica el bar ni concedeix premium. No es limita a un bar per NIF:
   una societat pot tenir diversos establiments.
 - `searchRegistrationLocations` i `getRegistrationLocationDetails`, callables
   a `europe-west1`, requereixen sessió i email verificat. Fan servir Google
@@ -37,7 +93,8 @@
   rebutja registres sense coordenades numèriques vàlides. Aquestes coordenades
   situen el local; no són una verificació de titularitat.
 - Cal publicar **junts** el web i els callables `registerBar`,
-  `searchRegistrationLocations` i `getRegistrationLocationDetails`. El web es
+  `searchRegistrationLocations`, `getRegistrationLocationDetails` i
+  `stripeWebhook`. El web es
   publica amb la integració Git de Vercel des de `main`; les funcions es despleguen a
   `trobar-1123f`, regió `europe-west1`. La publicació del registre no activa
   cobraments ni modifica secrets o configuració de Stripe. Les comprovacions

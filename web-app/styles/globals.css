@@ -92,6 +92,64 @@ h1, h2, h3 { overflow-wrap: anywhere; }
 
 ::selection { background: var(--gold); color: var(--black); }
 
+.registration-form {
+  scroll-margin-top: 110px;
+}
+.registration-form input:not([type="checkbox"]),
+.registration-form textarea {
+  background: #fff;
+  color: #24211d;
+  font-weight: 500;
+  scroll-margin-top: 120px;
+}
+.registration-form input::placeholder,
+.registration-form textarea::placeholder {
+  color: #77736c;
+  font-weight: 400;
+  font-style: italic;
+  opacity: 1;
+}
+.registration-form [aria-invalid="true"] {
+  border-color: #ef9696 !important;
+  box-shadow: 0 0 0 3px rgba(239,150,150,.22);
+}
+.registration-form input[type="checkbox"][aria-invalid="true"] {
+  outline: 2px solid #ef9696;
+  outline-offset: 3px;
+}
+.registration-field-error {
+  display: block;
+  margin-top: 6px;
+  color: #ffb4b4;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.registration-field-guide,
+.registration-optional {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.registration-step-label {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.registration-benefit {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.registration-form button:disabled {
+  cursor: wait;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .registration-form { scroll-behavior: auto; }
+}
+
 /* ── Containers ── */
 .container        { max-width: 1160px; margin: 0 auto; padding: 0 48px; }
 .container-narrow { max-width: 720px;  margin: 0 auto; padding: 0 48px; }

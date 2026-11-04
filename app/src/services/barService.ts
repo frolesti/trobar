@@ -11,6 +11,7 @@ import { barShowsMatch, isRegisteredBar } from '../utils/matchBroadcast';
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
 const mapDocToBar = (doc: any): Bar | null => {
     const data = doc.data();
+    if (data.status === 'pending_checkout') return null;
     const coordinates = getBarCoordinates(data);
     if (!coordinates) {
         console.warn('Bar omitted: missing valid coordinates', doc.id);
