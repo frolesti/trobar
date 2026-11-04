@@ -38,3 +38,11 @@ const target = path.join(webPublicGifDir, 'trobar.gif');
 fs.copyFileSync(source, target);
 
 console.log(`[sync-shared-assets] Copied ${source} -> ${target}`);
+
+const headerSource = path.join(root, 'assets', 'web', 'logos', 'email-header-pattern.png');
+const headerTarget = path.resolve(__dirname, '..', 'public', 'assets', 'logos', 'email-header-pattern.png');
+fs.mkdirSync(path.dirname(headerTarget), { recursive: true });
+if (!fs.existsSync(headerTarget) || fs.realpathSync(headerSource) !== fs.realpathSync(headerTarget)) {
+  fs.copyFileSync(headerSource, headerTarget);
+}
+console.log('[sync-shared-assets] Official email header ready.');

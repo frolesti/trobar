@@ -161,7 +161,7 @@ export default function Pricing() {
           ))}
         </ul>
 
-        <a href="/registra-bar" className="btn-slab" style={{
+        <a href={`/registra-bar?billing=${cycle}`} className="btn-slab" style={{
           display: 'block', textAlign: 'center', width: '100%',
         }}>
           Prova 14 dies gratis
