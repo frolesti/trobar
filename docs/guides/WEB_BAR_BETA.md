@@ -15,26 +15,30 @@
   revisió manual obligatòria. Continua sent gratuïta fins a una subscripció
   confirmada; un NIF vàlid no concedeix premium. No es limita a un bar per NIF:
   una societat pot tenir diversos establiments.
-- `searchRegistrationLocations`, callable a `europe-west1`, requereix sessió
-  i email verificat. Consulta Nominatim des del servidor, valida HTTP/JSON i
-  coordenades, aplica timeout de 12 s i cache de 24 h. Una reserva global
-  a Firestore serialitza peticions i deixa almenys 1,1 s entre consultes.
-  Una cerca ocupada retorna `resource-exhausted`; no es confon amb zero resultats.
-  Les col·leccions `registrationLocationCache` i `registrationLocationLimits`
-  només són accessibles des del servidor o per administradors.
-- Es respecta la [política de Nominatim](https://operations.osmfoundation.org/policies/nominatim/):
-  cerca explícita, no autocomplete, identificació de troBar i atribució visible.
-  Només s'hi han d'introduir noms/adreces públiques de locals. El proveïdor es
-  pot canviar al servidor amb `REGISTRATION_NOMINATIM_URL` (URL HTTPS de cerca
-  compatible); el servei públic no ofereix SLA i no és adequat per volum elevat.
+- `searchRegistrationLocations` i `getRegistrationLocationDetails`, callables
+  a `europe-west1`, requereixen sessió i email verificat. Fan servir Google
+  Places Autocomplete (New) i Place Details amb el secret de servidor
+  `GOOGLE_PLACES_API_KEY`, timeout de 10 s i un mateix token UUID de sessió.
+  La clau necessita accés a Places API (New) i facturació activa; no s'envia
+  al navegador. No es desa una cache de resultats de Google.
+- Les coincidències apareixen després de 3 caràcters i 450 ms sense escriure,
+  sense botó de cerca; es poden seleccionar amb teclat o ratolí. Les respostes
+  antigues no substitueixen una consulta més recent. La selecció consulta els
+  detalls i desa també `googlePlaceId`. Hi ha atribució visible a Google Maps.
+  Això substitueix Nominatim, que no permet autocomplete al servei públic.
+- `registrationLocationLimits/{sha256(uid)}` limita cada compte a 60 peticions
+  per minut i deixa almenys 250 ms entre cerques; seleccionar immediatament
+  un resultat està permès. No hi ha bloqueig global entre propietaris.
+  La col·lecció només és accessible des del servidor o per administradors.
+  Errors de quota/proveïdor són explícits i no es confonen amb zero resultats.
 - La selecció desa `location.latitude/longitude`, el format consumit pel mapa.
   Per a dades manuals cal localitzar l'adreça i seleccionar el resultat.
   Editar adreça, ciutat o codi postal invalida la selecció anterior. El backend
   rebutja registres sense coordenades numèriques vàlides. Aquestes coordenades
   situen el local; no són una verificació de titularitat.
-- Cal publicar **junts** el web i els callables `registerBar` i
-  `searchRegistrationLocations`. El web es publica amb la integració Git de
-  Vercel des de `main`; les dues funcions es despleguen explícitament a
+- Cal publicar **junts** el web i els callables `registerBar`,
+  `searchRegistrationLocations` i `getRegistrationLocationDetails`. El web es
+  publica amb la integració Git de Vercel des de `main`; les funcions es despleguen a
   `trobar-1123f`, regió `europe-west1`. La publicació del registre no activa
   cobraments ni modifica secrets o configuració de Stripe. Les comprovacions
   de pagament reals encara requereixen Stripe test configurat.
@@ -50,21 +54,24 @@ npm --prefix web-app run build
 ```
 
 La prova de transport utilitza Auth, Firestore i callables HTTP locals reals;
-la cerca es precàrrega amb una resposta de prova per no dependre d'OSM. No
-comprova enviament real d'emails ni Checkout/webhooks de Stripe reals.
+comprova autenticació i validació dels callables de localització i registra
+coordenades de prova. Els tests unitaris cobreixen suggeriments/detalls amb
+respostes Google simulades; l'emulador no consulta Places ni consumeix quota.
+No comprova enviament real d'emails ni Checkout/webhooks de Stripe reals.
 Per provar `getSubscriptionStatus` sense consultar Secret Manager, prepara
 `functions/.secret.local` amb `STRIPE_SECRET_KEY=sk_test_emulator_only` i
 `STRIPE_WEBHOOK_SECRET=whsec_emulator_only`; són valors ficticis, no credencials
-Stripe vàlides. No sobreescriguis secrets locals ja existents ni els versionis.
+Stripe vàlides. Afegeix també `GOOGLE_PLACES_API_KEY=emulator_only`, sense una
+clau real. No sobreescriguis secrets locals ja existents ni els versionis.
 
-Resultats: **34 proves dirigides i 2 proves amb emuladors correctes**, i builds
+Resultats de la primera publicació: **34 proves dirigides i 2 proves amb emuladors correctes**, i builds
 de Functions i Next correctes. La prova HTTP va revelar un error real amb
 `admin.firestore.FieldValue` dins del runtime de Functions: registre i
 facturació ara importen `FieldValue` directament de `firebase-admin/firestore`.
 El harness antic de facturació també s'ha alineat amb les dependències actuals
 dels handlers i el requisit d'email verificat.
 
-Comprovació al navegador contra un projecte **demo local**: compte sintètic
+Comprovació de la primera publicació al navegador contra un projecte **demo local**: compte sintètic
 verificat, cerca real de «Plaça de Catalunya, Barcelona» a Nominatim, selecció
 d'ubicació, NIF amb control incorrecte rebutjat, NIF normalitzat acceptat,
 confirmació final i recuperació del registre després de recarregar. Lectura
@@ -72,6 +79,31 @@ independent de Firestore confirma coordenades desades, NIF privat, estat
 `registered` i `premium=false`. No s'ha activat Stripe ni enviat correu real.
 La resta del document recull revisions anteriors; les referències a
 `pending_review` descriuen el comportament anterior a aquesta alta immediata.
+
+## UX del compte i correu de verificació
+
+Validació d'aquesta iteració: **44 proves dirigides i 2 proves amb emuladors
+correctes**, més builds de Functions i Next. Consulta real de «Zurito Terrassa»
+amb Autocomplete i Place Details: HTTP 200, adreça i coordenades correctes.
+Comprovació al navegador: error de correu només després de sortir del camp,
+ocult en tornar a editar, cap logo al formulari ni desbordament horitzontal.
+Els tests cobreixen també teclat, cancel·lació del debounce, respostes fora
+d'ordre, límit de quota, selecció de coordenades i registre HTTP persistent.
+
+El formulari no mostra logos decoratius ni fletxes als botons. L'error de format
+del correu apareix en sortir del camp, no mentre s'escriu. Les instruccions de
+verificació només apareixen després de crear el compte i enviar el correu.
+
+Firebase Auth continua enviant els correus, sense substituir el proveïdor.
+`trobar.cat` i `www.trobar.cat` estan autoritzats a Firebase Auth. La pàgina
+corporativa `/auth/action` ofereix continuar el registre després de verificar.
+**No és encara el destí dels correus enviats**: els intents de configurar
+`notification.sendEmail.callbackUri` i les plantilles mitjançant Identity Toolkit
+Admin v2 retornen `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, fins i tot sense canviar
+el cos del missatge. Cal desbloquejar-ho a Firebase abans d'activar aquesta
+personalització. Afegir dominis autoritzats no canvia la plantilla ni el remitent.
+No s'ha configurat SMTP ni s'han alterat enviaments operatius. Sense les
+capçaleres del correu rebut no es pot atribuir de manera fiable l'entrada a spam.
 
 Abast: `https://trobar.cat` → `https://www.trobar.cat/`, el web **Next.js de
 `web-app`**, no l'export d'Expo. Revisió pública només de lectura; cap compte,

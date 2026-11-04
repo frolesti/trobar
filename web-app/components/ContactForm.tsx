@@ -1,17 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, fetchSignInMethodsForEmail, onAuthStateChanged } from 'firebase/auth'
 import { httpsCallable } from 'firebase/functions'
 import { doc, getDocFromServer } from 'firebase/firestore'
 import { stdnum } from 'stdnum'
 import { auth, db, functions } from '../lib/firebase'
-import Logo from './Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ContactForm — Flux de registre en 6 passos
    ═══════════════════════════════════════════════════════════════════════════
    Pas 1: Email + contrasenya + nom → crear compte Firebase Auth → enviar verificació
    Pas 2: Esperar verificació d'email (polling automàtic)
-   Pas 3: Cercar el bar (Nominatim / OSM) → auto-omple dades
+   Pas 3: Cercar el bar (Google Places) → auto-omple dades
    Pas 4: Dades del negoci (pre-omplert si s'ha cercat)
    Pas 5: Selecció de facturació + confirmació
    Pas 6: Benvingut!
@@ -25,22 +24,20 @@ const CYCLES: Record<BillingCycle, { label: string; price: number; savePct?: str
   annual:    { label: 'Anual',      price: 29, savePct: '25%', saveYear: 120 },
 }
 
-interface NominatimResult {
-  place_id: number
-  display_name: string
-  lat: string
-  lon: string
-  name?: string
-  address?: {
-    amenity?: string
-    road?: string
-    house_number?: string
-    city?: string
-    town?: string
-    village?: string
-    postcode?: string
-    [key: string]: string | undefined
-  }
+interface LocationSuggestion {
+  placeId: string
+  primaryText: string
+  secondaryText: string
+}
+
+interface LocationDetails {
+  placeId: string
+  name: string
+  address: string
+  city: string
+  postalCode: string
+  latitude: number
+  longitude: number
 }
 
 interface FormState {
@@ -52,6 +49,7 @@ interface FormState {
   phone: string
   website: string
   location: { latitude: number; longitude: number } | null
+  googlePlaceId: string | null
   /* Dades legals */
   nif: string
   legalName: string
@@ -73,6 +71,7 @@ interface FormState {
 const initialState: FormState = {
   businessName: '', address: '', city: '', postalCode: '', phone: '', website: '',
   location: null,
+  googlePlaceId: null,
   nif: '', legalName: '',
   contactName: '', contactPhone: '', password: '',
   capacity: '', screens: '', openingHours: '', description: '',
@@ -187,15 +186,6 @@ const buttonSecondary: React.CSSProperties = {
   cursor: 'pointer', transition: 'all 0.2s', marginTop: 12,
 }
 
-const stepBadge: React.CSSProperties = {
-  width: 64,
-  height: 64,
-  margin: '0 auto 12px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function ContactForm({ onOpenLegal }: ContactFormProps) {
@@ -211,6 +201,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [existingAccount, setExistingAccount] = useState<null | 'password' | 'google.com' | 'apple.com' | 'other'>(null)
   const [checkingEmail, setCheckingEmail] = useState(false)
   const [subscription, setSubscription] = useState<{ active: boolean; status?: string } | null>(null)
+  const emailCheckVersion = useRef(0)
 
   useEffect(() => {
     const billing = new URLSearchParams(window.location.search).get('billing') as BillingCycle
@@ -249,14 +240,16 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   }, [step])
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
-  const emailError = (emailTouched || email.trim().length >= 6) && email.trim() !== '' && !isValidEmail(email)
+  const emailError = emailTouched && email.trim() !== '' && !isValidEmail(email)
 
   const checkEmailExists = async (rawEmail: string) => {
     const value = rawEmail.trim().toLowerCase()
     if (!isValidEmail(value)) return
+    const version = ++emailCheckVersion.current
     setCheckingEmail(true)
     try {
       const methods = await fetchSignInMethodsForEmail(auth, value)
+      if (version !== emailCheckVersion.current) return
       if (methods.includes('password')) setExistingAccount('password')
       else if (methods.includes('google.com')) setExistingAccount('google.com')
       else if (methods.includes('apple.com')) setExistingAccount('apple.com')
@@ -265,7 +258,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     } catch {
       // Si Firebase té protecció anti-enumeration, ho detectarem en el submit.
     } finally {
-      setCheckingEmail(false)
+      if (version === emailCheckVersion.current) setCheckingEmail(false)
     }
   }
 
@@ -286,8 +279,12 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   /* ── Cerca de bar ──────────────────────────────────────────────────── */
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<NominatimResult[]>([])
+  const [searchResults, setSearchResults] = useState<LocationSuggestion[]>([])
   const [searching, setSearching] = useState(false)
+  const [activeSuggestion, setActiveSuggestion] = useState(-1)
+  const searchVersion = useRef(0)
+  const searchSession = useRef<string | null>(null)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /* ── Cooldown timer ────────────────────────────────────────────────── */
   useEffect(() => {
@@ -301,7 +298,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     if (changesAddress) setSearchResults([])
     setState(s => ({ ...s,
       [key]: (e.target as HTMLInputElement).type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value,
-      ...(changesAddress ? { location: null } : {}),
+      ...(changesAddress ? { location: null, googlePlaceId: null } : {}),
     }))
   }
 
@@ -414,9 +411,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     }
   }
 
-  /* ── PAS 3: Cercar bar al mapa (Nominatim / OSM) ───────────────────── */
-  const searchLocations = async (query: string) => {
-    if (searching) return
+  /* ── PAS 3: Coincidències de locals ───────────────────────────────── */
+  const searchLocations = async (query: string, version = searchVersion.current) => {
+    if (version !== searchVersion.current) return
     if (query.trim().length < 3 || query.length > 200) {
       setStatus('Escriu entre 3 i 200 caràcters per cercar.')
       return
@@ -426,56 +423,82 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     setStatus(null)
 
     try {
-      await auth.currentUser?.getIdToken(true)
-      const search = httpsCallable<{ query: string }, { results: NominatimResult[] }>(functions, 'searchRegistrationLocations')
-      const { data: { results: data } } = await search({ query: query.trim() })
+      if (!searchSession.current) searchSession.current = window.crypto.randomUUID()
+      await auth.currentUser?.getIdToken()
+      const search = httpsCallable<{ query: string; sessionToken: string }, { results: LocationSuggestion[] }>(functions, 'searchRegistrationLocations')
+      const { data: { results: data } } = await search({ query: query.trim(), sessionToken: searchSession.current })
+      if (version !== searchVersion.current) return
       setSearchResults(data)
+      setActiveSuggestion(-1)
       if (data.length === 0) {
-        setStatus('No hem trobat resultats. Prova amb un altre nom o adreça.')
+        setStatus('No trobem cap coincidència. Afegeix el municipi o introdueix les dades del bar manualment.')
       }
     } catch (error) {
-      setStatus(getFriendlyFunctionError(error))
+      if (version === searchVersion.current) setStatus(getFriendlyFunctionError(error))
     } finally {
-      setSearching(false)
+      if (version === searchVersion.current) setSearching(false)
     }
   }
 
-  const handleSearchBar = async () => searchLocations(searchQuery)
+  useEffect(() => {
+    if (step !== 3 || searchQuery.trim().length < 3) {
+      setSearching(false)
+      return
+    }
+    const version = ++searchVersion.current
+    searchTimer.current = setTimeout(() => { void searchLocations(searchQuery, version) }, 450)
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); searchVersion.current++ }
+  }, [searchQuery, step])
+
   const handleLocateAddress = async () => {
     if (![state.address, state.city, state.postalCode].every(value => value.trim())) {
       setStatus('Omple l’adreça, la ciutat i el codi postal abans de localitzar el bar.')
       return
     }
-    await searchLocations(`${state.address}, ${state.postalCode} ${state.city}`)
+    await searchLocations(`${state.address}, ${state.postalCode} ${state.city}`, ++searchVersion.current)
   }
 
-  const handleSelectBar = (result: NominatimResult, addressOnly = false) => {
-    const addr = result.address || {}
-    const streetParts = [addr.road, addr.house_number].filter(Boolean).join(' ')
-
-    setState(s => ({
-      ...s,
-      businessName: addressOnly ? s.businessName : result.name || addr.amenity || result.display_name.split(',')[0] || s.businessName,
-      address: addressOnly ? s.address : streetParts || s.address,
-      city: addressOnly ? s.city : addr.city || addr.town || addr.village || s.city,
-      postalCode: addressOnly ? s.postalCode : addr.postcode || s.postalCode,
-      location: { latitude: Number(result.lat), longitude: Number(result.lon) },
-    }))
-    setSearchResults([])
-    setStep(4)
+  const handleSelectBar = async (result: LocationSuggestion, addressOnly = false) => {
+    if (loading) return
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    const version = ++searchVersion.current
+    setLoading(true)
+    setSearching(false)
     setStatus(null)
+    try {
+      const getDetails = httpsCallable<{ placeId: string; sessionToken: string }, { place: LocationDetails }>(functions, 'getRegistrationLocationDetails')
+      if (!searchSession.current) throw new Error('Missing location search session')
+      const { data: { place } } = await getDetails({ placeId: result.placeId, sessionToken: searchSession.current })
+      if (version !== searchVersion.current) return
+      setState(s => ({
+        ...s, businessName: addressOnly ? s.businessName : place.name,
+        address: addressOnly ? s.address : place.address,
+        city: addressOnly ? s.city : place.city, postalCode: addressOnly ? s.postalCode : place.postalCode,
+        location: { latitude: place.latitude, longitude: place.longitude }, googlePlaceId: place.placeId,
+      }))
+      searchSession.current = null
+      setSearchResults([])
+      setStep(4)
+    } catch (error) {
+      if (version === searchVersion.current) setStatus(getFriendlyFunctionError(error))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const locationResults = (addressOnly = false) => searchResults.length > 0 && (
-    <div style={{ maxHeight: 320, overflowY: 'auto', marginBottom: 20, border: '1px solid var(--border)', borderRadius: 14 }}>
-      {searchResults.map(result => (
-        <button key={result.place_id} type="button" onClick={() => handleSelectBar(result, addressOnly)}
+    <div id="bar-suggestions" role="listbox" aria-label="Coincidències de locals"
+      style={{ maxHeight: 320, overflowY: 'auto', marginBottom: 12, border: '1px solid var(--border)', borderRadius: 14 }}>
+      {searchResults.map((result, index) => (
+        <button key={result.placeId} id={`bar-suggestion-${index}`} type="button" role="option"
+          aria-selected={activeSuggestion === index} disabled={loading} onClick={() => handleSelectBar(result, addressOnly)}
           style={{ width: '100%', padding: '14px 16px', background: 'transparent', border: 'none',
-            borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+            borderBottom: '1px solid var(--border)', cursor: loading ? 'wait' : 'pointer', textAlign: 'left', fontFamily: 'inherit',
+            ...(activeSuggestion === index ? { background: formAccentSoft } : {}) }}>
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
-            {result.name || result.address?.amenity || result.display_name.split(',')[0]}
+            {result.primaryText}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{result.display_name}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{result.secondaryText}</div>
         </button>
       ))}
     </div>
@@ -609,14 +632,11 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div className="contact-form-card" style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
-          <div style={{ ...stepBadge, width: 84, height: 84, marginBottom: 18 }}>
-            <Logo size={84} variant="white" visualScale={1.65} maskCircle={false} />
-          </div>
           <h2 style={{ margin: '0 0 6px', fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Crea el teu compte
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 15, marginTop: 8, lineHeight: 1.5 }}>
-            Crea un compte o reprèn el registre amb el teu email i contrasenya. Hauràs de clicar l&apos;enllaç de verificació.
+            Registra&apos;t per donar d&apos;alta el teu bar. Si ja tens un compte, fes servir el mateix correu i contrasenya.
           </p>
         </div>
 
@@ -637,10 +657,13 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
               type="email"
               value={email}
               onChange={e => {
+                emailCheckVersion.current++
+                setCheckingEmail(false)
                 setEmail(e.target.value)
                 if (status) setStatus(null)
                 if (existingAccount) setExistingAccount(null)
               }}
+              onFocus={() => setEmailTouched(false)}
               onBlur={() => { setEmailTouched(true); checkEmailExists(email) }}
               style={{
                 ...inputStyle,
@@ -787,12 +810,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             cursor: loading || !canSubmit ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Connectant…' : 'Crear compte o continuar'}
+          {loading ? 'Connectant…' : 'Continuar'}
         </button>
-        <p style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 1.4 }}>
-          Rebràs un correu per verificar el teu email.<br/>
-          Un cop verificat, podràs continuar amb el registre.
-        </p>
         {statusMessage}
       </div>
     )
@@ -804,34 +823,21 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={cardStyle}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={stepBadge}>
-            <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
-          </div>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
-            Verifica el teu email
+            Revisa el teu correu
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 15, marginTop: 8, lineHeight: 1.5 }}>
-            Hem enviat un correu de verificació a<br/>
+            Confirma aquesta adreça per continuar amb l&apos;alta del bar:<br/>
             <strong style={{ color: 'var(--text)' }}>{email}</strong>
           </p>
         </div>
 
-        {/* Animació d'espera */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{
-            display: 'inline-block', width: 48, height: 48, borderRadius: '50%',
-            border: '3px solid var(--border)', borderTopColor: formAccent,
-            animation: 'spin 1s linear infinite',
-          }} />
-          <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 12 }}>
-            Esperant verificació…
-          </p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-
         <p style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>
-          Clica l&apos;enllaç del correu per verificar el teu email.<br/>
-          No el trobes? Revisa la carpeta de <strong>correu brossa</strong>.
+          Obre el missatge de troBar i prem el botó de confirmació.
+          Aquesta pàgina continuarà automàticament quan el correu estigui confirmat.
+        </p>
+        <p style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.5 }}>
+          Si no el trobes, revisa el <strong>correu brossa</strong> o demana&apos;n un altre.
         </p>
 
         {/* Reenviar */}
@@ -862,7 +868,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           }}
           style={{ ...buttonSecondary, marginTop: 16 }}
         >
-          ← Canviar email
+          Canviar el correu
         </button>
 
         {statusMessage}
@@ -876,57 +882,74 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       <div style={{ ...cardStyle, maxWidth: 560 }}>
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={stepBadge}>
-            <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
-          </div>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Troba el teu bar
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
-            ✓ Email verificat: <strong>{email}</strong>
+            Busca el local pel nom i el municipi i selecciona&apos;l de la llista.
           </p>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>
-            Cerca el nom o l&apos;adreça del teu bar per auto-omplir les dades.
+            Si no hi apareix, podràs introduir-ne les dades manualment.
           </p>
         </div>
 
         {/* Search input */}
-        <div className="contact-search-row" style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <label style={labelStyle} htmlFor="bar-search">Nom del bar i municipi</label>
+        <div className="contact-search-row" style={{ marginTop: 8, marginBottom: 12 }}>
           <input
+            id="bar-search" role="combobox" aria-autocomplete="list" aria-controls="bar-suggestions"
+            aria-expanded={searchResults.length > 0} aria-busy={searching || loading}
+            aria-activedescendant={activeSuggestion >= 0 ? `bar-suggestion-${activeSuggestion}` : undefined}
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearchBar()}
-            style={{ ...inputStyle, marginTop: 0, flex: 1 }}
-            placeholder="Bar Can Punyetes, Barcelona"
+            disabled={loading}
+            onChange={e => {
+              searchVersion.current++
+              setSearchQuery(e.target.value)
+              setSearchResults([])
+              setActiveSuggestion(-1)
+              setSearching(e.target.value.trim().length >= 3)
+              setStatus(null)
+            }}
+            onKeyDown={e => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                if (searchResults.length) setActiveSuggestion(i => Math.max(0, Math.min(searchResults.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))))
+              } else if (e.key === 'Enter') {
+                e.preventDefault()
+                if (searchResults.length) void handleSelectBar(searchResults[Math.max(0, activeSuggestion)])
+              } else if (e.key === 'Escape') {
+                if (searchTimer.current) clearTimeout(searchTimer.current)
+                searchVersion.current++
+                setSearchResults([])
+                setActiveSuggestion(-1)
+                setSearching(false)
+              }
+            }}
+            style={{ ...inputStyle, marginTop: 0 }}
+            placeholder="Ex.: Zurito, Terrassa"
+            maxLength={200}
             autoFocus
           />
-          <button
-            onClick={handleSearchBar}
-            disabled={searching || !searchQuery.trim()}
-            style={{
-              padding: '14px 24px', borderRadius: 12,
-              background: formAccent, color: 'var(--black)',
-              fontWeight: 700, fontSize: 14, border: 'none',
-              cursor: searching || !searchQuery.trim() ? 'not-allowed' : 'pointer',
-              opacity: searching || !searchQuery.trim() ? 0.5 : 1,
-              whiteSpace: 'nowrap', fontFamily: 'inherit',
-              transition: 'all 0.2s',
-            }}
-          >
-            {searching ? '…' : 'Cercar'}
-          </button>
         </div>
+        {(searching || loading) && <p role="status" style={{ fontSize: 13, color: 'var(--muted)' }}>
+          {loading ? 'Carregant les dades del local…' : 'Cercant coincidències…'}
+        </p>}
+        {!searchQuery.trim() && <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+          Les coincidències apareixeran aquí mentre escrius.
+        </p>}
 
         {/* Search results */}
         {locationResults()}
         <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-          Dades de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>.
+          Resultats de <a href="https://maps.google.com" target="_blank" rel="noreferrer">Google Maps</a>.
         </p>
+        {statusMessage}
 
         {/* Skip button */}
         <button
-          onClick={() => { setSearchResults([]); setStep(4); setStatus(null) }}
+          disabled={loading}
+          onClick={() => { searchVersion.current++; setSearchResults([]); setStep(4); setStatus(null) }}
           style={{
             ...buttonSecondary,
             marginTop: 4,
@@ -934,10 +957,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             fontSize: 13,
           }}
         >
-          Ometre i introduir les dades manualment →
+          Introduir les dades manualment
         </button>
 
-        {statusMessage}
       </div>
     )
   }
@@ -964,15 +986,15 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </label>
           <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
             Adreça *
-            <input required disabled={searching} value={state.address} onChange={set('address')} style={inputStyle} placeholder="Carrer de Sants 123" />
+            <input required disabled={searching || loading} value={state.address} onChange={set('address')} style={inputStyle} placeholder="Carrer de Sants 123" />
           </label>
           <label style={labelStyle}>
             Ciutat *
-            <input required disabled={searching} value={state.city} onChange={set('city')} style={inputStyle} placeholder="Barcelona" />
+            <input required disabled={searching || loading} value={state.city} onChange={set('city')} style={inputStyle} placeholder="Barcelona" />
           </label>
           <label style={labelStyle}>
             Codi postal *
-            <input required disabled={searching} value={state.postalCode} onChange={set('postalCode')} style={inputStyle} placeholder="08014" maxLength={5} />
+            <input required disabled={searching || loading} value={state.postalCode} onChange={set('postalCode')} style={inputStyle} placeholder="08014" maxLength={5} />
           </label>
           <label style={labelStyle}>
             Telèfon del local
@@ -984,12 +1006,12 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </label>
         </div>
 
-        <button type="button" onClick={handleLocateAddress} disabled={searching} style={buttonSecondary}>
+        <button type="button" onClick={handleLocateAddress} disabled={searching || loading} style={buttonSecondary}>
           {searching ? 'Localitzant…' : state.location ? 'Tornar a localitzar l’adreça' : 'Localitza l’adreça al mapa'}
         </button>
         <p style={{ fontSize: 12, color: 'var(--muted)' }}>
           {state.location ? 'Ubicació seleccionada. Si canvies l’adreça, cal tornar-la a localitzar.' : 'Cerca l’adreça i selecciona el resultat correcte per situar el bar al mapa.'}
-          {' '}Dades de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>.
+          {' '}Resultats de <a href="https://maps.google.com" target="_blank" rel="noreferrer">Google Maps</a>.
         </p>
         {locationResults(true)}
 
@@ -1053,13 +1075,13 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             onClick={() => { setStep(3); setStatus(null) }}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
           >
-            ← Enrere
+            Enrere
           </button>
           <button
             onClick={handleContinue}
             style={{ ...buttonPrimary, flex: 2 }}
           >
-            Continuar →
+            Continuar
           </button>
         </div>
         {statusMessage}
@@ -1162,7 +1184,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
             onClick={() => setStep(4)}
             style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
           >
-            ← Enrere
+            Enrere
           </button>
           <button
             onClick={handleSubmit}
@@ -1185,9 +1207,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   return (
     <div style={cardStyle}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
-        <div style={stepBadge}>
-          <Logo size={56} variant="white" visualScale={1.08} maskCircle={false} />
-        </div>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
           Benvingut a troBar!
         </h2>

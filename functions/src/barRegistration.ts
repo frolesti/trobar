@@ -33,6 +33,10 @@ export function validateBarRegistration(input: unknown): Record<string, unknown>
     throw new HttpsError("invalid-argument", "Les coordenades del bar no són vàlides.");
   }
   result.location = { latitude, longitude };
+  if (data.googlePlaceId != null && (typeof data.googlePlaceId !== "string" || !/^[A-Za-z0-9_-]{1,255}$/.test(data.googlePlaceId))) {
+    throw new HttpsError("invalid-argument", "L'identificador del local no és vàlid.");
+  }
+  result.googlePlaceId = data.googlePlaceId || null;
   if (data.acceptTerms !== true) throw new HttpsError("invalid-argument", "Has d'acceptar les condicions.");
   if (!["monthly", "quarterly", "annual"].includes(data.billing as string)) {
     throw new HttpsError("invalid-argument", "Cicle de facturació invàlid.");
@@ -86,6 +90,7 @@ export async function persistBarRegistration(
       transaction.set(barRef, {
         name: data.businessName, address: data.address, city: data.city, postalCode: data.postalCode,
         phone: data.phone, website: data.website, location: data.location,
+        ...(data.googlePlaceId ? { googlePlaceId: data.googlePlaceId } : {}),
         legalName: data.legalName || data.businessName, capacity: data.capacity, screens: data.screens,
         openingHours: data.openingHours, description: data.description, ownerId: uid, ownerEmail: email,
         billing: data.billing, status: "registered", isActive: true, tier: "free", premium: false,

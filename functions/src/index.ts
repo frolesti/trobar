@@ -5,7 +5,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import Stripe from "stripe";
 import { persistBarRegistration } from "./barRegistration";
-export { searchRegistrationLocations } from "./registrationLocations";
+export { searchRegistrationLocations, getRegistrationLocationDetails } from "./registrationLocations";
 
 /* ── Stripe configuration ────────────────────────────────────────────────── */
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");

@@ -10,6 +10,9 @@ function formHarness(options = {}) {
   const slots = [];
   const dependencies = [];
   const effects = [];
+  const cleanups = [];
+  const timeouts = new Map();
+  let timeoutId = 0;
   const timers = [];
   const calls = [];
   let cursor, subscriber;
@@ -30,13 +33,20 @@ function formHarness(options = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
     module, exports: module.exports, URLSearchParams,
-    window: { location: { search: '', origin: 'http://localhost:3000', assign: url => calls.push(['redirect', url]) } },
+    window: { crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' },
+      location: { search: '', origin: 'http://localhost:3000', assign: url => calls.push(['redirect', url]) } },
     setInterval: callback => { timers.push(callback); return 1; }, clearInterval() {},
-    setTimeout() {}, clearTimeout() {},
+    setTimeout: (callback, delay) => { timeouts.set(++timeoutId, { callback, delay }); return timeoutId; },
+    clearTimeout: id => timeouts.delete(id),
     require: name => {
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
       if (name === 'stdnum') return require('../web-app/node_modules/stdnum');
       if (name === 'react') return {
+        useRef: initial => {
+          const index = cursor++;
+          if (!(index in slots)) slots[index] = { current: initial };
+          return slots[index];
+        },
         useState: initial => {
           const index = cursor++;
           if (!(index in slots)) slots[index] = initial;
@@ -45,7 +55,8 @@ function formHarness(options = {}) {
         useEffect: (callback, deps) => {
           const index = cursor++;
           if (!dependencies[index] || deps.some((dep, i) => dep !== dependencies[index][i])) {
-            dependencies[index] = deps; effects.push(callback);
+            dependencies[index] = deps;
+            effects.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
           }
         },
       };
@@ -72,6 +83,7 @@ function formHarness(options = {}) {
       if (name === 'firebase/functions') return {
         httpsCallable: (client, operation) => async data => {
           calls.push([operation, data]);
+          if (operation === 'searchRegistrationLocations' && options.search) return { data: await options.search(data) };
           if (operation === 'getSubscriptionStatus') return { data: { active: false } };
           if (options.fakeSuccess) return { data: { ok: true, barId: 'unpersisted' } };
           return { data: await server.api[operation](request(data)) };
@@ -96,6 +108,16 @@ function formHarness(options = {}) {
   render();
   return {
     server, user, slots, calls, options, render,
+    elements: predicate => nodes(render(), predicate),
+    debounce: async () => {
+      for (const [id, timer] of [...timeouts]) {
+        if (timer.delay !== 450) continue;
+        timeouts.delete(id);
+        await timer.callback();
+      }
+      await new Promise(resolve => setImmediate(resolve));
+      render();
+    },
     restore: async () => { auth.currentUser = user; await subscriber(user); },
     tick: async () => { await timers.at(-1)(); },
     prepare: (step, data = {}) => { slots[0] = step; slots[1] = user.email; slots[2] = { ...slots[2],
@@ -116,6 +138,20 @@ function formHarness(options = {}) {
       const input = nodes(render(), node => node.type === 'input' && node.props.placeholder === placeholder)[0];
       assert.ok(input, placeholder);
       input.props.onChange({ target: { value, type: 'text' } });
+      render();
+    },
+    blur: placeholder => {
+      nodes(render(), node => node.type === 'input' && node.props.placeholder === placeholder)[0].props.onBlur?.();
+      render();
+    },
+    focus: placeholder => {
+      nodes(render(), node => node.type === 'input' && node.props.placeholder === placeholder)[0].props.onFocus?.();
+      render();
+    },
+    key: async (placeholder, key) => {
+      const input = nodes(render(), node => node.type === 'input' && node.props.placeholder === placeholder)[0];
+      input.props.onKeyDown({ key, preventDefault() {} });
+      await new Promise(resolve => setImmediate(resolve));
       render();
     },
     text: () => {
@@ -202,24 +238,33 @@ test('invalid NIF is rejected before submit and cannot advance business details'
   assert.equal(h.calls.some(call => call[0] === 'registerBar'), false);
 });
 
-test('search selection preserves coordinates; editing the address requires locating it again', async () => {
-  const place = { place_id: 123, name: 'Bar Beta', display_name: 'Bar Beta, Barcelona', lat: '41.38', lon: '2.17',
-    address: { road: 'Carrer 1', city: 'Barcelona', postcode: '08001' } };
-  const h = formHarness({ server: { locationResults: [place] } });
+const placeServer = () => ({ fetch: async url => ({ ok: true, json: async () => url.includes('autocomplete')
+  ? { suggestions: [{ placePrediction: { placeId: 'ChIJlocal', text: { text: 'Bar Beta, Barcelona' } } }] }
+  : { id: 'ChIJlocal', displayName: { text: 'Bar Beta' }, formattedAddress: 'Carrer 1, Barcelona',
+    location: { latitude: 41.38, longitude: 2.17 }, addressComponents: [
+      { longText: 'Carrer 1', types: ['route'] }, { longText: 'Barcelona', types: ['locality'] },
+      { longText: '08001', types: ['postal_code'] },
+    ] } }) });
+
+test('typing shows debounced suggestions without a search button and selection preserves coordinates', async () => {
+  const h = formHarness({ server: placeServer() });
   await h.restore();
-  h.change('Bar Can Punyetes, Barcelona', 'Bar Beta');
-  await h.click('handleSearchBar');
+  h.change('Ex.: Zurito, Terrassa', 'Bar Beta');
+  assert.equal(h.calls.some(call => call[0] === 'searchRegistrationLocations'), false);
+  assert.equal(h.elements(node => node.type === 'button' && node.props.children === 'Cercar').length, 0);
+  await h.debounce();
+  assert.match(h.text(), /Bar Beta/);
   await h.clickResult();
   assert.equal(h.slots[0], 4);
   assert.equal(h.slots[2].businessName, 'Bar Beta');
   assert.equal(h.slots[2].location.latitude, 41.38);
+  assert.equal(h.slots[2].googlePlaceId, 'ChIJlocal');
   h.change('Carrer de Sants 123', 'Carrer 2');
   assert.equal(h.slots[2].location, null);
 });
 
 test('manual address lookup confirms a location without replacing the business name', async () => {
-  const h = formHarness({ server: { locationResults: [{ place_id: 1, display_name: 'Carrer 2, Barcelona',
-    lat: '41.38', lon: '2.17', address: { road: 'Carrer 2' } }] } });
+  const h = formHarness({ server: placeServer() });
   await h.restore();
   h.prepare(4, { businessName: 'Bar manual', address: 'Carrer 2', city: 'Barcelona', postalCode: '08001', nif: ' ES b-12345674 ' });
   await h.click('handleContinue');
@@ -230,4 +275,74 @@ test('manual address lookup confirms a location without replacing the business n
   await h.click('handleContinue');
   assert.equal(h.slots[0], 5);
   assert.equal(h.slots[2].nif, 'B12345674');
+});
+
+test('email format feedback appears only after blur and disappears while correcting it', () => {
+  const h = formHarness();
+  h.change('joan@barcanpunyetes.cat', 'joan@hotmail');
+  assert.doesNotMatch(h.text(), /Introdueix un email vàlid/);
+  h.blur('joan@barcanpunyetes.cat');
+  assert.match(h.text(), /Introdueix un email vàlid/);
+  h.focus('joan@barcanpunyetes.cat');
+  h.change('joan@barcanpunyetes.cat', 'joan@hotmail.c');
+  assert.doesNotMatch(h.text(), /Introdueix un email vàlid/);
+});
+
+test('registration steps have no decorative logos or arrow button labels and account copy is concise', () => {
+  const h = formHarness();
+  assert.doesNotMatch(h.text(), /Hauràs de clicar|enllaç de verificació/);
+  for (const step of [1, 2, 3, 4, 5, 6]) {
+    h.prepare(step);
+    assert.equal(h.elements(node => node.type === 'img' || node.type?.name === 'Logo').length, 0);
+    assert.doesNotMatch(h.text(), /[←→↗]/);
+  }
+});
+
+test('short queries do not search and late responses cannot replace newer suggestions', async () => {
+  const pending = new Map();
+  const h = formHarness({ search: data => new Promise(resolve => pending.set(data.query, resolve)) });
+  await h.restore();
+  h.change('Ex.: Zurito, Terrassa', 'zu');
+  await h.debounce();
+  assert.equal(h.calls.some(call => call[0] === 'searchRegistrationLocations'), false);
+  h.change('Ex.: Zurito, Terrassa', 'Zurito');
+  await h.debounce();
+  h.change('Ex.: Zurito, Terrassa', 'Zurito Terrassa');
+  await h.debounce();
+  pending.get('Zurito Terrassa')({ results: [{ placeId: 'new', primaryText: 'Correcte', secondaryText: 'Terrassa' }] });
+  await new Promise(resolve => setImmediate(resolve));
+  pending.get('Zurito')({ results: [{ placeId: 'old', primaryText: 'Antic', secondaryText: 'Altre municipi' }] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.text(), /Correcte/);
+  assert.doesNotMatch(h.text(), /Antic/);
+});
+
+test('keyboard navigation selects a suggestion and empty lists do not gain a phantom active option', async () => {
+  const h = formHarness({ server: placeServer() });
+  await h.restore();
+  await h.key('Ex.: Zurito, Terrassa', 'ArrowDown');
+  assert.equal(h.elements(node => node.props?.role === 'combobox')[0].props['aria-activedescendant'], undefined);
+  h.change('Ex.: Zurito, Terrassa', 'Bar Beta');
+  await h.debounce();
+  await h.key('Ex.: Zurito, Terrassa', 'ArrowDown');
+  assert.equal(h.elements(node => node.props?.role === 'combobox')[0].props['aria-activedescendant'], 'bar-suggestion-0');
+  await h.key('Ex.: Zurito, Terrassa', 'Enter');
+  assert.equal(h.slots[0], 4);
+  assert.equal(h.slots[2].googlePlaceId, 'ChIJlocal');
+});
+
+test('changing queries cancels the previous debounce and Escape cancels a queued search', async () => {
+  const h = formHarness({ server: placeServer() });
+  await h.restore();
+  h.change('Ex.: Zurito, Terrassa', 'Old query');
+  h.change('Ex.: Zurito, Terrassa', 'New query');
+  await h.debounce();
+  const calls = h.calls.filter(call => call[0] === 'searchRegistrationLocations');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].query, 'New query');
+  h.change('Ex.: Zurito, Terrassa', 'Cancelled query');
+  await h.key('Ex.: Zurito, Terrassa', 'Escape');
+  await h.debounce();
+  assert.equal(h.calls.filter(call => call[0] === 'searchRegistrationLocations').length, 1);
+  assert.equal(h.elements(node => node.props?.role === 'option').length, 0);
 });

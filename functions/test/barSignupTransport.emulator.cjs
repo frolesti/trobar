@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createHash } = require('node:crypto');
+const { randomUUID } = require('node:crypto');
 
 test('signup callables work over HTTP with local Auth, Firestore, refreshed claims and private NIF', {
   skip: !process.env.BAR_SIGNUP_FUNCTIONS_EMULATOR_HOST || !process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST,
@@ -25,11 +25,11 @@ test('signup callables work over HTTP with local Auth, Firestore, refreshed clai
   const [functionHost, functionPort] = process.env.BAR_SIGNUP_FUNCTIONS_EMULATOR_HOST.split(':');
   connectFunctionsEmulator(functions, functionHost, Number(functionPort));
   const search = httpsCallable(functions, 'searchRegistrationLocations');
+  const details = httpsCallable(functions, 'getRegistrationLocationDetails');
   const register = httpsCallable(functions, 'registerBar');
   const email = `transport-${Date.now()}@example.test`;
   const password = 'Local-transport-test-123!';
   const query = `bar transport fixture ${Date.now()}`;
-  const cache = server.firestore().collection('registrationLocationCache').doc(createHash('sha256').update(query).digest('hex'));
   let uid, barId, stranger;
   try {
     await assert.rejects(search({ query }), error => error.code === 'functions/unauthenticated');
@@ -39,14 +39,13 @@ test('signup callables work over HTTP with local Auth, Firestore, refreshed clai
     await server.auth().updateUser(uid, { emailVerified: true });
     await user.reload();
     await user.getIdToken(true);
-    await cache.set({ expiresAt: Date.now() + 60000, results: [{ place_id: 1, name: 'Bar local',
-      display_name: 'Bar local, Barcelona', lat: '41.38', lon: '2.17', address: { city: 'Barcelona' } }] });
-    const { data: locations } = await search({ query });
-    assert.equal(locations.results[0].lat, '41.38');
+    await assert.rejects(search({ query, sessionToken: 'invalid' }), error => error.code === 'functions/invalid-argument');
+    await assert.rejects(details({ placeId: '../invalid', sessionToken: randomUUID() }),
+      error => error.code === 'functions/invalid-argument');
     const data = { businessName: 'Bar transport', address: 'Carrer de prova 1', city: 'Barcelona',
       postalCode: '08001', nif: 'ES b-12345674', contactName: 'Propietari local',
       billing: 'quarterly', acceptTerms: true,
-      location: { latitude: Number(locations.results[0].lat), longitude: Number(locations.results[0].lon) } };
+      googlePlaceId: 'ChIJlocal', location: { latitude: 41.38, longitude: 2.17 } };
     await assert.rejects(register({ ...data, nif: 'B12345678' }), error => error.code === 'functions/invalid-argument');
     const { data: result } = await register(data);
     barId = result.barId;
@@ -56,6 +55,7 @@ test('signup callables work over HTTP with local Auth, Firestore, refreshed clai
     assert.equal((await getDocFromServer(doc(firestore, 'users', uid))).data().ownedBars[0], barId);
     const bar = (await getDocFromServer(doc(firestore, 'bars', barId))).data();
     assert.equal(bar.location.latitude, 41.38);
+    assert.equal(bar.googlePlaceId, 'ChIJlocal');
     assert.equal(bar.status, 'registered');
     assert.equal('nif' in bar, false);
     const { data: subscription } = await httpsCallable(functions, 'getSubscriptionStatus')({});
@@ -69,7 +69,7 @@ test('signup callables work over HTTP with local Auth, Firestore, refreshed clai
   } finally {
     await signOut(auth);
     await deleteApp(client);
-    const cleanup = [cache.delete()];
+    const cleanup = [];
     if (uid) cleanup.push(server.auth().deleteUser(uid), server.firestore().collection('users').doc(uid).delete(),
       server.firestore().collection('barOwners').doc(uid).delete());
     if (barId) cleanup.push(server.firestore().collection('bars').doc(barId).delete());

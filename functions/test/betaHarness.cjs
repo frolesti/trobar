@@ -105,10 +105,11 @@ function harness(options = {}) {
       module, exports: module.exports, URL, URLSearchParams, Date, AbortSignal,
       fetch: async (...args) => {
         calls.push({ action: 'location', args });
+        if (options.fetch) return options.fetch(...args);
         if (options.locationError) throw new Error('location/network');
         return { ok: options.locationStatus === undefined || options.locationStatus === 200,
           status: options.locationStatus || 200,
-          json: async () => options.locationResults ?? [] };
+          json: async () => options.locationResults ?? {} };
       },
       process: { env: { STRIPE_PRICE_MONTHLY: 'price_monthly', STRIPE_PRICE_QUARTERLY: 'price_quarterly', STRIPE_PRICE_ANNUAL: 'price_annual', ...options.env } },
       console: { log() {}, error() {}, info() {} },

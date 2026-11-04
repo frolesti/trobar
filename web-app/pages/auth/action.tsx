@@ -82,7 +82,7 @@ export default function AuthActionPage() {
             : action?.kind === 'reset' ? 'Una nova contrasenya' : 'Revisa l’enllaç'}</h1>
           {loading && <p role="status">Estem comprovant l’enllaç de manera segura.</p>}
           {complete && <p role="status">{action?.kind === 'verified'
-            ? 'El teu correu ja està verificat. Pots tornar a troBar.'
+            ? 'El teu correu ja està confirmat. Ja pots continuar amb l’alta del bar.'
             : 'Ja pots iniciar sessió a troBar amb la nova contrasenya.'}</p>}
           {error && <div className={styles.notice} role="alert">{error}</div>}
           {!loading && !complete && action?.kind === 'reset' && <form onSubmit={submit}>
@@ -100,7 +100,8 @@ export default function AuthActionPage() {
               onChange={event => setShowPassword(event.target.checked)} /> Mostra les contrasenyes</label>
             <button type="submit" disabled={submitting}>{submitting ? 'Desant…' : 'Desar la contrasenya'}</button>
           </form>}
-          {!loading && <a className={styles.back} href="trobar://login">Tornar a l’app</a>}
+          {!loading && action?.kind === 'verified' && <a className={styles.primaryLink} href="/registra-bar">Continuar amb el registre</a>}
+          {!loading && <a className={styles.back} href="trobar://login">Obrir l’app de troBar</a>}
         </div>
         <footer className={styles.footer}>El teu equip. El teu bar. <a href="/">troBar</a></footer>
       </section>
