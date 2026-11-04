@@ -213,6 +213,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [subscriptionCheck, setSubscriptionCheck] = useState(0)
   const cardRef = useRef<HTMLDivElement>(null)
   const previousStep = useRef(step)
+  const resumeCheckout = useRef<'auto' | 'review' | null>(null)
+  const checkoutRedirecting = useRef(false)
   const scrollBehavior = (): ScrollBehavior => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 
   useEffect(() => {
@@ -270,6 +272,11 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     }
   }
 
+  const handleBackToPage = () => {
+    if (window.history.length > 1) window.history.back()
+    else window.location.assign('/per-a-bars')
+  }
+
   const restoreOwnerDetails = async (data: Record<string, unknown>, uid: string) => {
     const profile = await getDocFromServer(doc(db, 'users', uid))
     const user = auth.currentUser
@@ -296,6 +303,11 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         openingHours: details.openingHours || '', description: details.description || '',
       } : {}),
     }))
+    const checkoutReturn = new URLSearchParams(window.location.search).get('checkout')
+    resumeCheckout.current = details && (details.status === 'pending_checkout' || !data.stripeSubscriptionId)
+      ? checkoutReturn === 'cancelled' ? 'review' : !checkoutReturn ? 'auto' : null
+      : null
+    setCheckingSubscription(true)
     setStep(6)
   }
 
@@ -334,13 +346,33 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         const result = await check({})
         if (cancelled) return
         setSubscription(result.data)
+        const canResume = !result.data.active && (!result.data.status || ['canceled', 'incomplete_expired'].includes(result.data.status))
+        if (canResume && resumeCheckout.current) {
+          const action = resumeCheckout.current
+          resumeCheckout.current = null
+          setStatus(null)
+          if (action === 'review') {
+            setStep(5)
+          } else {
+            setLoading(true)
+            try {
+              await openCheckout()
+            } catch (error) {
+              if (!cancelled) setStatus(getFriendlyFunctionError(error, true))
+            } finally {
+              if (!cancelled && !checkoutRedirecting.current) setLoading(false)
+            }
+          }
+          if (!cancelled) setCheckingSubscription(false)
+          return
+        }
         const returning = new URLSearchParams(window.location.search).get('checkout') === 'success'
         if (!result.data.active && returning && ++attempts < 10) {
           timer = setTimeout(() => { void refresh() }, 3000)
           return
         }
         setStatus(result.data.active ? null : returning
-          ? "Encara no tenim la confirmació de Stripe. Pots tornar a comprovar-la sense repetir el pagament."
+          ? "Stripe encara està confirmant el pagament. Torna-ho a comprovar."
           : null)
       } catch {
         if (!cancelled) setStatus("No hem pogut comprovar la subscripció. Torna-ho a comprovar abans de repetir el pagament.")
@@ -680,7 +712,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     } catch (err: unknown) {
       setStatus(getFriendlyFunctionError(err, prepared))
     } finally {
-      setLoading(false)
+      if (!checkoutRedirecting.current) setLoading(false)
     }
   }
 
@@ -696,6 +728,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
       throw new Error("No s'ha pogut obrir el pagament.")
     }
     window.location.assign(result.data.url)
+    checkoutRedirecting.current = true
   }
 
   const handleCheckout = async () => {
@@ -706,7 +739,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     } catch (error) {
       setStatus(getFriendlyFunctionError(error, true))
     } finally {
-      setLoading(false)
+      if (!checkoutRedirecting.current) setLoading(false)
     }
   }
 
@@ -721,6 +754,19 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     position: 'relative',
     border: '1px solid var(--hairline)',
   }
+
+  const backButton = (onClick: () => void, label: string, disabled = loading) => (
+    <button type="button" onClick={onClick} aria-label={label} title={label} disabled={disabled} style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 44, height: 44, marginBottom: 16, padding: 0, borderRadius: '50%',
+      background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
+      cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+    }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M19 12H5M12 19l-7-7 7-7" />
+      </svg>
+    </button>
+  )
 
   /* Barra de progrés: 4 segments
      Steps 1-2 → seg 1 | Step 3 → seg 2 | Step 4 → seg 3 | Step 5 → seg 4 */
@@ -759,6 +805,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     const canSubmit = !existingAccount || existingAccount === 'password'
     return (
       <div ref={cardRef} className="contact-form-card registration-form" style={cardStyle}>
+        {backButton(handleBackToPage, 'Tornar a la pàgina anterior')}
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
           <h2 style={{ margin: '0 0 6px', fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -958,6 +1005,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   if (step === 2) {
     return (
       <div ref={cardRef} className="registration-form" style={cardStyle}>
+        {backButton(handleBackToAccount, 'Tornar al compte')}
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -997,14 +1045,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           )}
         </div>
 
-        <button
-          onClick={handleBackToAccount}
-          disabled={loading}
-          style={{ ...buttonSecondary, marginTop: 16 }}
-        >
-          Canviar el correu
-        </button>
-
         {statusMessage}
       </div>
     )
@@ -1014,6 +1054,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   if (step === 3) {
     return (
       <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 560 }}>
+        {backButton(handleBackToAccount, 'Tornar al compte')}
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -1093,10 +1134,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         >
           Introduir les dades manualment
         </button>
-        <button type="button" onClick={handleBackToAccount} disabled={loading} style={buttonSecondary}>
-          Enrere: el meu compte
-        </button>
-        <p className="registration-field-guide">Les dades del local es conservaran mentre no recarreguis la pàgina.</p>
       </div>
     )
   }
@@ -1105,6 +1142,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   if (step === 4) {
     return (
       <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 600 }}>
+        {backButton(() => { setStep(3); setStatus(null); setFieldErrors({}) }, 'Tornar a la cerca del bar', searching || loading)}
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -1221,13 +1259,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
         <div className="contact-actions" style={{ display: 'flex', gap: 12, marginTop: 28 }}>
           <button
-            onClick={() => { setStep(3); setStatus(null); setFieldErrors({}) }}
-            disabled={searching || loading}
-            style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
-          >
-            Enrere
-          </button>
-          <button
             onClick={handleContinue}
             disabled={searching || loading}
             style={{ ...buttonPrimary, flex: 2 }}
@@ -1251,6 +1282,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
     return (
       <div ref={cardRef} className="registration-form" style={cardStyle}>
+        {backButton(() => { setStep(4); setStatus(null); setFieldErrors({}) }, 'Tornar a les dades del bar')}
         {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
@@ -1258,10 +1290,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
             Un sol pla, tot inclòs. Estalvia triant trimestral o anual.
-          </p>
-          <p className="registration-benefit">
-            A continuació aniràs a Stripe per introduir la targeta i confirmar els 14 dies de prova.
-            El bar no s’activarà fins que Stripe confirmi la subscripció.
           </p>
         </div>
 
@@ -1340,13 +1368,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
         <div className="contact-actions" style={{ display: 'flex', gap: 12 }}>
           <button
-            onClick={() => { setStep(4); setStatus(null); setFieldErrors({}) }}
-            disabled={loading}
-            style={{ ...buttonSecondary, flex: 1, marginTop: 0 }}
-          >
-            Enrere
-          </button>
-          <button
             onClick={handleSubmit}
             disabled={loading}
             style={{
@@ -1366,42 +1387,39 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   /* ── PAS 6: Confirmació final ───────────────────────────────────────── */
   return (
     <div ref={cardRef} className="registration-form" style={cardStyle}>
+      {backButton(subscription?.active ? handleBackToPage : () => { setStep(5); setStatus(null); setFieldErrors({}) },
+        subscription?.active ? 'Tornar a la pàgina anterior' : 'Tornar a la subscripció', loading || checkingSubscription)}
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
-          {checkingSubscription ? 'Comprovant la subscripció…'
+          {loading ? 'Obrint Stripe…' : checkingSubscription ? 'Confirmant…'
             : subscription?.active ? 'El teu bar ja està activat!'
-            : 'Falta confirmar la subscripció'}
+            : 'Continua amb Stripe'}
         </h2>
+        {subscription?.active && !checkingSubscription && (
         <p style={{ color: 'var(--muted)', fontSize: 16, marginTop: 12, lineHeight: 1.6 }}>
-          {checkingSubscription ? 'Estem consultant Stripe. No cal que tornis a introduir la targeta.'
-            : subscription?.active
-              ? <>La subscripció de <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong> està confirmada.</>
-              : <>Hem conservat les dades de <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong>.
-                Completa el pas de Stripe per activar-lo. Si encara no has completat cap subscripció, el bar no està publicat.</>}
+          La subscripció de <strong style={{ color: 'var(--text)' }}>{state.businessName}</strong> està confirmada.
         </p>
+        )}
         {subscription?.active && !checkingSubscription && (
           <p style={{ fontSize: 14 }}>
             {subscription.status === 'trialing' ? 'Ja han començat els 14 dies de prova. El primer cobrament serà en acabar aquest període.' : 'La subscripció està activa.'}
           </p>
         )}
-        {!subscription?.active && !checkingSubscription && (
+        {!subscription?.active && !checkingSubscription && !loading && (
           <>
-            {subscription && (!subscription.status || ['canceled', 'incomplete_expired'].includes(subscription.status)) && (
-              <>
+            {subscription && (!subscription.status || ['canceled', 'incomplete_expired'].includes(subscription.status))
+              && new URLSearchParams(window.location.search).get('checkout') !== 'success' ? (
                 <button onClick={handleCheckout} disabled={loading} style={buttonPrimary}>
-                  {loading ? 'Obrint Stripe…' : 'Continuar a Stripe'}
+                  Continuar a Stripe
                 </button>
-                <button disabled={loading} onClick={() => { setStep(4); setStatus(null); setFieldErrors({}) }} style={buttonSecondary}>
-                  Enrere: revisar les dades
+              ) : (
+                <button onClick={() => { setStatus(null); setSubscriptionCheck(value => value + 1) }} style={buttonSecondary}>
+                  Comprovar confirmació
                 </button>
-              </>
             )}
             {subscription?.status && !['canceled', 'incomplete_expired'].includes(subscription.status) && (
-              <p>La subscripció necessita una revisió. No iniciïs un altre pagament; contacta amb suport si no es resol.</p>
+              <p>Contacta amb suport per revisar el pagament.</p>
             )}
-            <button disabled={loading} onClick={() => { setStatus(null); setSubscriptionCheck(value => value + 1) }} style={buttonSecondary}>
-              Tornar a comprovar la subscripció
-            </button>
           </>
         )}
         {statusMessage}

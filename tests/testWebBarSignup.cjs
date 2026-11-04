@@ -35,6 +35,7 @@ function formHarness(options = {}) {
   }).outputText, {
     module, exports: module.exports, URLSearchParams, URL,
     window: { crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' },
+      history: { length: options.historyLength ?? 2, back: () => calls.push(['historyBack']) },
       location },
     setInterval: callback => { timers.push(callback); return 1; }, clearInterval() {},
     setTimeout: (callback, delay) => { timeouts.set(++timeoutId, { callback, delay }); return timeoutId; },
@@ -302,7 +303,7 @@ test('search offers a working way back to the account without losing local draft
   assert.equal(h.slots[2].description, 'Ambient de partit');
 });
 
-test('cancelled Checkout restores the draft without a success claim and active trials alone show activation', async () => {
+test('cancelled Checkout returns to the previous subscription step with the saved details', async () => {
   const documents = { 'barOwners/owner': { barId: 'bar', barName: 'Bar pendent', billingCycle: 'annual', nif: 'B12345674' },
     'users/owner': { role: 'bar_owner', ownedBars: ['bar'] },
     'bars/bar': { address: 'Carrer 1', city: 'Barcelona', postalCode: '08001', description: 'Ambient de partit',
@@ -310,18 +311,86 @@ test('cancelled Checkout restores the draft without a success claim and active t
   const h = formHarness({ searchParams: '?checkout=cancelled', claims: { role: 'bar_owner' }, server: { documents } });
   await h.restore();
   await h.settle();
-  assert.equal(h.slots[0], 6);
-  assert.match(h.text(), /Falta confirmar/);
+  assert.equal(h.slots[0], 5);
+  assert.match(h.text(), /Tria la facturació/);
   assert.doesNotMatch(h.text(), /ja està activat|registrat correctament|Descarrega/);
   assert.equal(h.slots[2].description, 'Ambient de partit');
   assert.equal(h.slots[2].nif, 'B12345674');
-  h.options.subscriptionResponse = { active: true, status: 'trialing' };
-  const retry = h.elements(node => node.type === 'button' && node.props.children === 'Tornar a comprovar la subscripció')[0];
-  retry.props.onClick();
-  h.render();
+  assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false, 'cancel must not reopen Checkout automatically');
+});
+
+const validDraft = { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
+  nif: 'B12345674', acceptTerms: true, location: { latitude: 41.38, longitude: 2.17 } };
+
+async function savedDraft(options = {}) {
+  const h = formHarness({ checkoutError: true, ...options });
+  h.location.origin = 'https://www.trobar.cat';
+  await h.restore();
+  h.prepare(5, validDraft);
+  await h.click('handleSubmit');
+  h.calls.length = 0;
+  return h;
+}
+
+test('reopening a pending registration connects to Stripe automatically exactly once', async () => {
+  const h = await savedDraft();
+  h.options.checkoutError = false;
+  await h.restore();
   await h.settle();
-  assert.match(h.text(), /ja està activat/);
-  assert.match(h.text(), /primer cobrament serà en acabar/);
+  await h.settle();
+  assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
+  assert.equal(h.calls.filter(call => call[0] === 'redirect').length, 1, h.text());
+  assert.doesNotMatch(h.text(), /Falta confirmar|Hem conservat les dades|Tornar a comprovar/);
+});
+
+test('registrations saved before the pending status was introduced also connect to Stripe', async () => {
+  const h = await savedDraft();
+  Object.assign(h.server.documents.get('bars/bar1'), { status: 'registered', isActive: true });
+  h.options.checkoutError = false;
+  await h.restore();
+  await h.settle();
+  assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
+  assert.equal(h.calls.filter(call => call[0] === 'redirect').length, 1);
+});
+
+test('automatic Checkout failure shows a single retry without looping or losing the previous step', async () => {
+  const h = await savedDraft();
+  await h.restore();
+  await h.settle();
+  await h.settle();
+  assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
+  assert.match(h.text(), /servei no està disponible/);
+  assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleCheckout').length, 1);
+  const back = h.elements(node => node.type === 'button' && node.props['aria-label'] === 'Tornar a la subscripció')[0];
+  back.props.onClick();
+  h.render();
+  assert.equal(h.slots[0], 5);
+  assert.equal(h.slots[2].businessName, 'Bar Beta');
+});
+
+test('confirmed trials and unresolved subscriptions never trigger automatic repeat Checkout', async () => {
+  for (const response of [{ active: true, status: 'trialing' }, { active: false, status: 'past_due' }]) {
+    const h = await savedDraft({ subscriptionResponse: response });
+    h.options.checkoutError = false;
+    await h.restore();
+    await h.settle();
+    assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false);
+    if (response.active) {
+      assert.match(h.text(), /ja està activat/);
+      assert.match(h.text(), /primer cobrament serà en acabar/);
+    } else {
+      assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleCheckout').length, 0);
+    }
+  }
+});
+
+test('a pending Stripe success return waits for confirmation instead of opening Checkout again', async () => {
+  const h = await savedDraft({ searchParams: '?checkout=success' });
+  h.options.checkoutError = false;
+  await h.restore();
+  await h.settle();
+  assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false);
+  assert.doesNotMatch(h.text(), /ja està activat/);
 });
 
 test('a success query parameter and unknown subscription state cannot claim activation or offer duplicate payment', async () => {
@@ -397,14 +466,41 @@ test('email format feedback appears only after blur and disappears while correct
   assert.doesNotMatch(h.text(), /Introdueix un email vàlid/);
 });
 
-test('registration steps have no decorative logos or arrow button labels and account copy is concise', () => {
+test('every step has an accessible icon-only left arrow instead of a text back button', () => {
   const h = formHarness();
   assert.doesNotMatch(h.text(), /Hauràs de clicar|enllaç de verificació/);
   for (const step of [1, 2, 3, 4, 5, 6]) {
     h.prepare(step);
     assert.equal(h.elements(node => node.type === 'img' || node.type?.name === 'Logo').length, 0);
     assert.doesNotMatch(h.text(), /[←→↗]/);
+    const back = h.elements(node => node.type === 'button' && node.props['aria-label']?.startsWith('Tornar'));
+    assert.equal(back.length, 1);
+    assert.equal(back[0].props.children.type, 'svg');
+    assert.equal(back[0].props.children.props['aria-hidden'], 'true');
+    assert.doesNotMatch(h.text(), /Enrere|Canviar el correu/);
   }
+});
+
+test('the first arrow navigates browser history, with a fallback for direct entry', async () => {
+  for (const historyLength of [1, 2]) {
+    const h = formHarness({ historyLength });
+    await h.click('handleBackToPage');
+    assert.ok(h.calls.some(call => historyLength === 2 ? call[0] === 'historyBack'
+      : call[0] === 'redirect' && call[1] === '/per-a-bars'));
+  }
+});
+
+test('arrows from subscription and business details go to the previous step and preserve inputs', () => {
+  const h = formHarness();
+  h.prepare(5, validDraft);
+  h.elements(node => node.type === 'button' && node.props['aria-label'] === 'Tornar a les dades del bar')[0].props.onClick();
+  h.render();
+  assert.equal(h.slots[0], 4);
+  h.elements(node => node.type === 'button' && node.props['aria-label'] === 'Tornar a la cerca del bar')[0].props.onClick();
+  h.render();
+  assert.equal(h.slots[0], 3);
+  assert.equal(h.slots[2].businessName, 'Bar Beta');
+  assert.equal(h.slots[2].nif, 'B12345674');
 });
 
 test('short queries do not search and late responses cannot replace newer suggestions', async () => {

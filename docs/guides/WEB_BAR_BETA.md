@@ -3,6 +3,9 @@
 ## Revisió UX i confirmació a Stripe (4 de novembre de 2026)
 
 - Navegació enrere també des de la cerca i la verificació del correu.
+  Cada pantalla té una fletxa esquerra sense text visible, amb nom accessible.
+  Torna al pas anterior; al primer pas torna a la pàgina anterior del navegador
+  (o a `/per-a-bars` si s'ha entrat directament).
   Les dades escrites es conserven durant la navegació del formulari; no es
   persisteixen contrasenyes ni esborranys personals al navegador.
 - Camps obligatoris amb `*`, opcionals identificats explícitament i ubicació
@@ -28,12 +31,22 @@
   Checkout oberta, un reintent idèntic es permet, però no canviar les dades
   o el pla fins que caduqui. No se sobreescriuen bars ja activats.
 - En tornar o recarregar, es recuperen les dades des del servidor. Una
-  cancel·lació permet reprendre o revisar les dades; un retorn `success`
+  alta pendent reprèn Checkout automàticament després de comprovar que no
+  existeix una subscripció activa, també per a les altes antigues sense ID
+  de subscripció. No mostra una pantalla intermèdia explicativa.
+  Una cancel·lació torna al pas de facturació sense reobrir Stripe; un retorn `success`
   només inicia una consulta d'estat amb reintents acotats. Un error de
   consulta no equival a una subscripció inactiva ni ofereix repetir el
-  pagament a cegues. Es mantenen els 14 dies de prova.
+  pagament a cegues. Si falla obrir Checkout, només s'ofereix reintentar
+  i la fletxa per tornar al pas anterior; no hi ha reintents automàtics
+  en bucle. Es mantenen els 14 dies de prova.
 
-Validació d'aquesta revisió: **60 proves dirigides correctes**, builds de
+Correcció posterior de navegació i represa: **38 proves dirigides correctes**
+(formulari, Checkout i estat de facturació) i build Next correcte. Cobreix
+represa automàtica única, altes antigues, error sense bucle, retorn cancel·lat,
+retorn d'èxit sense pagament duplicat i fletxes amb conservació de dades.
+
+Validació de la revisió inicial: **60 proves dirigides correctes**, builds de
 Next i Functions i type-check de l'app correctes. **Dues proves amb emuladors
 correctes**, una amb el handler i una amb el transport HTTP real dels callables:
 esborrany inactiu, propietat, NIF privat, claims, reintents i denegació a un
@@ -147,7 +160,8 @@ ocult en tornar a editar, cap logo al formulari ni desbordament horitzontal.
 Els tests cobreixen també teclat, cancel·lació del debounce, respostes fora
 d'ordre, límit de quota, selecció de coordenades i registre HTTP persistent.
 
-El formulari no mostra logos decoratius ni fletxes als botons. L'error de format
+El formulari no mostra logos decoratius; la navegació enrere utilitza una
+icona de fletxa esquerra amb nom accessible. L'error de format
 del correu apareix en sortir del camp, no mentre s'escriu. Les instruccions de
 verificació només apareixen després de crear el compte i enviar el correu.
 
