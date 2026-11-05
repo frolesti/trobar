@@ -1,5 +1,33 @@
 # Beta web: registre de propietaris de bars
 
+## Espais i confirmació després de Checkout (5 de novembre de 2026)
+
+- Es redueixen els paddings i les separacions del web: seccions de la portada
+  de 48–64 px, sense mínims de 70–100 vh, i menys espai al web de bars,
+  contacte, legals i peu de pàgina. Es conserven els controls tàctils de 44 px.
+- La confirmació amaga el hero comercial i se situa just sota la capçalera.
+  No mostra fletxa mentre consulta Stripe ni quan el bar ja està activat;
+  tampoc es mostren fletxes durant altres operacions del formulari.
+- `getSubscriptionStatus` ja retorna `trialEnd`, `currentPeriodEnd` i
+  `cancelAtPeriodEnd`. El web mostra la data real en català i zona de
+  Barcelona: primer cobrament, següent renovació o final d'accés si s'ha
+  cancel·lat la renovació. No calcula una data fictícia sumant 14 dies.
+- Renovació escollida: automàtica si no es cancel·la abans de la data.
+  El recordatori per correu encara no està activat i el web no el promet.
+  La [campanya de correus](TRIAL_EMAIL_CAMPAIGN.md) detalla els requisits.
+- Stripe s'explica com la passarel·la segura per gestionar targetes i
+  cobraments, al hero i abans de continuar al pagament.
+- L'app encara no està publicada a les botigues. `StoreBadges` ara ho indica,
+  en comptes d'enviar a les portades genèriques d'Apple i Google. Quan hi
+  hagi fitxes reals, configurar `NEXT_PUBLIC_APP_STORE_URL` i/o
+  `NEXT_PUBLIC_GOOGLE_PLAY_URL` a l'entorn del web i tornar a desplegar.
+  El mateix component s'utilitza a portada i confirmació.
+- Validació: **43 proves dirigides correctes** i build Next correcte.
+  Render visual dels components reals, amb dades fictícies i sense accés a
+  Firebase: confirmació a 360/390/767/1440 px, sense hero, fletxes ni overflow;
+  separació capçalera-targeta de 27–31 px. La càrrega de Checkout tampoc
+  mostra fletxa. Aquests renders no simulen un nou pagament.
+
 ## Favicon, peu de pàgina i progrés de Checkout (5 de novembre de 2026)
 
 - El logo oficial identifica totes les pestanyes: ICO de 16/32/48 px,

@@ -78,7 +78,7 @@ export default function PerABars() {
         <FloatingLogos className="per-a-bars-floats" count={12} opacity={0.32} fixed zIndex={0} />
         <div className="per-a-bars-content" style={{ position: 'relative', zIndex: 1 }}>
         {/* Hero per a bars */}
-        <section className="per-a-bars-hero" style={{ padding: '160px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        <section className="per-a-bars-hero" style={{ padding: '120px 24px 40px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ maxWidth: 720, margin: '0 auto', position: 'relative', zIndex: 1 }} className="fade-up per-a-bars-hero-inner">
             <span className="eyebrow">Per a bars i restaurants</span>
             <h1 style={{ marginBottom: 24 }}>
@@ -95,9 +95,9 @@ export default function PerABars() {
         </section>
 
         {/* Beneficis */}
-        <section className="per-a-bars-benefits" style={{ padding: '100px 24px 60px' }}>
+        <section className="per-a-bars-benefits" style={{ padding: '48px 24px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: 64 }}>
+            <div style={{ textAlign: 'center', marginBottom: 32 }}>
               <span className="eyebrow">Què inclou</span>
               <h2 style={{ marginBottom: 14 }}>
                 Tot per fer créixer <em style={{ color: 'var(--gold)', fontWeight: 500 }}>el teu negoci</em>
@@ -143,14 +143,14 @@ export default function PerABars() {
         </section>
 
         {/* Preus */}
-        <section className="per-a-bars-preus" style={{ padding: '80px 24px' }}>
+        <section className="per-a-bars-preus" style={{ padding: '48px 24px' }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <Pricing />
           </div>
         </section>
 
         {/* CTA final */}
-        <section className="per-a-bars-cta" style={{ textAlign: 'center', padding: '80px 24px 140px' }}>
+        <section className="per-a-bars-cta" style={{ textAlign: 'center', padding: '40px 24px 48px' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <h2 style={{ marginBottom: 20 }}>
               Comença <em style={{ color: 'var(--gold)', fontWeight: 500 }}>avui</em>

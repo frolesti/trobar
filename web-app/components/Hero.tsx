@@ -9,14 +9,14 @@ export default function Hero() {
       className="hero-section"
       style={{
         position: 'relative',
-        minHeight: '100vh',
+        minHeight: 'auto',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
         textAlign: 'center',
         overflow: 'hidden',
-        padding: '132px 24px 48px',
+        padding: '112px 24px 40px',
       }}
     >
       {/* ── Fons ── */}
@@ -53,7 +53,7 @@ export default function Hero() {
         <p className="hero-copy" style={{
           fontSize: 18,
           maxWidth: 480,
-          margin: '0 auto 52px',
+          margin: '0 auto 28px',
           color: 'var(--cream-70)',
         }}>
           El mapa col·laboratiu dels culers. Descobreix on emeten el partit,

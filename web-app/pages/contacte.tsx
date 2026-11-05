@@ -24,8 +24,8 @@ export default function Contacte() {
       </Head>
       <Header />
 
-      <main style={{ maxWidth: 620, margin: '0 auto', padding: '160px 24px 100px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <main style={{ maxWidth: 620, margin: '0 auto', padding: '112px 24px 48px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <span className="eyebrow">Contacte</span>
           <h1 style={{ marginBottom: 16 }}>
             Parla amb <em style={{ color: 'var(--gold)', fontWeight: 500 }}>nosaltres</em>
@@ -104,7 +104,7 @@ export default function Contacte() {
         )}
 
         <div style={{
-          marginTop: 64, textAlign: 'center',
+          marginTop: 32, textAlign: 'center',
           fontSize: 15, color: 'var(--paper-mute)',
         }}>
           <p>O escriu-nos directament a</p>

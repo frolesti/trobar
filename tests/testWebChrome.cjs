@@ -84,3 +84,51 @@ test('official favicon variants are concrete deployable images with the advertis
   assert.match(document, /sizes="32x32" href="\/assets\/logos\/favicon-32\.png"/);
   assert.match(document, /sizes="180x180" href="\/assets\/logos\/apple-touch-icon\.png"/);
 });
+
+test('download badges never link to generic stores and explain when the app is not published', () => {
+  const render = env => {
+    const module = { exports: {} };
+    const jsx = (type, props) => ({ type, props });
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../web-app/components/StoreBadges.tsx'), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    }).outputText, { module, exports: module.exports, process: { env },
+      require: name => {
+        assert.equal(name, 'react/jsx-runtime');
+        return { jsx, jsxs: jsx };
+      },
+    });
+    return JSON.stringify(module.exports.default({ center: true }));
+  };
+  assert.match(render({}), /encara no està publicada/);
+  assert.doesNotMatch(render({}), /"href"/);
+  const appStore = 'https://apps.apple.com/app/id0000000000';
+  const googlePlay = 'https://play.google.com/store/apps/details?id=example.test.trobar';
+  const configured = render({ NEXT_PUBLIC_APP_STORE_URL: appStore, NEXT_PUBLIC_GOOGLE_PLAY_URL: googlePlay });
+  assert.ok(configured.includes(appStore));
+  assert.ok(configured.includes(googlePlay));
+  assert.doesNotMatch(configured, /encara no està publicada/);
+});
+
+test('registration hides the marketing hero on confirmation and keeps it for editable steps', () => {
+  const render = (step, checkout) => {
+    const module = { exports: {} };
+    const jsx = (type, props) => ({ type, props });
+    let cursor = 0;
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../web-app/pages/registra-bar.tsx'), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    }).outputText, { module, exports: module.exports,
+      require: name => {
+        if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+        if (name === 'react') return { useState: initial => [cursor++ === 1 ? step : initial, () => {}] };
+        if (name === 'next/router') return { useRouter: () => ({ query: { checkout } }) };
+        return { default: name };
+      },
+    });
+    return JSON.stringify(module.exports.default());
+  };
+  assert.match(render(5), /"className":"register-hero"/);
+  for (const [step, checkout] of [[6, undefined], [1, 'success']]) {
+    assert.doesNotMatch(render(step, checkout), /"className":"register-hero"/);
+    assert.match(render(step, checkout), /register-page--confirmation/);
+  }
+});

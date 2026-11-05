@@ -43,7 +43,7 @@ export default function Pricing() {
 
   return (
     <section id="preus" className="pricing-section">
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <span className="eyebrow">Preus</span>
         <h2 style={{ marginBottom: 14 }}>
           Un sol pla, <em style={{ color: 'var(--gold)', fontWeight: 500 }}>sense sorpreses</em>
@@ -56,7 +56,7 @@ export default function Pricing() {
       {/* Cycle selector — pestanyes editorials */}
       <div className="pricing-selector" style={{
         display: 'flex', justifyContent: 'center', gap: 0,
-        maxWidth: 540, margin: '0 auto 48px',
+        maxWidth: 540, margin: '0 auto 28px',
         borderTop: '1px solid var(--hairline)',
         borderBottom: '1px solid var(--hairline)',
       }}>

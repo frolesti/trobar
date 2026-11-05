@@ -98,12 +98,13 @@ function formHarness(options = {}) {
       };
       if (name === '../lib/firebase') return { auth, db: {}, functions: {} };
       if (name === './Logo') return { default: () => null };
+      if (name === './StoreBadges') return { __esModule: true, default: 'store-badges' };
       throw new Error(name);
     },
   });
   function render() {
     cursor = 0;
-    const tree = module.exports.default({});
+    const tree = module.exports.default({ onStepChange: options.onStepChange });
     for (const node of nodes(tree, node => node.props?.ref && typeof node.props.ref === 'object')) {
       node.props.ref.current = {
         scrollIntoView: settings => calls.push(['scrollCard', settings]),
@@ -277,6 +278,7 @@ test('opening Checkout shows one progress message in the button, without duplica
   await new Promise(resolve => setImmediate(resolve));
   assert.equal((h.text().match(/Obrint Stripe…/g) || []).length, 1);
   assert.equal(h.elements(node => node.props?.role === 'status').length, 0);
+  assert.equal(h.elements(node => node.type === 'button' && node.props['aria-label']?.startsWith('Tornar')).length, 0);
   assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleSubmit')[0].props['aria-busy'], true);
   release();
   await submission;
@@ -397,7 +399,7 @@ test('confirmed trials and unresolved subscriptions never trigger automatic repe
     assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false);
     if (response.active) {
       assert.match(h.text(), /ja està activat/);
-      assert.match(h.text(), /primer cobrament serà en acabar/);
+      assert.match(h.text(), /Premium al mapa/);
     } else {
       assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleCheckout').length, 0);
     }
@@ -486,10 +488,10 @@ test('email format feedback appears only after blur and disappears while correct
   assert.doesNotMatch(h.text(), /Introdueix un email vàlid/);
 });
 
-test('every step has an accessible icon-only left arrow instead of a text back button', () => {
+test('editable steps have an accessible icon-only left arrow instead of a text back button', () => {
   const h = formHarness();
   assert.doesNotMatch(h.text(), /Hauràs de clicar|enllaç de verificació/);
-  for (const step of [1, 2, 3, 4, 5, 6]) {
+  for (const step of [1, 2, 3, 4, 5]) {
     h.prepare(step);
     assert.equal(h.elements(node => node.type === 'img' || node.type?.name === 'Logo').length, 0);
     assert.doesNotMatch(h.text(), /[←→↗]/);
@@ -499,6 +501,56 @@ test('every step has an accessible icon-only left arrow instead of a text back b
     assert.equal(back[0].props.children.props['aria-hidden'], 'true');
     assert.doesNotMatch(h.text(), /Enrere|Canviar el correu/);
   }
+});
+
+test('confirmation reports its stage, shows the real trial date and Premium status without a back arrow', async () => {
+  const stages = [];
+  const h = formHarness({ searchParams: '?checkout=success', onStepChange: step => stages.push(step),
+    subscriptionResponse: { active: true, status: 'trialing', trialEnd: 1795079482 } });
+  h.prepare(6, { businessName: 'Bar Beta' });
+  await h.settle();
+  assert.ok(stages.includes(6));
+  assert.match(h.text(), /Primer cobrament:\s+19 de novembre del? 2026/);
+  assert.match(h.text(), /automàtic si no cancel·les/);
+  assert.match(h.text(), /Premium al mapa/);
+  assert.doesNotMatch(h.text(), /enviarem.*correu|rebràs.*correu/i, 'do not promise reminders before delivery is enabled');
+  assert.equal(h.elements(node => node.type === 'button' && node.props['aria-label']?.startsWith('Tornar')).length, 0);
+  assert.equal(h.elements(node => node.type === 'store-badges').length, 1);
+});
+
+test('pending confirmation never shows a back arrow or claims activation', () => {
+  const h = formHarness({ searchParams: '?checkout=success' });
+  h.prepare(6);
+  h.render();
+  assert.match(h.text(), /Confirmant/);
+  assert.equal(h.elements(node => node.type === 'button' && node.props['aria-label']?.startsWith('Tornar')).length, 0);
+  assert.doesNotMatch(h.text(), /Premium al mapa|ja està activat/);
+});
+
+test('cancelled renewal explains that there is no future charge, and a missing date is explicit', async () => {
+  const cancelled = formHarness({ subscriptionResponse: {
+    active: true, status: 'trialing', trialEnd: 1795079482, cancelAtPeriodEnd: true,
+  } });
+  cancelled.prepare(6);
+  await cancelled.settle();
+  assert.match(cancelled.text(), /Tens accés fins al\s+19 de novembre del? 2026/);
+  assert.match(cancelled.text(), /No es farà cap cobrament/);
+  assert.doesNotMatch(cancelled.text(), /Primer cobrament|cobrament és automàtic/);
+
+  const missing = formHarness({ subscriptionResponse: { active: true, status: 'trialing' } });
+  missing.prepare(6);
+  await missing.settle();
+  assert.match(missing.text(), /data de cobrament encara no està disponible/);
+  assert.equal(missing.elements(node => node.type === 'button' && node.props.children === 'Tornar a comprovar').length, 1);
+});
+
+test('paid subscriptions show the actual next renewal date using Barcelona time, not the former trial end', async () => {
+  const h = formHarness({ subscriptionResponse: { active: true, status: 'active', trialEnd: 1,
+    currentPeriodEnd: Date.UTC(2026, 10, 18, 23, 30) / 1000 } });
+  h.prepare(6);
+  await h.settle();
+  assert.match(h.text(), /Pròxima renovació:\s+19 de novembre del? 2026/);
+  assert.doesNotMatch(h.text(), /1970/);
 });
 
 test('the first arrow navigates browser history, with a fallback for direct entry', async () => {

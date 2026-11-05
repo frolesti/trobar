@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions'
 import { doc, getDocFromServer } from 'firebase/firestore'
 import { stdnum } from 'stdnum'
 import { auth, db, functions } from '../lib/firebase'
+import StoreBadges from './StoreBadges'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ContactForm — Flux de registre en 6 passos
@@ -81,6 +82,15 @@ const initialState: FormState = {
 
 interface ContactFormProps {
   onOpenLegal?: (type: 'privacy' | 'terms') => void
+  onStepChange?: (step: number) => void
+}
+
+interface SubscriptionStatus {
+  active: boolean
+  status?: string
+  trialEnd?: number | null
+  currentPeriodEnd?: number | null
+  cancelAtPeriodEnd?: boolean
 }
 
 type FieldErrors = Partial<Record<keyof FormState | 'email', string>>
@@ -193,7 +203,7 @@ const buttonSecondary: React.CSSProperties = {
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 
-export default function ContactForm({ onOpenLegal }: ContactFormProps) {
+export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormProps) {
   const [step, setStep] = useState(1)
   const [email, setEmail] = useState('')
   const [state, setState] = useState<FormState>(initialState)
@@ -205,7 +215,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const [emailTouched, setEmailTouched] = useState(false)
   const [existingAccount, setExistingAccount] = useState<null | 'password' | 'google.com' | 'apple.com' | 'other'>(null)
   const [checkingEmail, setCheckingEmail] = useState(false)
-  const [subscription, setSubscription] = useState<{ active: boolean; status?: string } | null>(null)
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null)
   const emailCheckVersion = useRef(0)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [errorAttempt, setErrorAttempt] = useState(0)
@@ -216,6 +226,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   const resumeCheckout = useRef<'auto' | 'review' | null>(null)
   const checkoutRedirecting = useRef(false)
   const scrollBehavior = (): ScrollBehavior => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+
+  useEffect(() => { onStepChange?.(step) }, [step, onStepChange])
 
   useEffect(() => {
     if (previousStep.current === step) return
@@ -340,7 +352,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     let timer: ReturnType<typeof setTimeout> | undefined
     let attempts = 0
     setCheckingSubscription(true)
-    const check = httpsCallable<Record<string, never>, { active: boolean; status?: string }>(functions, 'getSubscriptionStatus')
+    const check = httpsCallable<Record<string, never>, SubscriptionStatus>(functions, 'getSubscriptionStatus')
     const refresh = async () => {
       try {
         const result = await check({})
@@ -747,14 +759,14 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   ═══════════════════════════════════════════════════════════════════════ */
 
   const cardStyle: React.CSSProperties = {
-    background: 'var(--card)', padding: 'clamp(20px, 4vw, 36px)', borderRadius: 20,
+    background: 'var(--card)', padding: 'clamp(18px, 3vw, 28px)', borderRadius: 20,
     boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
     maxWidth: 480, margin: '0 auto', width: '100%',
     position: 'relative',
     border: '1px solid var(--hairline)',
   }
 
-  const backButton = (onClick: () => void, label: string, disabled = loading) => (
+  const backButton = (onClick: () => void, label: string, disabled = loading) => disabled ? null : (
     <button type="button" onClick={onClick} aria-label={label} title={label} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: 44, height: 44, marginBottom: 16, padding: 0, borderRadius: '50%',
@@ -1290,6 +1302,9 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 6 }}>
             Un sol pla, tot inclòs. Estalvia triant trimestral o anual.
           </p>
+          <p className="registration-benefit">
+            Stripe és la passarel·la de pagament segura que fem servir per gestionar la targeta i els cobraments.
+          </p>
         </div>
 
         {/* Billing cycle selector */}
@@ -1386,11 +1401,17 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
   }
 
   /* ── PAS 6: Confirmació final ───────────────────────────────────────── */
+  const billingTimestamp = subscription?.status === 'trialing' ? subscription.trialEnd : subscription?.currentPeriodEnd
+  const billingDate = typeof billingTimestamp === 'number' && billingTimestamp > 0
+    && Number.isFinite(new Date(billingTimestamp * 1000).getTime())
+    ? new Intl.DateTimeFormat('ca-ES', { dateStyle: 'long', timeZone: 'Europe/Madrid' }).format(new Date(billingTimestamp * 1000))
+    : null
+  const checkoutSucceeded = new URLSearchParams(window.location.search).get('checkout') === 'success'
   return (
-    <div ref={cardRef} className="registration-form" style={cardStyle}>
-      {backButton(subscription?.active ? handleBackToPage : () => { setStep(5); setStatus(null); setFieldErrors({}) },
-        subscription?.active ? 'Tornar a la pàgina anterior' : 'Tornar a la subscripció', loading || checkingSubscription)}
-      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+    <div ref={cardRef} className="registration-form registration-confirmation" style={cardStyle} aria-busy={loading || checkingSubscription}>
+      {!subscription?.active && !checkingSubscription && !checkoutSucceeded &&
+        backButton(() => { setStep(5); setStatus(null); setFieldErrors({}) }, 'Tornar a la subscripció')}
+      <div style={{ textAlign: 'center' }}>
         <h2 style={{ margin: 0, fontSize: 26, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
           {loading ? 'Obrint Stripe…' : checkingSubscription ? 'Confirmant…'
             : subscription?.active ? 'El teu bar ja està activat!'
@@ -1403,8 +1424,28 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
         )}
         {subscription?.active && !checkingSubscription && (
           <p style={{ fontSize: 14 }}>
-            {subscription.status === 'trialing' ? 'Ja han començat els 14 dies de prova. El primer cobrament serà en acabar aquest període.' : 'La subscripció està activa.'}
+            El teu bar ja apareix com a Premium al mapa de troBar.
           </p>
+        )}
+        {subscription?.active && !checkingSubscription && (
+          <div className="registration-billing-details">
+            {billingDate ? (
+              <>
+                <p>
+                  {subscription.cancelAtPeriodEnd ? 'Tens accés fins al ' : subscription.status === 'trialing' ? 'Primer cobrament: ' : 'Pròxima renovació: '}
+                  <strong>{billingDate}</strong>.
+                </p>
+                <p>
+                  {subscription.cancelAtPeriodEnd ? 'La renovació està cancel·lada. No es farà cap cobrament.'
+                    : 'El cobrament és automàtic si no cancel·les abans d’aquesta data. Stripe gestiona el pagament de forma segura.'}
+                </p>
+              </>
+            ) : (
+              <p>La data de cobrament encara no està disponible.
+                {' '}<button type="button" onClick={() => setSubscriptionCheck(value => value + 1)} className="registration-inline-action">Tornar a comprovar</button>
+              </p>
+            )}
+          </div>
         )}
         {!subscription?.active && !checkingSubscription && !loading && (
           <>
@@ -1427,15 +1468,16 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
         {subscription?.active && !checkingSubscription && (
         <div style={{
-          marginTop: 28, padding: 20, borderRadius: 14,
+          marginTop: 16, padding: 16, borderRadius: 14,
           background: formAccentSoft, border: `1px solid ${formAccentBorder}`,
         }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>
-            Descarrega l&apos;app per gestionar el teu bar
+            Gestiona el teu bar des de l&apos;app
           </p>
           <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--muted)' }}>
             Inicia sessió amb <strong>{email}</strong> i la contrasenya que has creat.
           </p>
+          <StoreBadges center />
         </div>
         )}
       </div>

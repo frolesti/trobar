@@ -50,6 +50,8 @@ function PlaySVG() {
 }
 
 export default function StoreBadges({ center = false }: { center?: boolean }) {
+  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL
+  const googlePlayUrl = process.env.NEXT_PUBLIC_GOOGLE_PLAY_URL
   const hover = (e: React.MouseEvent<HTMLAnchorElement>) => {
     (e.currentTarget as HTMLElement).style.background = 'var(--cream)'
     ;(e.currentTarget as HTMLElement).style.color = 'var(--black)'
@@ -59,6 +61,14 @@ export default function StoreBadges({ center = false }: { center?: boolean }) {
     ;(e.currentTarget as HTMLElement).style.color = 'var(--cream)'
   }
 
+  if (!appStoreUrl && !googlePlayUrl) {
+    return (
+      <p className="store-availability" style={{ fontSize: 14, margin: '12px 0 0', textAlign: center ? 'center' : 'left' }}>
+        L’app encara no està publicada a les botigues. Els enllaços de descàrrega estaran disponibles aquí quan es publiqui.
+      </p>
+    )
+  }
+
   return (
     <div className="store-badges" style={{
       display: 'flex',
@@ -66,8 +76,8 @@ export default function StoreBadges({ center = false }: { center?: boolean }) {
       flexWrap: 'wrap',
       justifyContent: center ? 'center' : 'flex-start',
     }}>
-      <a
-        href="https://apps.apple.com"
+      {appStoreUrl && <a
+        href={appStoreUrl}
         target="_blank"
         rel="noopener noreferrer"
         style={S}
@@ -77,10 +87,10 @@ export default function StoreBadges({ center = false }: { center?: boolean }) {
       >
         <AppleSVG />
         App Store
-      </a>
+      </a>}
 
-      <a
-        href="https://play.google.com"
+      {googlePlayUrl && <a
+        href={googlePlayUrl}
         target="_blank"
         rel="noopener noreferrer"
         style={S}
@@ -90,7 +100,7 @@ export default function StoreBadges({ center = false }: { center?: boolean }) {
       >
         <PlaySVG />
         Google Play
-      </a>
+      </a>}
     </div>
   )
 }

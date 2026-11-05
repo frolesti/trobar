@@ -95,6 +95,34 @@ h1, h2, h3 { overflow-wrap: anywhere; }
 .registration-form {
   scroll-margin-top: 110px;
 }
+.register-form-wrap {
+  padding: 0 16px 40px;
+}
+.register-page--confirmation .register-form-wrap {
+  padding-top: 112px;
+}
+.registration-confirmation p {
+  margin-bottom: 12px;
+}
+.registration-billing-details {
+  padding: 12px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.registration-billing-details p:last-child {
+  margin-bottom: 0;
+}
+.registration-inline-action {
+  background: none;
+  border: 0;
+  padding: 4px;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .registration-form input:not([type="checkbox"]),
 .registration-form textarea {
   background: #fff;
@@ -163,7 +191,7 @@ h1, h2, h3 { overflow-wrap: anywhere; }
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--gold);
-  margin-bottom: 28px;
+  margin-bottom: 16px;
 }
 
 /* ── Buttons ── */
@@ -351,6 +379,10 @@ ul.legal li::before {
   .split-grid--reverse .split-media { grid-column: 1; grid-row: 1; }
   .split-grid--reverse .split-copy { grid-column: 1; grid-row: 2; }
   .step-grid  { grid-template-columns: 1fr !important; }
+  .split-grid { min-height: 0 !important; }
+  .split-media { min-height: 240px !important; }
+  .split-copy { padding: 36px 22px !important; }
+  #qui-som { padding: 48px 22px !important; }
 }
 
 @media (max-width: 900px) {
@@ -508,7 +540,7 @@ ul.legal li::before {
   }
 
   .per-a-bars-hero {
-    padding: 120px 16px 56px !important;
+    padding: 100px 16px 32px !important;
   }
 
   .per-a-bars-hero h1 {
@@ -533,12 +565,15 @@ ul.legal li::before {
   }
 
   .register-hero {
-    padding: 100px 14px 20px !important;
+    padding: 96px 14px 20px !important;
   }
 
   .register-form-wrap {
     padding-left: 12px !important;
     padding-right: 12px !important;
+  }
+  .register-page--confirmation .register-form-wrap {
+    padding-top: 96px;
   }
 
   .contact-form-card {
@@ -589,16 +624,16 @@ ul.legal li::before {
 
 @media (max-width: 560px) {
   #com-funciona {
-    padding: 88px 22px !important;
+    padding: 48px 22px !important;
   }
 
   #caracteristiques {
-    padding: 86px 22px !important;
+    padding: 48px 22px !important;
   }
 
   #descarrega {
     min-height: auto !important;
-    padding: 84px 18px !important;
+    padding: 48px 18px !important;
   }
 
   #per-a-bars {
@@ -606,6 +641,6 @@ ul.legal li::before {
   }
 
   #per-a-bars > div:last-child {
-    padding: 48px 20px !important;
+    padding: 36px 20px !important;
   }
 }

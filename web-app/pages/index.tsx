@@ -27,13 +27,13 @@ export default function Home() {
             fa servir text gros per explicar la seva identitat.
         ══════════════════════════════════════════ */}
         <section id="qui-som" style={{
-          padding: '160px 24px',
+          padding: '64px 24px',
           textAlign: 'center',
           background: 'var(--dark)',
         }}>
           <div style={{ maxWidth: 820, margin: '0 auto' }}>
             <span className="eyebrow">Qui som</span>
-            <h2 style={{ marginBottom: 36 }}>
+            <h2 style={{ marginBottom: 24 }}>
               El bar de sempre<br />
               <em style={{ color: 'var(--gold)' }}>ara al teu mòbil</em>
             </h2>
@@ -58,11 +58,11 @@ export default function Home() {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            minHeight: '90vh',
+            minHeight: 420,
           }} className="split-grid">
 
             {/* Esquerra — video glasses beer */}
-            <div className="split-media" style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
+            <div className="split-media" style={{ minHeight: 360, position: 'relative', background: 'var(--charcoal)' }}>
               <BackgroundVideo name="glasses-beer" />
             </div>
 
@@ -71,7 +71,7 @@ export default function Home() {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              padding: '80px 64px',
+              padding: '48px 40px',
             }}>
               <span className="eyebrow">L&apos;app</span>
               <h2 style={{ marginBottom: 32 }}>
@@ -96,11 +96,11 @@ export default function Home() {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            minHeight: '90vh',
+            minHeight: 420,
           }} className="split-grid split-grid--reverse">
 
             {/* Dreta a escriptori; primer a mòbil */}
-            <div className="split-media" style={{ minHeight: 480, position: 'relative', background: 'var(--charcoal)' }}>
+            <div className="split-media" style={{ minHeight: 360, position: 'relative', background: 'var(--charcoal)' }}>
               <BackgroundVideo name="community" />
             </div>
 
@@ -109,7 +109,7 @@ export default function Home() {
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              padding: '80px 64px',
+              padding: '48px 40px',
             }}>
               <span className="eyebrow">Comunitat</span>
               <h2 style={{ marginBottom: 32 }}>
@@ -132,13 +132,13 @@ export default function Home() {
             Secció 5 — Com funciona (3 passos)
         ══════════════════════════════════════════ */}
         <section id="com-funciona" style={{
-          padding: '140px 48px',
+          padding: '64px 32px',
           background: 'var(--black)',
           borderTop: '1px solid var(--hairline)',
           borderBottom: '1px solid var(--hairline)',
         }}>
           <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-            <div style={{ marginBottom: 100 }}>
+            <div style={{ marginBottom: 40 }}>
               <span className="eyebrow">Com funciona</span>
               <h2 style={{ maxWidth: 500 }}>
                 Tres passos,<br />un bar
@@ -183,9 +183,9 @@ export default function Home() {
         {/* ══════════════════════════════════════════
             Secció 6 — Característiques
         ══════════════════════════════════════════ */}
-        <section id="caracteristiques" style={{ padding: '120px 48px', background: 'var(--dark)' }}>
+        <section id="caracteristiques" style={{ padding: '64px 32px', background: 'var(--dark)' }}>
           <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-            <div style={{ marginBottom: 80 }}>
+            <div style={{ marginBottom: 40 }}>
               <span className="eyebrow">Per què troBar</span>
               <h2 style={{ maxWidth: 480 }}>
                 Tot el que<br />necessites
@@ -200,20 +200,19 @@ export default function Home() {
             Estil barpimentel.com: text gran centrat + CTA senzill
         ══════════════════════════════════════════ */}
         <section id="descarrega" style={{
-          minHeight: '80vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           textAlign: 'center',
-          padding: '120px 24px',
+          padding: '64px 24px',
           background: 'var(--black)',
           borderTop: '1px solid var(--hairline)',
         }}>
           <div>
             <span className="eyebrow">Descarrega</span>
-            <h2 style={{ marginBottom: 40, maxWidth: 640, margin: '0 auto 40px' }}>
-              Disponible a<br />
-              <em style={{ color: 'var(--gold)' }}>iOS i Android</em>
+            <h2 style={{ maxWidth: 640, margin: '0 auto 24px' }}>
+              L’app de troBar<br />
+              <em style={{ color: 'var(--gold)' }}>al teu mòbil</em>
             </h2>
             <StoreBadges center />
           </div>
@@ -224,7 +223,7 @@ export default function Home() {
         ══════════════════════════════════════════ */}
         <section id="per-a-bars" style={{
           position: 'relative',
-          minHeight: '70vh',
+          minHeight: 360,
           display: 'flex',
           alignItems: 'center',
           overflow: 'hidden',
@@ -248,7 +247,7 @@ export default function Home() {
 
           <div style={{
             position: 'relative', zIndex: 2,
-            padding: '80px 64px',
+            padding: '48px 40px',
             maxWidth: 680,
           }}>
             <span className="eyebrow">Per a bars i restaurants</span>
@@ -256,7 +255,7 @@ export default function Home() {
               Tens un bar on<br />
               <em style={{ color: 'var(--gold)' }}>es veu el Barça</em>?
             </h2>
-            <p style={{ fontSize: 17, marginBottom: 40, maxWidth: 480 }}>
+            <p style={{ fontSize: 17, marginBottom: 24, maxWidth: 480 }}>
               Apareix al mapa que fan servir milers de culers cada dia de
               partit. Registra el teu local i converteix l&apos;afició en clients fidels.
             </p>

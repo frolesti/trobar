@@ -16,7 +16,7 @@ export default function Footer() {
   return (
     <footer style={{
       borderTop: '1px solid var(--hairline)',
-      padding: '56px 48px 32px',
+      padding: '36px 32px 24px',
       background: 'var(--black)',
     }}>
       <div className="footer-top footer-desktop" style={{
@@ -25,7 +25,7 @@ export default function Footer() {
         display: 'grid',
         gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
         gap: 40,
-        marginBottom: 44,
+        marginBottom: 24,
       }}>
         {/* Marca */}
         <div>
@@ -79,7 +79,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="footer-mobile" style={{ maxWidth: 1160, margin: '0 auto 24px' }}>
+      <div className="footer-mobile" style={{ maxWidth: 1160, margin: '0 auto 16px' }}>
         <div className="footer-mobile-row">
           <button
             type="button"
@@ -155,7 +155,7 @@ export default function Footer() {
         }
         :global(.footer-mobile-row) {
           border-top: 1px solid var(--hairline);
-          padding: 10px 0;
+          padding: 6px 0;
         }
         :global(.footer-mobile-title) {
           display: flex;
@@ -197,7 +197,7 @@ export default function Footer() {
         }
         @media (max-width: 768px) {
           footer {
-            padding: 44px 20px 24px !important;
+            padding: 28px 20px 20px !important;
           }
           :global(.footer-desktop) {
             display: none !important;
@@ -211,7 +211,7 @@ export default function Footer() {
         }
         @media (max-width: 480px) {
           footer {
-            padding: 40px 18px 22px !important;
+            padding: 24px 18px 20px !important;
           }
           :global(.footer-bottom) {
             flex-direction: row !important;

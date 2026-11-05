@@ -7,6 +7,49 @@ No s'han enviat correus, canviat preferències de Stripe ni contractat serveis.
 Stripe continua en sandbox. Abans d'enviar cal completar els requisits de
 la secció «Activació».
 
+### Decisions confirmades el 5 de novembre de 2026
+
+- Renovació **automàtica** en acabar el trial si el titular no cancel·la.
+  El recordatori informa de data/import i permet gestionar la subscripció:
+  no demana una segona autorització ni condiciona el cobrament a respondre
+  el correu.
+- La confirmació del web mostra la data de Stripe, però no promet cap
+  recordatori mentre no s'hagi habilitat i provat el lliurament.
+- L'app encara no té fitxes publicades a les botigues; els correus no han
+  d'incloure enllaços genèrics de descàrrega ni botons sense destinació real.
+
+### Correu dedicat a l'aplicació: ordre de posada en marxa
+
+1. **Bústia per a persones:** crear una adreça del domini propi, per exemple
+   `suport@trobar.cat`, en un proveïdor de correu com Google Workspace o Zoho
+   Mail. És el canal monitorat per a dubtes, incidències i respostes.
+   No cal barrejar-lo amb altres projectes ni amb un compte personal.
+2. **DNS del domini:** verificar propietat i configurar els MX del proveïdor
+   per rebre correus. Activar SPF, DKIM i DMARC seguint els valors exactes
+   del proveïdor; no crear registres SPF duplicats ni inventar claus DKIM.
+3. **Enviaments automàtics:** seleccionar un servei transaccional, per
+   exemple Resend, i verificar un emissor com `avisos@trobar.cat` o un
+   subdomini dedicat. Configurar `Reply-To: suport@trobar.cat`. Una bústia
+   no activa, per si sola, els recordatoris de l'app.
+4. **Integració:** guardar credencials al servidor/Secret Manager, mai al
+   navegador; preparar plantilles i automatització amb idempotència,
+   cancel·lació i dates reals descrites més avall.
+5. **Stripe i cancel·lació:** activar el recordatori natiu de 7 dies abans
+   només quan toqui operar en live; completar Customer Portal perquè el
+   titular pugui cancel·lar sense eliminar el compte. El recordatori propi
+   de 24 h requereix el planificador de troBar.
+6. **Prova i activació:** verificar lliurament i respostes amb comptes interns.
+   Només després anunciar a la UI que s'enviarà un recordatori. Els avisos
+   natius de Stripe no s'envien en sandbox.
+
+Punts pendents detectats: el peu del web encara mostra
+`hola@trobar-app.cat`; la consulta DNS d'aquell domini retorna nom inexistent,
+i no s'han trobat MX per a `trobar.cat`. No s'ha creat cap bústia ni modificat
+DNS. A més, el formulari web de contacte actual simula l'enviament: no s'ha
+d'utilitzar com a canal de cancel·lació o suport operatiu fins a connectar-lo
+a un servei real. Aquesta revisió no canvia adreces públiques per una altra
+que tampoc estigui creada.
+
 Objectiu: ajudar el titular a posar el perfil a punt i assegurar que sap
 **quan s'acaba la prova, quant pagarà i com pot cancel·lar abans del cobrament**.
 Sense urgències artificials, promeses de nous clients ni càrrecs sorpresa.

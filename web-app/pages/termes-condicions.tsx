@@ -12,7 +12,7 @@ export default function TermesCondicions() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <Header />
-      <main style={{ padding: '140px 24px 80px' }}>
+      <main style={{ padding: '112px 24px 48px' }}>
         <LegalBody doc={TERMS} />
       </main>
       <Footer />
