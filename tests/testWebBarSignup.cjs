@@ -90,6 +90,7 @@ function formHarness(options = {}) {
             if (options.statusError) throw { code: 'functions/unavailable' };
             return { data: options.subscriptionResponse || { active: false } };
           }
+          if (operation === 'createCheckoutSession' && options.checkoutWait) await options.checkoutWait();
           if (operation === 'createCheckoutSession' && options.checkoutError) throw { code: 'functions/unavailable' };
           if (options.fakeSuccess) return { data: { ok: true, barId: 'unpersisted' } };
           return { data: await server.api[operation](request(data)) };
@@ -262,6 +263,25 @@ test('Checkout failure preserves the pending draft and exposes a retry without c
   assert.equal(h.server.documents.get('bars/bar1').isActive, false);
   assert.match(h.text(), /servei no està disponible/);
   assert.equal(h.calls.some(call => call[0] === 'redirect'), false);
+});
+
+test('opening Checkout shows one progress message in the button, without duplicated status text', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const h = formHarness({ checkoutWait: () => pending });
+  h.location.origin = 'https://www.trobar.cat';
+  await h.restore();
+  h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
+    nif: 'B12345674', acceptTerms: true, location: { latitude: 41.38, longitude: 2.17 } });
+  const submission = h.click('handleSubmit');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((h.text().match(/Obrint Stripe…/g) || []).length, 1);
+  assert.equal(h.elements(node => node.props?.role === 'status').length, 0);
+  assert.equal(h.elements(node => node.type === 'button' && node.props.onClick?.name === 'handleSubmit')[0].props['aria-busy'], true);
+  release();
+  await submission;
+  assert.equal(h.calls.filter(call => call[0] === 'redirect').length, 1);
+  assert.equal((h.text().match(/Obrint Stripe…/g) || []).length, 1);
 });
 
 test('missing fields are identified individually, focused and scrolled into view in form order', async () => {

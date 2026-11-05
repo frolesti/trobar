@@ -37,6 +37,7 @@ functions/lib/
 # scripts/setup-asset-junctions.ps1). Only /assets is committed.
 app/assets
 web-app/public/assets
+web-app/public/favicon.ico
 
 # Local runbooks (personal notes)
 docs/local/

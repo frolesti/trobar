@@ -683,7 +683,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
     }
     setFieldErrors({})
     setLoading(true)
-    setStatus('Preparant el pagament segur…')
+    setStatus(null)
     let prepared = false
     try {
       const register = httpsCallable<Record<string, unknown>, { ok: boolean; barId?: string; message?: string }>(functions, 'registerBar')
@@ -703,7 +703,6 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           throw new Error("No s'ha pogut confirmar el perfil desat. Reintenta el registre sense crear un altre compte.")
         }
         prepared = true
-        setStatus('Obrint Stripe…')
         await openCheckout()
       } else {
         throw new Error('Registration preparation did not return a bar')
@@ -733,7 +732,7 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
 
   const handleCheckout = async () => {
     setLoading(true)
-    setStatus('Obrint Stripe…')
+    setStatus(null)
     try {
       await openCheckout()
     } catch (error) {
@@ -1370,6 +1369,8 @@ export default function ContactForm({ onOpenLegal }: ContactFormProps) {
           <button
             onClick={handleSubmit}
             disabled={loading}
+            aria-busy={loading}
+            aria-live="polite"
             style={{
               ...buttonPrimary, flex: 2,
               opacity: loading ? 0.5 : 1,

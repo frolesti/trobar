@@ -14,6 +14,8 @@ for (const directory of ['img', 'logos', 'videos']) {
   const sourceDirectory = path.join(root, 'assets', 'web', directory);
   fs.cpSync(sourceDirectory, path.join(publicAssets, directory), { recursive: true });
 }
+fs.copyFileSync(path.join(root, 'assets', 'web', 'logos', 'favicon.ico'),
+  path.resolve(__dirname, '..', 'public', 'favicon.ico'));
 const webPublicGifDir = path.resolve(__dirname, '..', 'public', 'assets', 'gif');
 
 // Canonical source priority:

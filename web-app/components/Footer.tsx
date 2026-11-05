@@ -1,41 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 
 export default function Footer() {
-  const [isMobile, setIsMobile] = useState(false)
   const [openSection, setOpenSection] = useState<string | null>(null)
-  const longPressTriggeredRef = useRef(false)
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    const sync = () => setIsMobile(window.innerWidth <= 768)
-    sync()
-    window.addEventListener('resize', sync)
-    return () => window.removeEventListener('resize', sync)
-  }, [])
+  const toggleSection = (key: string) => setOpenSection(prev => prev === key ? null : key)
 
-  const startHold = (key: string) => {
-    if (!isMobile) return
-    longPressTriggeredRef.current = false
-    if (holdTimerRef.current) clearTimeout(holdTimerRef.current)
-    holdTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true
-      setOpenSection(prev => (prev === key ? null : key))
-    }, 380)
-  }
-
-  const endHold = () => {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current)
-      holdTimerRef.current = null
-    }
-  }
-
-  const blockTap = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isMobile && !longPressTriggeredRef.current) {
-      e.preventDefault()
-    }
-  }
+  const chevron = (expanded: boolean) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"
+      style={{ transform: expanded ? 'rotate(180deg)' : undefined }}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
 
   return (
     <footer style={{
@@ -104,74 +80,57 @@ export default function Footer() {
       </div>
 
       <div className="footer-mobile" style={{ maxWidth: 1160, margin: '0 auto 24px' }}>
-        <div className="footer-mobile-help">Mantén premut per desplegar</div>
-
         <div className="footer-mobile-row">
           <button
             type="button"
             className="footer-mobile-title"
-            onTouchStart={() => startHold('producte')}
-            onTouchEnd={endHold}
-            onTouchCancel={endHold}
-            onMouseDown={() => startHold('producte')}
-            onMouseUp={endHold}
-            onMouseLeave={endHold}
-            onClick={blockTap}
+            aria-expanded={openSection === 'producte'}
+            aria-controls="footer-producte-links"
+            onClick={() => toggleSection('producte')}
           >
             Producte
+            {chevron(openSection === 'producte')}
           </button>
-          {openSection === 'producte' && (
-            <ul className="footer-mobile-list">
+            <ul id="footer-producte-links" className="footer-mobile-list" hidden={openSection !== 'producte'}>
               <li><Link href="/#com-funciona">Com funciona</Link></li>
               <li><Link href="/per-a-bars">Per a bars</Link></li>
               <li><Link href="/per-a-bars#preus">Preus</Link></li>
             </ul>
-          )}
         </div>
 
         <div className="footer-mobile-row">
           <button
             type="button"
             className="footer-mobile-title"
-            onTouchStart={() => startHold('contacte')}
-            onTouchEnd={endHold}
-            onTouchCancel={endHold}
-            onMouseDown={() => startHold('contacte')}
-            onMouseUp={endHold}
-            onMouseLeave={endHold}
-            onClick={blockTap}
+            aria-expanded={openSection === 'contacte'}
+            aria-controls="footer-contacte-links"
+            onClick={() => toggleSection('contacte')}
           >
             Contacte
+            {chevron(openSection === 'contacte')}
           </button>
-          {openSection === 'contacte' && (
-            <ul className="footer-mobile-list">
+            <ul id="footer-contacte-links" className="footer-mobile-list" hidden={openSection !== 'contacte'}>
               <li><a href="mailto:hola@trobar-app.cat">hola@trobar-app.cat</a></li>
               <li><a href="https://www.instagram.com/trobarapp/" target="_blank" rel="noopener noreferrer">Instagram</a></li>
               <li><Link href="/contacte">Formulari</Link></li>
             </ul>
-          )}
         </div>
 
         <div className="footer-mobile-row">
           <button
             type="button"
             className="footer-mobile-title"
-            onTouchStart={() => startHold('legal')}
-            onTouchEnd={endHold}
-            onTouchCancel={endHold}
-            onMouseDown={() => startHold('legal')}
-            onMouseUp={endHold}
-            onMouseLeave={endHold}
-            onClick={blockTap}
+            aria-expanded={openSection === 'legal'}
+            aria-controls="footer-legal-links"
+            onClick={() => toggleSection('legal')}
           >
             Legal
+            {chevron(openSection === 'legal')}
           </button>
-          {openSection === 'legal' && (
-            <ul className="footer-mobile-list">
+            <ul id="footer-legal-links" className="footer-mobile-list" hidden={openSection !== 'legal'}>
               <li><Link href="/termes-condicions">Termes del servei</Link></li>
               <li><Link href="/politica-privacitat">Política de privacitat</Link></li>
             </ul>
-          )}
         </div>
       </div>
 
@@ -194,16 +153,15 @@ export default function Footer() {
         :global(.footer-mobile) {
           display: none;
         }
-        :global(.footer-mobile-help) {
-          font-size: 11px;
-          color: var(--cream-40);
-          margin-bottom: 10px;
-        }
         :global(.footer-mobile-row) {
           border-top: 1px solid var(--hairline);
           padding: 10px 0;
         }
         :global(.footer-mobile-title) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 44px;
           width: 100%;
           background: transparent;
           border: none;
@@ -223,6 +181,9 @@ export default function Footer() {
           display: flex;
           flex-direction: column;
           gap: 8px;
+        }
+        :global(.footer-mobile-list[hidden]) {
+          display: none;
         }
         :global(.footer-mobile-list li a) {
           color: var(--cream-70);

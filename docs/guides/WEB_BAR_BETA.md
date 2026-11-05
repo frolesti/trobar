@@ -1,5 +1,41 @@
 # Beta web: registre de propietaris de bars
 
+## Favicon, peu de pàgina i progrés de Checkout (5 de novembre de 2026)
+
+- El logo oficial identifica totes les pestanyes: ICO de 16/32/48 px,
+  PNG de 32 px i icona Apple de 180 px, derivats de `logo-red.png`.
+  Els originals es versionen a `assets/web/logos`; `sync-shared-assets.js`
+  copia les imatges a `public/assets/logos` i l'ICO a `/favicon.ico`,
+  també quan Vercel executa `next build` directament.
+- `_document.tsx` declara les variants i mides per a tot el web. Si Chrome
+  conserva la icona antiga, recarrega amb Ctrl+F5 o comprova una pestanya
+  d'incògnit. La icona dels controls de seguretat al costat de l'URL és
+  del navegador i no es pot substituir pel logo.
+- El peu mòbil es desplega amb un toc o clic normal, Enter o Espai:
+  no hi ha pulsació llarga ni missatge «Mantén premut». Els controls mostren
+  una fletxa, `aria-expanded` i `aria-controls`; els enllaços tancats queden
+  ocults també per a teclat i lectors de pantalla.
+- En obrir Checkout, «Obrint Stripe…» apareix només al botó, amb
+  `aria-busy`, no es repeteix en un segon text d'estat. Els errors continuen
+  sent visibles i permeten reintentar.
+- Validació: **42 proves dirigides correctes** (formulari, Chrome web i
+  facturació) i build Next correcte. Cap cobrament ni canvi de Stripe live.
+
+### Prova manual de Stripe sandbox
+
+1. Comprova que Checkout mostra **Sandbox**. No utilitzis cap targeta real.
+2. Revisa el pla: l'anual és **348 EUR/any**, després de 14 dies gratuïts.
+3. Usa `4242 4242 4242 4242`, caducitat futura, qualsevol CVC de tres xifres
+   i nom fictici. Completa els altres camps que Stripe demani.
+4. Confirma la prova i espera el retorn al web. El bar només es considera
+   actiu quan el servidor confirma la subscripció `trialing` o `active`;
+   el paràmetre `checkout=success` no és una prova de pagament.
+5. A Stripe sandbox, comprova la subscripció i el seu final de prova.
+   Completar Checkout amb trial no acredita encara el primer cobrament
+   del període de pagament. El sandbox no mou diners.
+
+Referència: [targetes i pagaments de prova de Stripe](https://docs.stripe.com/testing).
+
 ## Revisió UX i confirmació a Stripe (4 de novembre de 2026)
 
 - Navegació enrere també des de la cerca i la verificació del correu.
