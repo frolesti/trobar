@@ -8,6 +8,8 @@
  * Si cal modificar el text legal, fes-ho AQUÍ i només aquí.
  */
 
+import contactEmails from './contactEmails.json';
+
 export type LegalBlock =
     | { kind: 'p'; text: string }
     | { kind: 'ul'; items: string[] };
@@ -31,8 +33,8 @@ const ul = (items: string[]): LegalBlock => ({ kind: 'ul', items });
 export const PRIVACY: LegalDoc = {
     title: 'Política de',
     titleAccent: 'Privacitat',
-    lastUpdated: '22 de març de 2026',
-    contactEmail: 'privacitat@trobar-app.cat',
+    lastUpdated: '5 de novembre de 2026',
+    contactEmail: contactEmails.support,
     sections: [
         { title: '1. Introducció', blocks: [
             p('A "troBar", valorem la teva privacitat. Aquesta Política explica com recollim, utilitzem i protegim les teves dades personals quan utilitzes la nostra aplicació mòbil i pàgina web.')
@@ -87,7 +89,7 @@ export const PRIVACY: LegalDoc = {
                 'Sol·licitar la portabilitat de les teves dades en un format estructurat.',
                 'Retirar el teu consentiment en qualsevol moment.',
             ]),
-            p('Pots eliminar el teu compte directament des de l\'aplicació ("Perfil" → "Eliminar Compte"). Per exercir qualsevol d\'aquests drets, contacta amb nosaltres a privacitat@trobar-app.cat.')
+            p(`Pots eliminar el teu compte directament des de l'aplicació ("Perfil" → "Eliminar Compte"). Per exercir qualsevol d'aquests drets, contacta amb nosaltres a ${contactEmails.support}.`)
         ]},
         { title: '9. Menors', blocks: [
             p('troBar no està dirigida a menors de 16 anys. No recollim conscientment dades de menors d\'aquesta edat. Si descobrim que hem recopilat dades d\'un menor sense el consentiment adequat, les suprimirem el més aviat possible.')
@@ -102,7 +104,7 @@ export const PRIVACY: LegalDoc = {
             p('Podem actualitzar aquesta Política periòdicament. Si els canvis són significatius, t\'informarem a través de l\'aplicació o per correu electrònic. La data de l\'última actualització apareixerà sempre al principi del document.')
         ]},
         { title: '13. Contacte', blocks: [
-            p('Per a qualsevol qüestió relacionada amb la privacitat, pots escriure a privacitat@trobar-app.cat.')
+            p(`Per a qualsevol qüestió relacionada amb la privacitat, pots escriure a ${contactEmails.support}.`)
         ]},
     ],
 };
@@ -110,8 +112,8 @@ export const PRIVACY: LegalDoc = {
 export const TERMS: LegalDoc = {
     title: 'Termes del',
     titleAccent: 'Servei',
-    lastUpdated: '22 de març de 2026',
-    contactEmail: 'suport@trobar-app.cat',
+    lastUpdated: '5 de novembre de 2026',
+    contactEmail: contactEmails.support,
     sections: [
         { title: '1. Introducció', blocks: [
             p('Benvingut a troBar! Aquests Termes del Servei regeixen l\'ús de la nostra aplicació mòbil i pàgina web per localitzar bars i establiments que emeten esdeveniments esportius. En utilitzar "troBar", acceptes aquestes condicions íntegrament.')
@@ -143,7 +145,8 @@ export const TERMS: LegalDoc = {
                 'Pots cancel·lar la subscripció en qualsevol moment des de la secció "Configuració".',
                 'Els pagaments es processen de forma segura a través de Stripe.',
                 'No s\'ofereixen reemborsaments per períodes ja consumits.',
-            ])
+            ]),
+            p(`Per a consultes sobre factures, cobraments o subscripcions, escriu a ${contactEmails.billing}.`)
         ]},
         { title: '8. Contingut Generat per l\'Usuari', blocks: [
             p('Els usuaris poden deixar ressenyes o suggerir canvis. En fer-ho, ens atorgues una llicència no exclusiva, gratuïta i mundial per utilitzar, reproduir i mostrar aquest contingut dins del servei. Et compromets a proporcionar informació veraç i respectuosa. Ens reservem el dret d\'eliminar qualsevol contingut ofensiu o inadequat.')
@@ -176,7 +179,7 @@ export const TERMS: LegalDoc = {
             p('Si alguna clàusula d\'aquests Termes resultés invàlida, la resta continuarà vigent. El fet que no exercim algun dret no implica que hi renunciem. Aquests Termes constitueixen l\'acord complet entre tu i troBar en relació amb l\'ús del servei. No existeix cap relació d\'associació, agència ni representació entre tu i troBar.')
         ]},
         { title: '18. Contacte', blocks: [
-            p('Per a qualsevol dubte, pots contactar-nos a suport@trobar-app.cat.')
+            p(`Per a dubtes sobre l'ús del servei, pots contactar-nos a ${contactEmails.support}. Per a consultes generals o col·laboracions, escriu a ${contactEmails.general}.`)
         ]},
     ],
 };

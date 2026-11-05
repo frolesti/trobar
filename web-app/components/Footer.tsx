@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
+import contactEmails from '../../app/src/data/contactEmails.json'
 
 export default function Footer() {
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -61,7 +62,7 @@ export default function Footer() {
             Contacte
           </p>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <li><a href="mailto:hola@trobar-app.cat" style={{ fontSize: 14, color: 'var(--cream-70)' }}>hola@trobar-app.cat</a></li>
+            <li><a href={`mailto:${contactEmails.general}`} style={{ fontSize: 14, color: 'var(--cream-70)' }}>{contactEmails.general}</a></li>
             <li><a href="https://www.instagram.com/trobarapp/" target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, color: 'var(--cream-70)' }}>Instagram</a></li>
             <li><Link href="/contacte" style={{ fontSize: 14, color: 'var(--cream-70)' }}>Formulari</Link></li>
           </ul>
@@ -110,7 +111,7 @@ export default function Footer() {
             {chevron(openSection === 'contacte')}
           </button>
             <ul id="footer-contacte-links" className="footer-mobile-list" hidden={openSection !== 'contacte'}>
-              <li><a href="mailto:hola@trobar-app.cat">hola@trobar-app.cat</a></li>
+              <li><a href={`mailto:${contactEmails.general}`}>{contactEmails.general}</a></li>
               <li><a href="https://www.instagram.com/trobarapp/" target="_blank" rel="noopener noreferrer">Instagram</a></li>
               <li><Link href="/contacte">Formulari</Link></li>
             </ul>

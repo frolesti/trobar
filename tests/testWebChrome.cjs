@@ -17,6 +17,7 @@ function footerHarness() {
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
       if (name === 'react') return { useState: () => [state, update => { state = update(state); }] };
       if (name === 'next/link') return { default: 'a' };
+      if (name.endsWith('/contactEmails.json')) return { default: require('../app/src/data/contactEmails.json') };
       throw new Error(name);
     },
   });

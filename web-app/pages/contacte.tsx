@@ -2,6 +2,7 @@ import Head from 'next/head'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import { useState, FormEvent } from 'react'
+import contactEmails from '../../app/src/data/contactEmails.json'
 
 export default function Contacte() {
   const [form, setForm] = useState({ nom: '', email: '', missatge: '' })
@@ -107,10 +108,19 @@ export default function Contacte() {
           marginTop: 32, textAlign: 'center',
           fontSize: 15, color: 'var(--paper-mute)',
         }}>
-          <p>O escriu-nos directament a</p>
-          <a href="mailto:hola@trobar-app.cat" style={{ color: 'var(--gold)', fontStyle: 'normal' }}>
-            hola@trobar-app.cat
-          </a>
+          <p>També pots escriure'ns directament:</p>
+          {[
+            { label: 'Consultes generals i col·laboracions', email: contactEmails.general },
+            { label: 'Suport, incidències i privacitat', email: contactEmails.support },
+            { label: 'Factures, cobraments i subscripcions', email: contactEmails.billing },
+          ].map(({ label, email }) => (
+            <p key={email} style={{ margin: '12px 0' }}>
+              {label}<br />
+              <a href={`mailto:${email}`} style={{ color: 'var(--gold)', fontStyle: 'normal' }}>
+                {email}
+              </a>
+            </p>
+          ))}
         </div>
       </main>
 

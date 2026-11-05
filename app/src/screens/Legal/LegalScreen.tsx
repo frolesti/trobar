@@ -23,8 +23,8 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
 
     // Detecta emails al text i els converteix en enllaços tappables
     const renderText = (text: string) => {
-        const splitter = /([\w.+-]+@[\w-]+\.[\w.-]+)/g;
-        const isEmail = /^[\w.+-]+@[\w-]+\.[\w.-]+$/;
+        const splitter = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g;
+        const isEmail = /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/;
         const parts = text.split(splitter);
         return parts.map((part, i) =>
             isEmail.test(part) ? (

@@ -57,8 +57,8 @@ export default function LegalBody({ doc }: LegalBodyProps) {
 
 /* Converteix emails en enllaços mailto dins del text */
 function renderInline(text: string): React.ReactNode {
-  const splitter = /([\w.+-]+@[\w-]+\.[\w.-]+)/g
-  const isEmail = /^[\w.+-]+@[\w-]+\.[\w.-]+$/
+  const splitter = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g
+  const isEmail = /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/
   const parts = text.split(splitter)
   return parts.map((part, i) =>
     isEmail.test(part)

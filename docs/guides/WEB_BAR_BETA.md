@@ -1,5 +1,20 @@
 # Beta web: registre de propietaris de bars
 
+## Correus públics de Workspace (5 de novembre de 2026)
+
+- [contactEmails.json](../../app/src/data/contactEmails.json) centralitza
+  les tres bústies confirmades: `hola@trobar.cat` (consultes generals),
+  `suport@trobar.cat` (ajuda i privacitat) i `facturacio@trobar.cat`
+  (factures, cobraments i subscripcions).
+- El peu del web utilitza contacte general; la pàgina de contacte diferencia
+  els tres àmbits. Els textos legals compartits pel web i l'app utilitzen
+  suport per a privacitat, i facturació a la secció de pagaments.
+- Els enllaços legals del web i l'app exclouen el punt final de la frase.
+  No es canvien bústies de clients ni les seves dades de compte.
+- Validació: **11 proves dirigides correctes**, build Next i type-check
+  de l'app correctes. L'actualització de textos no configura DNS ni activa
+  correus automàtics de Firebase, Stripe o la campanya de prova.
+
 ## Indicador de passos al peu del formulari (5 de novembre de 2026)
 
 - Els quatre passos es mostren sota els botons i els missatges d'estat,

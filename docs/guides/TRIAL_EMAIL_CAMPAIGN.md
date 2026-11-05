@@ -20,17 +20,21 @@ la secció «Activació».
 
 ### Correu dedicat a l'aplicació: ordre de posada en marxa
 
-1. **Bústia per a persones:** crear una adreça del domini propi, per exemple
-   `suport@trobar.cat`, en un proveïdor de correu com Google Workspace o Zoho
-   Mail. És el canal monitorat per a dubtes, incidències i respostes.
-   No cal barrejar-lo amb altres projectes ni amb un compte personal.
+1. **Bústies creades a Google Workspace:** `hola@trobar.cat` per a consultes
+   generals i col·laboracions; `suport@trobar.cat` per a incidències, ajuda
+   i privacitat; `facturacio@trobar.cat` per a factures, cobraments i
+   subscripcions. Són les úniques adreces públiques de troBar.
+   La font canònica del web i l'app és
+   [contactEmails.json](../../app/src/data/contactEmails.json).
 2. **DNS del domini:** verificar propietat i configurar els MX del proveïdor
    per rebre correus. Activar SPF, DKIM i DMARC seguint els valors exactes
    del proveïdor; no crear registres SPF duplicats ni inventar claus DKIM.
 3. **Enviaments automàtics:** seleccionar un servei transaccional, per
-   exemple Resend, i verificar un emissor com `avisos@trobar.cat` o un
-   subdomini dedicat. Configurar `Reply-To: suport@trobar.cat`. Una bústia
-   no activa, per si sola, els recordatoris de l'app.
+   exemple Resend, i verificar els emissors existents. Utilitzar
+   `facturacio@trobar.cat` com a emissor i `Reply-To` dels recordatoris de
+   cobrament i rebuts; `suport@trobar.cat` per a correus de compte i ajuda.
+   No introduir altres adreces públiques. Una bústia no activa, per si sola,
+   els recordatoris de l'app.
 4. **Integració:** guardar credencials al servidor/Secret Manager, mai al
    navegador; preparar plantilles i automatització amb idempotència,
    cancel·lació i dates reals descrites més avall.
@@ -42,13 +46,12 @@ la secció «Activació».
    Només després anunciar a la UI que s'enviarà un recordatori. Els avisos
    natius de Stripe no s'envien en sandbox.
 
-Punts pendents detectats: el peu del web encara mostra
-`hola@trobar-app.cat`; la consulta DNS d'aquell domini retorna nom inexistent,
-i no s'han trobat MX per a `trobar.cat`. No s'ha creat cap bústia ni modificat
-DNS. A més, el formulari web de contacte actual simula l'enviament: no s'ha
+Punts pendents: la creació de les tres bústies l'ha confirmat el titular;
+cal verificar els DNS i provar la recepció i l'enviament real abans de donar
+el servei per operatiu. Aquesta actualització no modifica DNS ni configura
+emissors a Stripe o Firebase. El formulari web de contacte actual simula l'enviament: no s'ha
 d'utilitzar com a canal de cancel·lació o suport operatiu fins a connectar-lo
-a un servei real. Aquesta revisió no canvia adreces públiques per una altra
-que tampoc estigui creada.
+a un servei real. Els enllaços directes de correu utilitzen les bústies creades.
 
 Objectiu: ajudar el titular a posar el perfil a punt i assegurar que sap
 **quan s'acaba la prova, quant pagarà i com pot cancel·lar abans del cobrament**.
