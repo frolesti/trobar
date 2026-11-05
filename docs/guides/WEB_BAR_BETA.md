@@ -1,5 +1,16 @@
 # Beta web: registre de propietaris de bars
 
+## Indicador de passos al peu del formulari (5 de novembre de 2026)
+
+- Els quatre passos es mostren sota els botons i els missatges d'estat,
+  al peu de cadascuna de les cinc pantalles editables del registre.
+  La verificació del correu continua formant part del pas del compte.
+- El títol ja no té l'indicador a sobre. Es conserva la fletxa enrere
+  i no s'afegeix cap indicador a la confirmació després de Stripe.
+- Validació: **32 proves del formulari correctes** i build Next correcte.
+  Ordre comprovat a totes cinc pantalles; primer pas al navegador a
+  360/390/767/1440 px, sota «Continuar» i sense desbordament horitzontal.
+
 ## Espais i confirmació després de Checkout (5 de novembre de 2026)
 
 - Es redueixen els paddings i les separacions del web: seccions de la portada

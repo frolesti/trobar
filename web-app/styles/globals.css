@@ -165,6 +165,11 @@ h1, h2, h3 { overflow-wrap: anywhere; }
   font-weight: 600;
   margin-bottom: 10px;
 }
+.registration-progress {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
 .registration-benefit {
   color: var(--muted);
   font-size: 14px;

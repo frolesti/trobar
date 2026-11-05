@@ -784,9 +784,9 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
   const progressSegment = step <= 2 ? 1 : step === 3 ? 2 : step === 4 ? 3 : 4
 
   const progressBar = (
-    <div aria-label={`Pas ${progressSegment} de 4: ${['Compte', 'Cerca del bar', 'Dades del bar', 'Subscripció'][progressSegment - 1]}`}>
+    <div className="registration-progress" role="group" aria-label={`Pas ${progressSegment} de 4: ${['Compte', 'Cerca del bar', 'Dades del bar', 'Subscripció'][progressSegment - 1]}`}>
       <p className="registration-step-label">Pas {progressSegment} de 4 · {['Compte', 'Cerca del bar', 'Dades del bar', 'Subscripció'][progressSegment - 1]}</p>
-      <div aria-hidden="true" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+      <div aria-hidden="true" style={{ display: 'flex', gap: 6 }}>
       {[1, 2, 3, 4].map(s => (
         <div
           key={s}
@@ -817,7 +817,6 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     return (
       <div ref={cardRef} className="contact-form-card registration-form" style={cardStyle}>
         {backButton(handleBackToPage, 'Tornar a la pàgina anterior')}
-        {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 36, paddingTop: 4 }}>
           <h2 style={{ margin: '0 0 6px', fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Crea el teu compte
@@ -1008,6 +1007,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
           {loading ? 'Connectant…' : 'Continuar'}
         </button>
         {statusMessage}
+        {progressBar}
       </div>
     )
   }
@@ -1017,7 +1017,6 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     return (
       <div ref={cardRef} className="registration-form" style={cardStyle}>
         {backButton(handleBackToAccount, 'Tornar al compte')}
-        {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <h2 style={{ margin: 0, fontSize: 24, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Revisa el teu correu
@@ -1057,6 +1056,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
         </div>
 
         {statusMessage}
+        {progressBar}
       </div>
     )
   }
@@ -1066,7 +1066,6 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     return (
       <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 560 }}>
         {backButton(handleBackToAccount, 'Tornar al compte')}
-        {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Troba el teu bar
@@ -1145,6 +1144,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
         >
           Introduir les dades manualment
         </button>
+        {progressBar}
       </div>
     )
   }
@@ -1154,7 +1154,6 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     return (
       <div ref={cardRef} className="registration-form" style={{ ...cardStyle, maxWidth: 600 }}>
         {backButton(() => { setStep(3); setStatus(null); setFieldErrors({}) }, 'Tornar a la cerca del bar', searching || loading)}
-        {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Dades del teu bar
@@ -1278,6 +1277,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
           </button>
         </div>
         {statusMessage}
+        {progressBar}
       </div>
     )
   }
@@ -1294,7 +1294,6 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     return (
       <div ref={cardRef} className="registration-form" style={cardStyle}>
         {backButton(() => { setStep(4); setStatus(null); setFieldErrors({}) }, 'Tornar a les dades del bar')}
-        {progressBar}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, color: 'var(--text)', fontFamily: 'var(--font-ui)' }}>
             Tria la facturació
@@ -1396,6 +1395,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
           </button>
         </div>
         {statusMessage}
+        {progressBar}
       </div>
     )
   }

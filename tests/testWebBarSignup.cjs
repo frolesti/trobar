@@ -503,6 +503,25 @@ test('editable steps have an accessible icon-only left arrow instead of a text b
   }
 });
 
+test('step markers sit at the bottom of every editable card after its action, never above the title', () => {
+  const h = formHarness();
+  for (const step of [1, 2, 3, 4, 5]) {
+    h.prepare(step);
+    const tree = h.render();
+    const all = h.elements(() => true);
+    const progress = all.filter(node => node.props?.className === 'registration-progress');
+    assert.equal(progress.length, 1);
+    assert.equal(tree.props.children.at(-1).props.className, 'registration-progress');
+    assert.ok(all.indexOf(all.find(node => node.type === 'h2')) < all.indexOf(progress[0]));
+    assert.ok(all.filter(node => node.type === 'button').every(node => all.indexOf(node) < all.indexOf(progress[0])));
+    assert.equal(progress[0].props.role, 'group');
+    assert.match(progress[0].props['aria-label'], new RegExp(`^Pas ${step <= 2 ? 1 : step - 1} de 4:`));
+    assert.equal(progress[0].props.children[1].props.children.length, 4);
+  }
+  h.prepare(6);
+  assert.equal(h.elements(node => node.props?.className === 'registration-progress').length, 0);
+});
+
 test('confirmation reports its stage, shows the real trial date and Premium status without a back arrow', async () => {
   const stages = [];
   const h = formHarness({ searchParams: '?checkout=success', onStepChange: step => stages.push(step),
