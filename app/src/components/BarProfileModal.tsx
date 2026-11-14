@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, TouchableOpacity, Image, ScrollView, Linking, Animated, useWindowDimensions, Platform, Modal, TextInput, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Text from './AppText';
 import AppIcon from './AppIcon';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 import { EDITORIAL } from '../theme/editorialTheme';
-import { showAlert } from './AlertBanner';
+import AlertBannerHost, { showAlert } from './AlertBanner';
 import { Bar, BarAmenity } from '../models/Bar';
 import { PlaceDetails, isOpenNow } from '../services/placesService';
 import { Match } from '../services/matchService';
@@ -15,6 +16,11 @@ import { AMENITY_OPTIONS, AMENITY_MAP, AMENITY_CATEGORIES, AmenityOption } from 
 import { useAuth } from '../context/AuthContext';
 import { subscribeToBar, unsubscribeFromBar, isSubscribedToBar } from '../services/barOwnerService';
 import MatchCard from './MatchCard';
+import GoogleRatingSection from './GoogleRatingSection';
+import UserNotice from './UserNotice';
+import { fetchDemoUserReviews, addDemoUserReview, deleteDemoUserReview } from '../services/premiumDemoReviewService';
+import { enrichPremiumDemoBar, isPremiumDemoBar, getPremiumDemoReviews, getPremiumDemoHours, getPremiumDemoBroadcastMatches, isZuritoDevelopmentPreview, ZURITO_PREVIEW_NOTICE } from '../data/premiumDemoProfiles';
+import VenuePhotoGallery from './VenuePhotoGallery';
 
 // ── Tipus ──────────────────────────────────────────────
 
@@ -26,6 +32,9 @@ interface BarProfileModalProps {
     allMatches?: Match[];
     onClose: () => void;
     onNavigate?: () => void;
+    onRequestLogin?: () => void;
+    embedded?: boolean;
+    onReviewStatsChange?: (stats: BarReviewStats) => void;
 }
 
 const P = {
@@ -43,28 +52,37 @@ const P = {
 };
 
 // Mapa de xarxes socials a icones i URLs
-const SOCIAL_CONFIG: Record<string, { icon: string; family: 'feather' | 'mci'; urlPrefix: string }> = {
-    instagram: { icon: 'instagram', family: 'feather', urlPrefix: 'https://instagram.com/' },
-    facebook:  { icon: 'facebook',  family: 'feather', urlPrefix: 'https://facebook.com/' },
-    twitter:   { icon: 'twitter',   family: 'feather', urlPrefix: 'https://x.com/' },
-    whatsapp:  { icon: 'whatsapp',  family: 'mci',     urlPrefix: 'https://wa.me/' },
-    telegram:  { icon: 'send',      family: 'feather', urlPrefix: 'https://t.me/' },
-    website:   { icon: 'globe',     family: 'feather', urlPrefix: '' },
+const SOCIAL_CONFIG: Record<string, { label: string; icon: string; family: 'feather' | 'mci'; urlPrefix: string }> = {
+    instagram: { label: 'Instagram', icon: 'instagram', family: 'feather', urlPrefix: 'https://instagram.com/' },
+    facebook:  { label: 'Facebook', icon: 'facebook',  family: 'feather', urlPrefix: 'https://facebook.com/' },
+    twitter:   { label: 'X', icon: 'twitter',   family: 'feather', urlPrefix: 'https://x.com/' },
+    whatsapp:  { label: 'WhatsApp', icon: 'whatsapp',  family: 'mci',     urlPrefix: 'https://wa.me/' },
+    telegram:  { label: 'Telegram', icon: 'send',      family: 'feather', urlPrefix: 'https://t.me/' },
+    website:   { label: 'Web', icon: 'globe',     family: 'feather', urlPrefix: '' },
 };
 
 // ── Component ──────────────────────────────────────────
 
 const BarProfileModal: React.FC<BarProfileModalProps> = ({
-    visible, bar, placeDetails: pd, allMatches = [], onClose, onNavigate,
+    visible, bar: originalBar, placeDetails, allMatches = [], onClose, onNavigate, onRequestLogin, embedded = false, onReviewStatsChange,
 }) => {
+    const bar = originalBar ? enrichPremiumDemoBar(originalBar) : null;
+    const isDemo = isPremiumDemoBar(bar);
+    const pd = isDemo ? null : placeDetails;
     const { user } = useAuth();
+    const insets = useSafeAreaInsets();
     const { height: screenHeight, width: screenWidth } = useWindowDimensions();
     const translateY = useRef(new Animated.Value(screenHeight)).current;
     const [showHours, setShowHours] = useState(false);
 
     // ── Estat de ressenyes internes ──
-    const [reviews, setReviews] = useState<Review[]>([]);
-    const [reviewStats, setReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
+    const [loadedReviews, setReviews] = useState<Review[]>([]);
+    const [loadedReviewStats, setReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
+    const reviews = isDemo && loadedReviews.length === 0 ? getPremiumDemoReviews(bar)! : loadedReviews;
+    const reviewStats = isDemo ? {
+        totalReviews: reviews.length,
+        averageRating: reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0,
+    } : loadedReviewStats;
     const [myReview, setMyReview] = useState<Review | null>(null);
     const [showReviewForm, setShowReviewForm] = useState(false);
     const [newRating, setNewRating] = useState(5);
@@ -79,88 +97,138 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     // ── Estat de subscripció ──
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [togglingSubscription, setTogglingSubscription] = useState(false);
+    const [reviewsLoading, setReviewsLoading] = useState(false);
+    const [reviewsError, setReviewsError] = useState<string | null>(null);
+    const loadTarget = `${visible}:${bar?.id}:${isDemo}:${user?.id}`;
+    const currentLoadTarget = useRef(loadTarget);
+    currentLoadTarget.current = loadTarget;
+    const notifyDemo = () => showAlert({
+        tone: 'info',
+        message: 'Aquesta opció encara no està disponible en aquest perfil.',
+    });
 
     // Carregar ressenyes quan s'obre el modal
     const loadReviews = useCallback(async () => {
         if (!bar?.id) return;
+        const target = loadTarget;
+        setReviewsLoading(true);
+        setReviewsError(null);
         try {
-            const [revs, stats] = await Promise.all([
-                fetchReviews(bar.id),
-                getBarReviewStats(bar.id),
-            ]);
-            setReviews(revs);
+            const [revs, stats, ownReview] = isDemo
+                ? await fetchDemoUserReviews(bar).then(local => {
+                    const combined = [...local, ...getPremiumDemoReviews(bar)!];
+                    return [combined, {
+                        totalReviews: combined.length,
+                        averageRating: combined.reduce((sum, review) => sum + review.rating, 0) / combined.length,
+                    }, local.find(review => review.userId === user?.id) ?? null] as const;
+                })
+                : await Promise.all([
+                    fetchReviews(bar.id), getBarReviewStats(bar.id), user ? getUserReview(bar.id, user.id) : null,
+                ]);
+            if (currentLoadTarget.current !== target) return;
+            setReviews(ownReview && !revs.some(review => review.id === ownReview.id) ? [ownReview, ...revs] : revs);
             setReviewStats(stats);
-            if (user) {
-                const mine = revs.find(r => r.userId === user.id) || null;
-                setMyReview(mine);
-            }
+            setMyReview(ownReview);
+            onReviewStatsChange?.(stats);
         } catch (e) {
-            console.error('Error loading reviews:', e);
+            console.info('Error loading reviews:', e);
+            if (currentLoadTarget.current === target) setReviewsError("No s'han pogut carregar les ressenyes de troBar. Torna-ho a provar.");
+        } finally {
+            if (currentLoadTarget.current === target) setReviewsLoading(false);
         }
-    }, [bar?.id, user]);
+    }, [bar?.id, user?.id, isDemo, loadTarget, onReviewStatsChange]);
 
     useEffect(() => {
         if (visible && bar) {
+            setReviews([]);
+            setReviewStats({ averageRating: 0, totalReviews: 0 });
+            setMyReview(null);
             loadReviews();
             setShowReviewForm(false);
             setNewRating(5);
             setNewComment('');
+            setSubmittingReview(false);
+            setTogglingSubscription(false);
             setEditingAmenities(false);
             setSelectedAmenities(new Set(bar.amenities ?? []));
             // Comprovar subscripció
-            if (user && bar.tier === 'premium') {
-                isSubscribedToBar(user.id, bar.id).then(setIsSubscribed).catch(() => {});
+            setIsSubscribed(false);
+            if (!isDemo && user && bar.tier === 'premium') {
+                const target = loadTarget;
+                isSubscribedToBar(user.id, bar.id).then(value => {
+                    if (currentLoadTarget.current === target) setIsSubscribed(value);
+                }).catch(error => {
+                    console.info('Error carregant el seguiment:', error);
+                    if (currentLoadTarget.current === target) showAlert({ tone: 'error', message: "No s'ha pogut comprovar si segueixes aquest bar." });
+                });
             }
         }
-    }, [visible, bar?.id]);
+    }, [visible, bar?.id, user?.id, isDemo]);
 
     const handleToggleSubscription = async () => {
-        if (!user || !bar) return;
+        if (isDemo) { notifyDemo(); return; }
+        if (!user || !bar) {
+            showAlert({ tone: 'info', message: 'Inicia sessió per seguir aquest bar.' });
+            return;
+        }
+        const target = loadTarget;
         setTogglingSubscription(true);
         try {
             if (isSubscribed) {
                 await unsubscribeFromBar(user.id, bar.id);
-                setIsSubscribed(false);
+                if (currentLoadTarget.current === target) setIsSubscribed(false);
             } else {
                 await subscribeToBar(user.id, bar.id);
-                setIsSubscribed(true);
+                if (currentLoadTarget.current === target) setIsSubscribed(true);
             }
         } catch (e) {
-            console.error('Error toggling subscription:', e);
+            console.info('Error toggling subscription:', e);
+            showAlert({ tone: 'error', message: "No s'ha pogut actualitzar el seguiment. Torna-ho a provar." });
         } finally {
-            setTogglingSubscription(false);
+            if (currentLoadTarget.current === target) setTogglingSubscription(false);
         }
     };
 
     const handleSubmitReview = async () => {
-        if (!bar || !user) return;
+        if (!bar || !user) {
+            showAlert({ tone: 'info', message: 'Inicia sessió per escriure una ressenya.' });
+            return;
+        }
+        if (submittingReview) return;
+        const target = loadTarget;
         setSubmittingReview(true);
         try {
-            await addReview(bar.id, user.id, user.name || 'Anònim', user.avatar, newRating, newComment);
+            if (isDemo) await addDemoUserReview(bar, { ...user, name: user.name || 'Usuari' }, newRating, newComment);
+            else await addReview(bar.id, user.id, user.name || 'Usuari', user.avatar, newRating, newComment);
+            if (currentLoadTarget.current !== target) return;
             setShowReviewForm(false);
             setNewComment('');
             setNewRating(5);
             await loadReviews();
         } catch (e) {
-            console.error('Error submitting review:', e);
+            console.info('Error submitting review:', e);
             showAlert({ tone: 'error', message: "No s'ha pogut publicar la ressenya." });
         } finally {
-            setSubmittingReview(false);
+            if (currentLoadTarget.current === target) setSubmittingReview(false);
         }
     };
 
     const handleDeleteReview = async (reviewId: string) => {
-        if (!bar) return;
+        if (!bar || !user) return;
+        const target = loadTarget;
         try {
-            await deleteReview(bar.id, reviewId);
-            await loadReviews();
+            if (isDemo) await deleteDemoUserReview(bar, reviewId, user.id);
+            else await deleteReview(bar.id, reviewId);
+            if (currentLoadTarget.current === target) await loadReviews();
         } catch (e) {
-            console.error('Error deleting review:', e);
+            console.info('Error deleting review:', e);
+            showAlert({ tone: 'error', message: "No s'ha pogut eliminar la ressenya." });
         }
     };
 
     // ── Guardar amenities ──
     const handleSaveAmenities = async () => {
+        if (isDemo) { notifyDemo(); return; }
         if (!bar) return;
         setSavingAmenities(true);
         try {
@@ -169,7 +237,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             bar.amenities = arr;          // actualitzar in-memory
             setEditingAmenities(false);
         } catch (e) {
-            console.error('Error saving amenities:', e);
+            console.info('Error saving amenities:', e);
             showAlert({ tone: 'error', message: "No s'han pogut desar els serveis." });
         } finally {
             setSavingAmenities(false);
@@ -186,6 +254,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     };
 
     useEffect(() => {
+        if (embedded) return;
         if (visible) {
             setShowHours(false);
             Animated.spring(translateY, {
@@ -201,7 +270,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                 useNativeDriver: true,
             }).start();
         }
-    }, [visible, screenHeight, translateY]);
+    }, [visible, screenHeight, translateY, embedded]);
 
     if (!visible && !bar) return null;
 
@@ -211,108 +280,84 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
     // NO usem bar.isOpen (sempre true per defecte a Firestore) → evitem flicker
     const openStatus = pd?.currentOpeningHours?.openNow ?? isOpenNow(bar?.openingPeriods);
     const photos = [...new Set([...(bar?.gallery || []), ...(pd?.photoUrls || [])])];
-    const hours = pd?.currentOpeningHours?.weekdayDescriptions ?? [];
+    const hours = getPremiumDemoHours(bar) ?? pd?.currentOpeningHours?.weekdayDescriptions ?? [];
     const social = bar?.socialMedia;
     const hasSocial = social && Object.values(social).some(v => !!v);
 
     // Partits que el bar emet (filtrats des de la llista completa)
-    const broadcastMatches = bar?.broadcastingMatches && bar.broadcastingMatches.length > 0
+    const broadcastMatches = getPremiumDemoBroadcastMatches(bar, allMatches) ?? (bar?.broadcastingMatches && bar.broadcastingMatches.length > 0
         ? allMatches.filter(m => bar.broadcastingMatches!.includes(m.id))
-        : [];
+        : []);
+    const broadcastSection = (
+        <View testID="premium-broadcasts" style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: P.separator }}>
+            <Text style={sectionTitleStyle}>Partits que emet</Text>
+            {isZuritoDevelopmentPreview(bar) && <Text style={{ color: P.textMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 12, marginBottom: 8 }}>Exemples d’emissió · no confirmats pel local</Text>}
+            {broadcastMatches.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                    {broadcastMatches.map((match, index) => (
+                        <View key={match.id} style={{ width: Math.min(340, screenWidth - 44) }}>
+                            <MatchCard match={match} compact isNextMatch={index === 0} />
+                        </View>
+                    ))}
+                </ScrollView>
+            ) : (
+                <Text style={{ color: P.textMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 14, lineHeight: 20 }}>
+                    {bar?.broadcastingMatches?.length ? `${bar.broadcastingMatches.length} partits configurats. La programació encara no està disponible.` : bar?.usuallyShowsBarca ? 'Normalment emet el Barça' : 'Encara no hi ha emissions confirmades.'}
+                </Text>
+            )}
+        </View>
+    );
 
     // Contingut interior del modal
-    const modalContent = (
-        <View style={{ flex: 1 }}>
-            {/* Fons semitransparent per tancar */}
-            <TouchableOpacity
-                activeOpacity={1}
-                onPress={onClose}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
-            />
-
-            {/* Panell lliscant */}
-            <Animated.View
-                testID="premium-bar-panel"
-                style={{
-                    position: 'absolute', left: 0, right: 0, bottom: 0,
-                    height: screenHeight * 0.92,
-                    backgroundColor: P.bg,
-                    borderTopLeftRadius: 8,
-                    borderTopRightRadius: 8,
-                    borderTopWidth: 4,
-                    borderTopColor: EDITORIAL.matchday,
-                    transform: [{ translateY }],
-                    ...Platform.select({
-                        web: { boxShadow: '0px -6px 40px rgba(0,0,0,0.3)' } as any,
-                        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.3, shadowRadius: 20 },
-                        android: { elevation: 24 },
-                    }),
-                }}
-            >
+    const profileContent = (
+        <>
                 {/* Indicador d'arrossegament */}
-                <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 6 }}>
+                {!embedded && <View style={{ height: 56, alignItems: 'center', paddingTop: 10 }}>
                     <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: P.separator }} />
-                </View>
+                </View>}
 
                 {/* Botó de tancar */}
                 <TouchableOpacity
                     onPress={onClose}
+                    testID="premium-profile-close"
                     accessibilityRole="button"
                     accessibilityLabel="Tancar les dades del bar"
                     style={{
-                        position: 'absolute', top: 14, right: 16, zIndex: 10,
-                        width: 44, height: 44, borderRadius: 8,
-                        backgroundColor: P.bg, alignItems: 'center', justifyContent: 'center',
+                        position: 'absolute', top: embedded ? -20 : 8, right: 8, zIndex: 10,
+                        width: 44, height: 44,
+                        alignItems: 'center', justifyContent: 'center',
                     }}
                 >
                     <AppIcon name="x" size={20} color={P.accent} />
                 </TouchableOpacity>
 
                 <ScrollView
+                    testID="premium-profile-scroll"
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 50 }}
+                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
                     showsVerticalScrollIndicator={false}
                     bounces={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {/* ── FOTOS PRINCIPALS ── */}
-                    {photos.length > 0 && (
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            style={{ marginBottom: 20, marginHorizontal: -20, marginTop: 4 }}
-                            contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-                        >
-                            {photos.map((url, i) => (
-                                <Image
-                                    key={i}
-                                    source={{ uri: url }}
-                                    style={{
-                                        width: Math.min(300, screenWidth * 0.7),
-                                        height: 200,
-                                        borderRadius: 8,
-                                        backgroundColor: P.subtleBg,
-                                    }}
-                                    resizeMode="cover"
-                                />
-                            ))}
-                        </ScrollView>
-                    )}
+                    <View style={{ marginTop: embedded ? 28 : 4, marginBottom: 14 }}>
+                        <VenuePhotoGallery testID="premium-profile-gallery" name={displayName} photos={photos} height={164} photoWidth={Math.min(280, screenWidth * 0.74)} />
+                    </View>
 
                     {/* ── NOM + INSÍGNIA PREMIUM ── */}
-                    <View style={{ marginBottom: 6 }}>
+                    <View testID="premium-profile-heading" style={{ marginBottom: 4 }}>
                         <Text style={{
-                            fontSize: 26, fontWeight: 'bold', color: P.text,
-                            fontFamily: EDITORIAL.fontSport, lineHeight: 32,
+                            fontSize: 24, color: P.text,
+                            fontFamily: EDITORIAL.fontBold, lineHeight: 28,
                         }}>
                             {displayName}
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 4, gap: 8, justifyContent: 'space-between' }}>
                             <View style={{
-                                backgroundColor: EDITORIAL.matchday,
-                                paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
+                                paddingVertical: 3,
                                 flexDirection: 'row', alignItems: 'center',
                             }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: P.bg, fontFamily: EDITORIAL.fontRegular, letterSpacing: 0 }}>
+                                <Text style={{ fontSize: 11, color: EDITORIAL.matchday, fontFamily: EDITORIAL.fontBold, letterSpacing: 0.5 }}>
                                     PREMIUM
                                 </Text>
                             </View>
@@ -320,27 +365,28 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                             {/* Botó de subscripció / notificacions */}
                             {user && bar?.tier === 'premium' && (
                                 <TouchableOpacity
+                                    testID="premium-follow-button"
                                     onPress={handleToggleSubscription}
                                     disabled={togglingSubscription}
                                     accessibilityRole="button"
                                     accessibilityLabel={`${isSubscribed ? 'Deixar de seguir' : 'Seguir'} ${displayName}`}
-                                    accessibilityState={{ busy: togglingSubscription }}
+                                    accessibilityState={{ busy: togglingSubscription, disabled: togglingSubscription, selected: isSubscribed }}
                                     style={{
-                                        flexDirection: 'row', alignItems: 'center',
+                                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
                                         minHeight: 44,
                                         backgroundColor: isSubscribed ? P.selectedBg : P.subtleBg,
-                                        paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-                                        marginLeft: 8,
+                                        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
                                         borderWidth: 1,
-                                        borderColor: isSubscribed ? P.accent : P.separator,
+                                        borderColor: P.separator,
+                                        opacity: togglingSubscription ? 0.6 : 1,
                                     }}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={{
-                                        fontSize: 12, fontWeight: '600', fontFamily: EDITORIAL.fontRegular,
+                                        fontSize: 13, lineHeight: 18, fontFamily: EDITORIAL.fontBold,
                                         color: P.text,
                                     }}>
-                                        {togglingSubscription ? '…' : isSubscribed ? 'Seguint' : 'Seguir'}
+                                        {togglingSubscription ? 'Desant…' : isSubscribed ? 'Deixar de seguir' : 'Seguir el bar'}
                                     </Text>
                                 </TouchableOpacity>
                             )}
@@ -348,7 +394,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     </View>
 
                     {/* ── PUNTUACIÓ INTERNA + OBERT/TANCAT ── */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 10, gap: 12, flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' }}>
                         {reviewStats.totalReviews > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 {[1,2,3,4,5].map(s => (
@@ -374,6 +420,9 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                 </Text>
                             )}
                         </View>
+
+                    {isZuritoDevelopmentPreview(bar) && <Text testID="zurito-preview-notice" style={{ color: P.textMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 12, lineHeight: 17 }}>{ZURITO_PREVIEW_NOTICE}</Text>}
+                    {broadcastSection}
 
                     {/* ── SEPARADOR ── */}
                     <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: P.separator, marginVertical: 6 }} />
@@ -417,7 +466,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
 
                     {/* ── AMENITIES / SERVEIS ── */}
                     {(() => {
-                        const isOwner = !!(user && bar?.ownerId && user.id === bar.ownerId);
+                        const isOwner = !isDemo && !!(user && bar?.ownerId && user.id === bar.ownerId);
                         const amenities = bar?.amenities ?? [];
                         const hasAmenities = amenities.length > 0;
 
@@ -642,56 +691,6 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         </View>
                     ) : null}
 
-                    {/* ── PARTITS QUE EMET ── */}
-                    <View style={{ marginTop: 24 }}>
-                        <Text style={sectionTitleStyle}>Partits que emet</Text>
-                        {broadcastMatches.length > 0 ? (
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={{ marginHorizontal: -20 }}
-                                contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
-                            >
-                                {broadcastMatches.map((match, idx) => (
-                                    <View key={match.id} style={{ width: Math.min(260, screenWidth * 0.65) }}>
-                                        <MatchCard match={match} compact isNextMatch={idx === 0} />
-                                    </View>
-                                ))}
-                            </ScrollView>
-                        ) : bar?.broadcastingMatches && bar.broadcastingMatches.length > 0 ? (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 8, padding: 16 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                    <AppIcon name="tv" size={18} color={P.accent} style={{ marginRight: 8 }} />
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: EDITORIAL.fontRegular }}>
-                                        {bar.broadcastingMatches.length} {bar.broadcastingMatches.length === 1 ? 'partit configurat' : 'partits configurats'}
-                                    </Text>
-                                </View>
-                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, lineHeight: 19 }}>
-                                    Els partits configurats apareixeran aquí quan hi hagi partits propers disponibles.
-                                </Text>
-                            </View>
-                        ) : bar?.usuallyShowsBarca ? (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 8, padding: 16 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                    <AppIcon name="tv" size={18} color={P.accent} style={{ marginRight: 8 }} />
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: P.text, fontFamily: EDITORIAL.fontRegular }}>
-                                        Normalment emet el Barça
-                                    </Text>
-                                </View>
-                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, lineHeight: 19 }}>
-                                    Segons els usuaris, aquest bar sol emetre els partits del FC Barcelona.
-                                </Text>
-                            </View>
-                        ) : (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 8, padding: 20, alignItems: 'center' }}>
-                                <AppIcon name="tv" size={28} color={P.textMuted} style={{ marginBottom: 8, opacity: 0.5 }} />
-                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, textAlign: 'center', lineHeight: 20 }}>
-                                    Properament podràs veure els partits que aquest bar ha confirmat que emetrà.
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
                     {/* ── XARXES SOCIALS ── */}
                     <View style={{ marginTop: 24 }}>
                         <Text style={sectionTitleStyle}>Xarxes socials</Text>
@@ -704,15 +703,15 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     return (
                                         <TouchableOpacity
                                             key={key}
-                                            onPress={() => Linking.openURL(url)}
+                                            onPress={() => isDemo ? notifyDemo() : Linking.openURL(url)}
                                             style={{
-                                                width: 48, height: 48, borderRadius: 24,
+                                                minHeight: 44, borderRadius: 8, paddingHorizontal: 12, flexDirection: 'row', gap: 8,
                                                 backgroundColor: P.cardBg,
                                                 alignItems: 'center', justifyContent: 'center',
                                                 borderWidth: 1, borderColor: P.separator,
                                             }}
                                             activeOpacity={0.7}
-                                            accessibilityRole="link"
+                                            accessibilityRole={isDemo ? 'button' : 'link'}
                                             accessibilityLabel={`Obrir ${key}`}
                                         >
                                             {config.family === 'mci' ? (
@@ -720,40 +719,67 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                             ) : (
                                                 <AppIcon name={config.icon as any} size={22} color={P.text} />
                                             )}
+                                            <Text style={{ color: P.text, fontSize: 13, fontFamily: EDITORIAL.fontRegular }}>{config.label}</Text>
                                         </TouchableOpacity>
                                     );
                                 })}
                             </View>
                         ) : (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 8, padding: 20, alignItems: 'center' }}>
-                                <AppIcon name="share-2" size={28} color={P.textMuted} style={{ marginBottom: 8, opacity: 0.5 }} />
-                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, textAlign: 'center', lineHeight: 20 }}>
+                            <View>
+                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, lineHeight: 20 }}>
                                     Les xarxes socials d'aquest bar apareixeran aquí.
                                 </Text>
                             </View>
                         )}
                     </View>
 
+                    <GoogleRatingSection enabled={bar?.showGoogleRating === true} placeDetails={pd} isDemo={isDemo} />
+
                     {/* ── MUR DE RESSENYES (INTERN) ── */}
-                    <View style={{ marginTop: 24 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <Text style={sectionTitleStyle}>Ressenyes</Text>
-                            {user && !myReview && !showReviewForm && !(user.id === bar?.ownerId) && (
+                    <View testID="trobar-reviews" style={{ marginTop: 24 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                            <Text style={sectionTitleStyle}>Ressenyes de troBar</Text>
+                            {user && !myReview && !showReviewForm && !reviewsLoading && !reviewsError && !(user.id === bar?.ownerId) && (
                                 <TouchableOpacity
                                     onPress={() => setShowReviewForm(true)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Escriure una ressenya a troBar"
                                     style={{
                                         flexDirection: 'row', alignItems: 'center',
                                         backgroundColor: P.accent, minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 6,
                                         borderRadius: 8,
                                     }}
                                 >
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: P.buttonText, fontFamily: EDITORIAL.fontRegular }}>Escriure</Text>
+                                    <Text style={{ fontSize: 14, color: P.buttonText, fontFamily: EDITORIAL.fontBold }}>Escriure</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
+                        <Text style={{ color: P.textMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 14, lineHeight: 20, marginBottom: 12 }}>
+                            {isDemo ? 'Les teves ressenyes es desen només en aquest dispositiu.' : 'Opinions de la comunitat troBar · Independents de Google Maps.'}
+                        </Text>
+                        {!user && (
+                            <TouchableOpacity
+                                onPress={() => onRequestLogin ? onRequestLogin() : showAlert({ tone: 'info', message: 'Inicia sessió des del teu perfil per escriure una ressenya.' })}
+                                accessibilityRole="button"
+                                style={{ backgroundColor: P.accent, padding: 12, borderRadius: 8, minHeight: 44, alignItems: 'center', marginBottom: 12 }}
+                            >
+                                <Text style={{ color: P.bg, fontFamily: EDITORIAL.fontBold }}>Inicia sessió per escriure una ressenya</Text>
+                            </TouchableOpacity>
+                        )}
+                        {user?.id === bar?.ownerId && <Text style={{ color: P.textMuted, marginBottom: 12 }}>No pots ressenyar el teu propi bar.</Text>}
+                        {myReview && !showReviewForm && <Text style={{ color: P.textMuted, marginBottom: 12 }}>Ja has publicat la teva ressenya en aquest bar.</Text>}
+                        {reviewsLoading && <Text accessibilityLiveRegion="polite" style={{ color: P.textMuted, marginBottom: 12 }}>Carregant ressenyes de troBar…</Text>}
+                        {reviewsError && (
+                            <View style={{ marginBottom: 12, gap: 8 }}>
+                                <UserNotice tone="error" message={reviewsError} />
+                                <TouchableOpacity onPress={loadReviews} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }}>
+                                    <Text style={{ color: P.text, fontFamily: EDITORIAL.fontBold, textDecorationLine: 'underline' }}>Reintentar les ressenyes de troBar</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
 
                         {/* Formulari de nova ressenya */}
-                        {showReviewForm && (
+                        {user && showReviewForm && (
                             <View style={{
                                 backgroundColor: P.subtleBg, borderRadius: 8,
                                 padding: 16, marginBottom: 16,
@@ -782,6 +808,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     onChangeText={setNewComment}
                                     multiline
                                     numberOfLines={3}
+                                    maxLength={2000}
+                                    accessibilityLabel="Comentari de la ressenya de troBar"
                                     style={{
                                         backgroundColor: P.bg,
                                         borderRadius: 8, padding: 12,
@@ -799,15 +827,18 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         onPress={handleSubmitReview}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={isDemo ? 'Desar la ressenya en aquest dispositiu' : 'Publicar la ressenya a troBar'}
+                                        accessibilityState={{ busy: submittingReview }}
                                         disabled={submittingReview || newRating === 0}
                                         style={{
                                             backgroundColor: P.accent, borderRadius: 8,
-                                            paddingHorizontal: 18, paddingVertical: 8,
+                                            paddingHorizontal: 18, paddingVertical: 8, minHeight: 44, justifyContent: 'center',
                                             opacity: (submittingReview || newRating === 0) ? 0.5 : 1,
                                         }}
                                     >
                                         <Text style={{ color: P.buttonText, fontWeight: 'bold', fontFamily: EDITORIAL.fontRegular, fontSize: 14 }}>
-                                            {submittingReview ? 'Enviant...' : 'Publicar'}
+                                            {submittingReview ? 'Enviant...' : isDemo ? 'Desar' : 'Publicar'}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -865,21 +896,21 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     </View>
                                 ))}
                             </View>
-                        ) : (
-                            <View style={{ backgroundColor: P.cardBg, borderRadius: 8, padding: 20, alignItems: 'center' }}>
-                                <AppIcon name="message-circle" size={28} color={P.textMuted} style={{ marginBottom: 8, opacity: 0.5 }} />
-                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, textAlign: 'center', lineHeight: 20 }}>
+                        ) : !reviewsLoading && !reviewsError ? (
+                            <View>
+                                <Text style={{ fontSize: 14, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, lineHeight: 20 }}>
                                     Encara no hi ha ressenyes. Sigues el primer a opinar!
                                 </Text>
                             </View>
-                        )}
+                        ) : null}
                     </View>
 
-                    {/* ── BOTÓ DE NAVEGACIÓ ── */}
+                </ScrollView>
+                <View testID="premium-profile-actions" style={{ borderTopWidth: 1, borderTopColor: P.separator, paddingHorizontal: 20, paddingTop: 10, paddingBottom: Math.max(12, insets.bottom) }}>
                     <TouchableOpacity
                         style={{
                             backgroundColor: P.accent, borderRadius: 8,
-                            paddingVertical: 16, paddingHorizontal: 20, marginTop: 30,
+                            minHeight: 48, paddingVertical: 12, paddingHorizontal: 20,
                             alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
                             ...sketchShadow(),
                         }}
@@ -887,14 +918,15 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         accessibilityRole="button"
                         accessibilityLabel={`Com arribar a ${displayName}`}
                     >
-                        <Text style={{ color: P.buttonText, fontWeight: 'bold', fontSize: 18, fontFamily: EDITORIAL.fontRegular }}>
+                        <Text style={{ color: P.buttonText, fontSize: 16, fontFamily: EDITORIAL.fontBold }}>
                             Com arribar-hi
                         </Text>
                     </TouchableOpacity>
-                </ScrollView>
-            </Animated.View>
-        </View>
+                </View>
+        </>
     );
+
+    if (embedded) return <View style={{ flex: 1 }}>{profileContent}</View>;
 
     return (
         <Modal
@@ -904,7 +936,25 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             statusBarTranslucent
             onRequestClose={onClose}
         >
-            {modalContent}
+            <View style={{ flex: 1 }}>
+                <TouchableOpacity activeOpacity={1} onPress={onClose} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }} />
+                <Animated.View
+                    testID="premium-bar-panel"
+                    style={{
+                        position: 'absolute', left: 0, right: 0, bottom: 0, height: screenHeight * 0.92,
+                        backgroundColor: P.bg, borderTopLeftRadius: 8, borderTopRightRadius: 8,
+                        borderTopWidth: 4, borderTopColor: EDITORIAL.matchday, transform: [{ translateY }],
+                        ...Platform.select({
+                            web: { boxShadow: '0px -6px 40px rgba(0,0,0,0.3)' },
+                            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.3, shadowRadius: 20 },
+                            android: { elevation: 24 },
+                        }),
+                    }}
+                >
+                    {profileContent}
+                </Animated.View>
+                <AlertBannerHost active={visible} priority={1} defaultPosition="top" topOffset={16} />
+            </View>
         </Modal>
     );
 };
@@ -912,10 +962,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
 // ── Estils compartits ──────────────────────────────────────
 
 const sectionTitleStyle = {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold' as const,
     color: P.text,
-    fontFamily: EDITORIAL.fontSport,
+    fontFamily: EDITORIAL.fontBold,
     marginBottom: 12,
 };
 

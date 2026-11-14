@@ -71,8 +71,10 @@ test('test owner loads the editable fixture without contacting Stripe or Google 
     };
     visit(parsed);
     let loaded;
+    const errors = [];
     const context = {
-        user: { id: 'test-owner' }, Date, Set, console,
+        user: { id: 'test-owner' }, Date, Set, console: { info: (...args) => errors.push(args) },
+        ownerDemoCopy: bar => bar, savedProfile: { current: null }, barProfileDraft: bar => bar,
         getOwnedBar: async () => buildFixtures(matches, 'test-owner')[0],
         getSubscriptionStatus: () => { throw new Error('Stripe must not be called'); },
         fetchBarPlaceDetails: () => { throw new Error('Google Places must not be called'); },
@@ -81,10 +83,11 @@ test('test owner loads the editable fixture without contacting Stripe or Google 
         AMENITY_OPTIONS: [{ key: 'projector' }],
         setBar: bar => { loaded = bar; },
     };
-    for (const name of ['Loading', 'Description', 'PromotionalText', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'LoadingPlaceDetails', 'PlaceDetails', 'ReviewStats', 'NotifPrefs', 'SubscriptionActive', 'BillingCycle', 'NotifPermission', 'UpcomingMatches']) context[`set${name}`] = () => {};
+    for (const name of ['Loading', 'Description', 'ShowGoogleRating', 'PromotionalText', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'LoadingPlaceDetails', 'PlaceDetails', 'ReviewStats', 'NotifPrefs', 'SubscriptionActive', 'SubscriptionLoaded', 'BillingCycle', 'NotifPermission', 'UpcomingMatches']) context[`set${name}`] = () => {};
     vm.runInNewContext(ts.transpileModule(`(${effect})();`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(loaded?.isTestData, true);
     assert.equal(loaded?.name, 'PROVA - Pantalles Terrassa');
-    assert.match(source, /currentTier === 'premium' && !bar\?\.isTestData/);
+    assert.deepEqual(errors, [], 'initialization must complete instead of passing after a caught dependency error');
+    assert.match(source, /if \(bar\.isTestData\)/);
 });

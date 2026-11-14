@@ -1,306 +1,148 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { sketchShadow } from '../theme/sketchTheme';
 import { EDITORIAL } from '../theme/editorialTheme';
 import { PlaceDetails } from '../services/placesService';
-
-// ── Tipus ──────────────────────────────────────────────
+import PremiumProfileSlider from './PremiumProfileSlider';
+import VenuePhotoGallery from './VenuePhotoGallery';
 
 export interface BarCardProps {
-    /** Nom del bar (alternativa si placeDetails no té displayName) */
     name: string;
-    /** Adreça alternativa */
     address?: string;
-    /** Coordenades per a l'enllaç de Google Maps */
     latitude: number;
     longitude: number;
-    /** Detalls de Google Places (compartit per a verificats i no verificats) */
     placeDetails: PlaceDetails | null;
-    /** Si els detalls de Place encara s'estan carregant */
     loadingPlaceDetails: boolean;
     gallery?: string[];
-    /** És un bar verificat/registrat? Determina quins botons d'acció es mostren */
     verified: boolean;
-
-    // ── Props només per a verificats ──
-    /** Puntuació alternativa (de la nostra BD) — només per a bars verificats */
     fallbackRating?: number;
-    /** Obert/tancat alternatiu de la nostra BD */
     fallbackIsOpen?: boolean;
-    /** Text de distància ("5 min caminant (300 m)") */
     distanceText?: string;
-    /** Navegar al bar (Google Maps extern) */
     onNavigate?: () => void;
-    /** Tancar bafarada */
     onClose?: () => void;
-
-    // ── Props només per a no verificats ──
-    /** Confirmar / reportar aquest bar */
     onConfirm?: () => void;
-    /** Cancel·lar / tornar enrere */
     onCancel?: () => void;
-    /** Si la confirmació està en curs */
     isSubmitting?: boolean;
-
-    /** Premium conserva la mateixa targeta i permet obrir totes les dades. */
+    promotionalText?: string;
     tier?: 'free' | 'premium';
-
-    /** Obre el modal de perfil premium a pantalla completa */
     onProfileOpen?: () => void;
-
-    /** Mitjana de ressenyes internes */
+    profileHandleHidden?: boolean;
+    dense?: boolean;
     reviewAvgRating?: number;
-    /** Nombre total de ressenyes internes */
     reviewCount?: number;
+    demo?: boolean;
 }
 
-// ── Auxiliars ────────────────────────────────────────────
-
-const getCleanBarName = (name: string) => name.replace(/\s+\d+$/, '');
-
-// ── Component ──────────────────────────────────────────
-
-const BarCard: React.FC<BarCardProps> = (props) => {
-    const {
-        name, address,
-        placeDetails: pd, loadingPlaceDetails, verified,
-        fallbackRating, fallbackIsOpen,
-        distanceText, onNavigate, onClose,
-        onConfirm, onCancel, isSubmitting,
-        tier, onProfileOpen, reviewAvgRating, reviewCount,
-    } = props;
-
-    const displayName = getCleanBarName(name);
-    const displayAddress = pd?.formattedAddress || address || 'Barcelona';
-    const photos = [...new Set([...(props.gallery || []), ...(pd?.photoUrls || [])])];
-    // Prioritat: 1) Google Places real-time, 2) fallback local (períodes cachejats)
-    // NO usem bar.isOpen de Firestore (sempre true, no fiable) → evitem flicker Obert→Tancat
+const BarCard: React.FC<BarCardProps> = ({
+    name, address, placeDetails: pd, loadingPlaceDetails, gallery = [], verified,
+    fallbackIsOpen, distanceText, onNavigate, onClose, onConfirm, onCancel, isSubmitting,
+    promotionalText, tier, onProfileOpen, profileHandleHidden, dense = false,
+    reviewAvgRating, reviewCount, demo = false,
+}) => {
+    const displayName = name.replace(/\s+\d+$/, '');
+    const displayAddress = pd?.formattedAddress || address || 'Adreça no disponible';
+    const photos = [...new Set([...gallery, ...(pd?.photoUrls || [])])];
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
+    const isPremium = verified && tier === 'premium';
+    const close = onClose || onCancel;
 
-    const openGoogleMaps = () => {
-        const query = encodeURIComponent(`${name}, ${displayAddress}`);
-        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-    };
-
-    // ── Renderitzat ─────────────────────────────────────────
-
-    const isPremium = tier === 'premium';
-
-    const C = {
-        text: EDITORIAL.onBackground,
-        muted: EDITORIAL.onBackgroundMuted,
-        icon: EDITORIAL.onBackground,
-        // Obert = pastilla grana subtil (positiu, en paleta).
-        // Tancat = aspecte "deshabilitat" (ink atenuat sobre paperAlt, sense vermell).
-        badgeOpen:   { bg: 'rgba(255,255,255,0.16)', color: EDITORIAL.onBackground, border: EDITORIAL.borderOnBackground },
-        badgeClosed: { bg: 'rgba(255,255,255,0.06)', color: EDITORIAL.onBackgroundMuted, border: EDITORIAL.borderOnBackground },
-        btnBg: EDITORIAL.onBackground,
-        btnText: EDITORIAL.background,
-    };
-
-    // ── BAR VERIFICAT (free o premium) — mateixa estructura, colors diferenciats ──
-    if (verified) {
-        return (
-            <View style={{ backgroundColor: EDITORIAL.background }}>
-                {onClose && (
-                    <TouchableOpacity
-                        onPress={onClose}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Tancar la fitxa de ${displayName}`}
-                        style={{ position: 'absolute', top: -8, right: -8, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
-                    >
-                        <Feather name="x" size={18} color={C.icon} />
-                    </TouchableOpacity>
-                )}
-                {/* Nom */}
-                <Text
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.75}
-                    style={{
-                        fontSize: 20, color: C.text,
-                        fontFamily: EDITORIAL.fontBold, marginBottom: 8, lineHeight: 26,
-                        letterSpacing: 0, paddingRight: 28,
-                    }}
-                >
+    return (
+        <View testID={isPremium ? 'premium-bar-summary' : 'venue-bar-summary'} style={{ backgroundColor: EDITORIAL.background }}>
+            {isPremium && onProfileOpen && !profileHandleHidden && (
+                <PremiumProfileSlider name={displayName} onOpen={onProfileOpen} />
+            )}
+            <View testID="venue-card-header" style={{ minHeight: 32, justifyContent: 'center', marginBottom: dense ? 4 : 6, paddingRight: 36 }}>
+                <Text numberOfLines={2} style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: dense ? 17 : 20, lineHeight: dense ? 20 : 24 }}>
                     {displayName}
                 </Text>
-
-                {/* Puntuació interna + Obert/Tancat */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
-                    {(reviewAvgRating != null && reviewAvgRating > 0) && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <MaterialCommunityIcons name="star" size={16} color={EDITORIAL.matchday} style={{ marginRight: 4 }} />
-                            <Text style={{ fontSize: 14, color: C.text, fontFamily: EDITORIAL.fontBold }}>
-                                {reviewAvgRating.toFixed(1)}
-                            </Text>
-                            {(reviewCount != null && reviewCount > 0) && (
-                                <Text style={{ fontSize: 12, color: C.muted, fontFamily: EDITORIAL.fontRegular, marginLeft: 4 }}>
-                                    ({reviewCount})
-                                </Text>
-                            )}
-                        </View>
+                {close && (
+                    <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Tancar la fitxa de ${displayName}`}
+                        disabled={isSubmitting}
+                        onPress={close}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Feather name="x" size={20} color={EDITORIAL.onBackground} />
+                    </TouchableOpacity>
+                )}
+            </View>
+                <View testID="venue-card-status" style={{ height: 24, flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: dense ? 6 : 8 }}>
+                    {isPremium && (
+                        <Text style={{ color: EDITORIAL.background, backgroundColor: EDITORIAL.matchday, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, fontFamily: EDITORIAL.fontBold, fontSize: 10, lineHeight: 14 }}>PREMIUM</Text>
                     )}
+                    {demo && <Text style={{ color: EDITORIAL.matchday, fontFamily: EDITORIAL.fontBold, fontSize: 10 }}>DEMO</Text>}
                     {openStatus != null && !loadingPlaceDetails && (
-                        <Text style={{
-                            paddingHorizontal: 10, paddingVertical: 3, borderRadius: 4, fontSize: 11,
-                            overflow: 'hidden', fontFamily: EDITORIAL.fontBold, borderWidth: 1,
-                            letterSpacing: 0,
-                            backgroundColor: openStatus ? C.badgeOpen.bg : C.badgeClosed.bg,
-                            color: openStatus ? C.badgeOpen.color : C.badgeClosed.color,
-                            borderColor: openStatus ? C.badgeOpen.border : C.badgeClosed.border,
-                        }}>
+                        <Text style={{ color: EDITORIAL.onBackground, borderWidth: 1, borderColor: EDITORIAL.borderOnBackground, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, fontFamily: EDITORIAL.fontRegular, fontSize: 11, lineHeight: 14 }}>
                             {openStatus ? 'Obert' : 'Tancat'}
                         </Text>
                     )}
-                </View>
-
-                {/* Fotos del bar (Google Places) */}
-                {renderPhotos(photos)}
-
-                {/* Adreça */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <Feather name="map-pin" size={14} color={C.icon} style={{ marginRight: 8, marginTop: 3 }} />
-                    <Text numberOfLines={2} style={{ fontSize: 14, color: C.muted, fontFamily: EDITORIAL.fontRegular, flex: 1, lineHeight: 20 }}>
-                        {displayAddress}
-                    </Text>
-                </View>
-
-                {/* Distància */}
-                {distanceText && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                        <Feather name="clock" size={14} color={C.icon} style={{ marginRight: 8 }} />
-                        <Text style={{ fontSize: 14, color: C.muted, fontFamily: EDITORIAL.fontRegular }}>
-                            {distanceText}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Botó de navegació */}
-                <TouchableOpacity
-                    style={{
-                        backgroundColor: C.btnBg, borderRadius: 6,
-                        paddingVertical: 13, paddingHorizontal: 16,
-                        alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
-                    }}
-                    onPress={onNavigate}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Com arribar a ${displayName}`}
-                >
-                    <Text style={{ color: C.btnText, fontSize: 14, fontFamily: EDITORIAL.fontBold, letterSpacing: 0 }}>Com arribar-hi</Text>
-                </TouchableOpacity>
-                {isPremium && onProfileOpen && (
-                    <TouchableOpacity
-                        onPress={onProfileOpen}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Veure totes les dades de ${displayName}`}
-                        accessibilityHint="Obre la fitxa completa del bar"
-                        activeOpacity={0.7}
-                        style={{ minHeight: 44, marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                    >
-                        <Text style={{ color: C.icon, fontSize: 14, fontFamily: EDITORIAL.fontBold, flexShrink: 1 }}>
-                            Veure totes les dades
-                        </Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-        );
-    }
-
-    // ── BAR NO VERIFICAT (flux de report OSM) — sense canvis ──
-    return (
-        <View>
-            <Text 
-                numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-                style={{
-                    fontSize: 18, color: EDITORIAL.grana,
-                    fontFamily: EDITORIAL.fontBold, marginBottom: 8, paddingRight: 28, lineHeight: 24
-                }}
-            >
-                {displayName}
-            </Text>
-
-            {/* Adreça */}
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                <Feather name="map-pin" size={15} color={EDITORIAL.inkMuted} style={{ marginRight: 8, marginTop: 2 }} />
-                <Text style={{ fontSize: 14, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular, flex: 1, lineHeight: 20 }}>
-                    {displayAddress}
-                </Text>
-            </View>
-
-            {/* Carregant */}
-            {loadingPlaceDetails && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                    <ActivityIndicator size="small" color={EDITORIAL.inkMuted} style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: 12, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular }}>Carregant detalls...</Text>
-                </View>
-            )}
-
-            {/* Fotos */}
-            {renderPhotos(photos)}
-
-            <View style={{ height: 1, backgroundColor: EDITORIAL.hairline, marginVertical: 14 }} />
-
-            {/* Acció de report */}
-            <View>
-                <Text style={{ fontSize: 16, fontFamily: EDITORIAL.fontBold, marginBottom: 15, textAlign: 'center', color: EDITORIAL.grana }}>
-                    Es poden veure partits aquí?
-                </Text>
-
-                <TouchableOpacity
-                    style={{
-                        backgroundColor: EDITORIAL.grana,
-                        paddingVertical: 14, borderRadius: EDITORIAL.radius.md,
-                        alignItems: 'center', marginBottom: 12,
-                        ...sketchShadow()
-                    }}
-                    onPress={onConfirm}
-                    disabled={isSubmitting}
-                >
-                    {isSubmitting ? (
-                        <ActivityIndicator color="white" />
-                    ) : (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{ color: 'white', fontSize: 16, fontFamily: EDITORIAL.fontBold }}>Sí, avisa tothom!</Text>
+                    {verified && reviewAvgRating != null && reviewAvgRating > 0 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialCommunityIcons name="star" size={14} color={EDITORIAL.matchday} />
+                            <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 12 }}>
+                                {reviewAvgRating.toFixed(1)}
+                            </Text>
+                            {!!reviewCount && <Text style={{ color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 11 }}>({reviewCount})</Text>}
                         </View>
                     )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    onPress={onCancel}
-                    style={{ alignItems: 'center', padding: 10 }}
-                >
-                    <Text style={{ color: EDITORIAL.inkMuted, textDecorationLine: 'underline', fontFamily: EDITORIAL.fontRegular }}>No n'estic segur</Text>
-                </TouchableOpacity>
+                    {loadingPlaceDetails && <ActivityIndicator accessibilityLabel="Carregant detalls del bar" size="small" color={EDITORIAL.onBackground} style={{ marginLeft: 'auto' }} />}
+                </View>
+            <View style={{ marginBottom: dense ? 6 : 8 }}>
+                <VenuePhotoGallery testID="venue-card-gallery" name={displayName} photos={photos} height={dense ? 72 : 96} photoWidth={dense ? 112 : 152} loading={loadingPlaceDetails} />
             </View>
+            <View testID="venue-card-details" style={{ marginBottom: dense ? 6 : 10 }}>
+                <View style={{ minWidth: 0, gap: 4 }}>
+                    <View style={{ height: 32, flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                        <Feather name="map-pin" size={14} color={EDITORIAL.onBackground} style={{ marginTop: 1 }} />
+                        <Text numberOfLines={2} accessibilityLabel={displayAddress} style={{ flex: 1, color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 12, lineHeight: 16 }}>{displayAddress}</Text>
+                    </View>
+                    {distanceText && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Feather name="clock" size={14} color={EDITORIAL.onBackground} />
+                            <Text numberOfLines={1} style={{ flex: 1, color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 12, lineHeight: 16 }}>{distanceText}</Text>
+                        </View>
+                    )}
+                </View>
+            </View>
+            {isPremium && promotionalText && (
+                <View style={{ borderLeftWidth: 3, borderLeftColor: EDITORIAL.matchday, paddingLeft: 8, marginBottom: dense ? 6 : 8 }}>
+                    <Text numberOfLines={2} accessibilityLabel={promotionalText} style={{ color: EDITORIAL.matchday, fontFamily: EDITORIAL.fontRegular, fontSize: 12, lineHeight: 16 }}>{promotionalText}</Text>
+                </View>
+            )}
+            {verified ? (
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Com arribar a ${displayName}`}
+                    onPress={onNavigate}
+                    style={{ minHeight: 44, backgroundColor: EDITORIAL.onBackground, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}
+                >
+                    <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 14 }}>Com arribar-hi</Text>
+                </TouchableOpacity>
+            ) : (
+                <View testID="venue-card-report">
+                    <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 14, lineHeight: 18, marginBottom: dense ? 6 : 8 }}>Es poden veure partits aquí?</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            onPress={onConfirm}
+                            disabled={isSubmitting}
+                            style={{ flex: 1, minHeight: 48, borderRadius: 6, backgroundColor: EDITORIAL.onBackground, alignItems: 'center', justifyContent: 'center', padding: 8 }}
+                        >
+                            {isSubmitting ? <ActivityIndicator color={EDITORIAL.background} /> : <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 14, textAlign: 'center' }}>Sí, avisa tothom!</Text>}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            accessibilityRole="button"
+                            onPress={onCancel}
+                            disabled={isSubmitting}
+                            style={{ flex: 1, minHeight: 48, borderRadius: 6, borderWidth: 1, borderColor: EDITORIAL.borderOnBackground, alignItems: 'center', justifyContent: 'center', padding: 8 }}
+                        >
+                            <Text style={{ color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 14, textAlign: 'center' }}>No n'estic segur</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </View>
-    );
-};
-
-// ── Sub-renderitzat de fotos ──────────────────────────────────
-
-const renderPhotos = (photos: string[]) => {
-    if (photos.length === 0) return null;
-
-    return (
-        <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: 14, marginTop: 4 }}
-            contentContainerStyle={{ gap: 10 }}
-        >
-            {photos.map((url, i) => (
-                <Image
-                    key={i}
-                    source={{ uri: url }}
-                    style={{ width: 150, height: 110, borderRadius: 8, backgroundColor: EDITORIAL.paperAlt }}
-                    resizeMode="cover"
-                />
-            ))}
-        </ScrollView>
     );
 };
 

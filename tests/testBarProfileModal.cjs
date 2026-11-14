@@ -9,22 +9,26 @@ const brand = require('../app/src/theme/brandColors.json');
 const theme = {
     background: brand.background, onBackground: '#FFFFFF', onBackgroundMuted: '#F0CDD9',
     borderOnBackground: 'rgba(255,255,255,0.3)', matchday: '#F4D35E',
-    fontRegular: 'Barlow', fontSport: 'BarlowCondensed',
+    fontRegular: 'Barlow', fontBold: 'BarlowSemiBold', fontSport: 'BarlowCondensed',
     paper: '#F5F7FA', paperAlt: '#EAF0F5', card: '#FFFFFF', granaSoft: '#F0D8E2',
     ink: '#202631', inkMuted: '#606875', hairline: '#DDE0E5',
 };
 const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
-const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : typeof node === 'string' ? node : '';
+const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? (node.props.message || '') + text(node.props.children) : typeof node === 'string' ? node : '';
 
-function render({ owner = false, editing = false, reviewForm = false, width = 390, height = 844 } = {}) {
+function render({ owner = false, editing = false, reviewForm = false, width = 390, height = 844, authenticated = true, reviewError = null, reviewLoading = false, subscribed = false, embedded = false, showGoogleRating = false } = {}) {
     let state = 0;
     const values = {
         0: true,
         1: [{ id: 'review', userId: 'other', userName: 'Anna', rating: 4, comment: 'Bon ambient', createdAt: new Date('2026-10-27') }],
         2: { averageRating: 4, totalReviews: 1 },
         4: reviewForm,
+        5: 4,
         8: editing,
         9: new Set(['wifi']),
+        11: subscribed,
+        13: reviewLoading,
+        14: reviewError,
     };
     const calls = [];
     const hooks = {
@@ -46,21 +50,32 @@ function render({ owner = false, editing = false, reviewForm = false, width = 39
         require(name) {
             if (name === 'react') return hooks;
             if (name === 'react-native') return native;
+            if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0, bottom: 34 }) };
             if (name.endsWith('AppText')) return { __esModule: true, default: 'Text' };
             if (name.endsWith('AppIcon')) return { __esModule: true, default: 'AppIcon' };
             if (name.includes('editorialTheme')) return { EDITORIAL: theme };
             if (name.includes('sketchTheme')) return { sketchShadow: () => ({}) };
-            if (name.includes('AuthContext')) return { useAuth: () => ({ user: { id: owner ? 'owner' : 'visitor' } }) };
+            if (name.includes('AuthContext')) return { useAuth: () => ({ user: authenticated ? { id: owner ? 'owner' : 'visitor' } : null }) };
             if (name.includes('placesService')) return { isOpenNow: () => true };
             if (name.includes('amenities')) return { AMENITY_OPTIONS: [amenity], AMENITY_MAP: new Map([['wifi', amenity]]), AMENITY_CATEGORIES: [{ key: 'serveis', label: 'Serveis' }] };
             if (name.endsWith('MatchCard')) return { __esModule: true, default: 'MatchCard' };
+            if (name.endsWith('GoogleRatingSection')) return { __esModule: true, default: 'GoogleRatingSection' };
+            if (name.endsWith('UserNotice')) return { __esModule: true, default: 'UserNotice' };
+            if (name.endsWith('VenuePhotoGallery')) return { __esModule: true, default: 'VenuePhotoGallery' };
+            if (name.includes('premiumDemoReviewService')) return {};
+            if (name.includes('premiumDemoProfiles')) return {
+                enrichPremiumDemoBar: bar => bar, isPremiumDemoBar: () => false,
+                getPremiumDemoReviews: () => null, getPremiumDemoReviewStats: () => null, getPremiumDemoHours: () => null,
+                getPremiumDemoBroadcastMatches: () => null, isZuritoDevelopmentPreview: () => false,
+            };
             if (name.includes('reviewService') || name.includes('barOwnerService') || name.includes('barService') || name.includes('AlertBanner')) return {};
             throw new Error(`Unexpected dependency: ${name}`);
         },
     });
     const tree = module.exports.default({
-        visible: true, bar: {
+        visible: true, embedded, bar: {
             id: 'premium', tier: 'premium', ownerId: 'owner', name: 'Bar del barri', address: 'Carrer Major',
+            showGoogleRating,
             amenities: ['wifi'], gallery: ['owner-photo'], description: 'Un bar de barri', promotionalText: 'Promo',
             socialMedia: { instagram: 'bar-del-barri' }, broadcastingMatches: ['match'],
         },
@@ -70,9 +85,29 @@ function render({ owner = false, editing = false, reviewForm = false, width = 39
         },
         allMatches: [{ id: 'match' }],
         onClose: () => calls.push('close'), onNavigate: () => calls.push('navigate'),
+        onRequestLogin: () => calls.push('login'),
     });
     return { tree, calls };
 }
+
+test('premium close target stays inside the sheet with an inset and clears the gallery', () => {
+    for (const embedded of [false, true]) {
+        const { tree, calls } = render({ embedded });
+        const close = nodes(tree).find(node => node.props.accessibilityLabel === 'Tancar les dades del bar');
+        assert(close);
+        assert.equal(close.props.style.backgroundColor, undefined);
+        const contentTop = embedded ? 28 : 0;
+        assert.equal(contentTop + close.props.style.top, 8);
+        assert.equal(close.props.style.right, 8);
+        assert.equal(close.props.style.width, 44);
+        assert.equal(close.props.style.height, 44);
+        const galleryFrame = nodes(tree).find(node => nodes(node.props.children).some(child => child.type === 'VenuePhotoGallery') && node.props.style?.marginBottom === 14);
+        const galleryTop = contentTop + (embedded ? 0 : 56) + galleryFrame.props.style.marginTop;
+        assert(galleryTop >= contentTop + close.props.style.top + close.props.style.height + 4);
+        close.props.onPress();
+        assert.deepEqual(calls, ['close']);
+    }
+});
 
 test('expanded premium profile uses grana surfaces, readable content and gold trim', () => {
     for (const options of [{}, { owner: true, editing: true }, { reviewForm: true }]) {
@@ -139,10 +174,43 @@ test('panel and gallery fit the current viewport instead of module-load dimensio
         const all = nodes(render({ width, height }).tree);
         const panel = all.find(node => node.props.testID === 'premium-bar-panel');
         assert.equal(panel.props.style.height, height * 0.92);
-        const photos = all.filter(node => node.type === 'Image' && ['owner-photo', 'public-photo'].includes(node.props.source?.uri));
-        assert.equal(photos.length, 2);
-        for (const image of photos) {
-            assert.equal(image.props.style.width, Math.min(300, width * 0.7));
-        }
+        const gallery = all.find(node => node.type === 'VenuePhotoGallery');
+        assert.deepEqual(Array.from(gallery.props.photos), ['owner-photo', 'public-photo']);
+        assert.equal(gallery.props.height, 164);
+        assert.equal(gallery.props.photoWidth, Math.min(280, width * 0.74));
     }
+});
+
+test('following stays secondary, readable and distinguishes the subscribed state', () => {
+    for (const subscribed of [false, true]) {
+        const follow = nodes(render({ subscribed }).tree).find(node => /^Seguir |^Deixar de seguir /.test(node.props.accessibilityLabel || ''));
+        assert.equal(follow.props.accessibilityRole, 'button');
+        assert(follow.props.style.minHeight >= 44);
+        assert.equal(follow.props.style.backgroundColor, subscribed ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)');
+        assert.equal(follow.props.accessibilityState.selected, subscribed);
+        assert.equal(follow.props.style.borderWidth, 1);
+        const label = nodes(follow).find(node => node.type === 'Text');
+        assert.equal(label.props.style.fontFamily, theme.fontBold);
+        assert.equal(label.props.style.color, '#FFFFFF');
+    }
+});
+
+test('Google and troBar sources stay separate and authentication/review errors are explicit', () => {
+    const guest = render({ authenticated: false });
+    const signIn = nodes(guest.tree).find(node => node.type === 'TouchableOpacity' && text(node) === 'Inicia sessió per escriure una ressenya');
+    signIn.props.onPress();
+    assert.deepEqual(guest.calls, ['login']);
+    assert(nodes(guest.tree).some(node => node.type === 'GoogleRatingSection' && node.props.enabled === false));
+    assert(nodes(render({ showGoogleRating: true }).tree).some(node => node.type === 'GoogleRatingSection' && node.props.enabled === true));
+    assert(text(guest.tree).includes('Ressenyes de troBar'));
+    const signedIn = nodes(render().tree);
+    assert(signedIn.some(node => node.props.accessibilityLabel === 'Escriure una ressenya a troBar'));
+    const owner = render({ owner: true });
+    assert(text(owner.tree).includes('No pots ressenyar el teu propi bar'));
+    assert(!nodes(owner.tree).some(node => node.props.accessibilityLabel === 'Escriure una ressenya a troBar'));
+    const failed = render({ reviewError: 'Permission denied' });
+    assert(text(failed.tree).includes('Permission denied'));
+    assert(text(failed.tree).includes('Reintentar les ressenyes de troBar'));
+    assert(!text(failed.tree).includes('Encara no hi ha ressenyes'));
+    assert(!nodes(render({ embedded: true }).tree).some(node => node.type === 'Modal'), 'the draggable sheet embeds the profile rather than opening another modal');
 });
