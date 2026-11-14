@@ -1,12 +1,13 @@
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp, query, where, limit as firestoreLimit } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Bar, BarAmenity } from '../models/Bar';
+import { Bar, BarAmenity, OpeningPeriod } from '../models/Bar';
 import { OSMBar } from './osmService';
 import { executeRequest } from '../api/core';
 import { mapOSMTagsToAmenities } from './osmService';
 import { PlaceDetails, mapGooglePlaceTypesToAmenities, mergeAmenities } from './placesService';
 import { getBarCoordinates } from '../utils/barNavigation';
 import { barShowsMatch, isRegisteredBar } from '../utils/matchBroadcast';
+import { enrichPremiumDemoBar } from '../data/premiumDemoProfiles';
 
 // Mapegem les dades de Firestore a la nostra interfície 'Bar'
 const mapDocToBar = (doc: any): Bar | null => {
@@ -14,11 +15,11 @@ const mapDocToBar = (doc: any): Bar | null => {
     if (data.status === 'pending_checkout') return null;
     const coordinates = getBarCoordinates(data);
     if (!coordinates) {
-        console.warn('Bar omitted: missing valid coordinates', doc.id);
+        console.info('Bar omitted: missing valid coordinates', doc.id);
         return null;
     }
 
-    return {
+    const bar: Bar = {
         id: doc.id,
         name: data.name || doc.id, // Si no té nom, usem l'ID (ex: 'bar-mut')
         address: data.address || '',
@@ -32,6 +33,7 @@ const mapDocToBar = (doc: any): Bar | null => {
         broadcastingMatches: data.broadcastingMatches || [],
         usuallyShowsBarca: data.usuallyShowsBarca ?? false,
         googlePlaceId: data.googlePlaceId || undefined,
+        showGoogleRating: data.showGoogleRating === true,
         tier: data.tier || 'free',
         isTestData: data.isTestData === true,
         // Camps premium
@@ -46,6 +48,7 @@ const mapDocToBar = (doc: any): Bar | null => {
         // Camps opcionals que potser no estan a totes les entrades
         nextMatch: data.nextMatch || undefined
     };
+    return bar.isTestData === true && bar.tier === 'premium' ? enrichPremiumDemoBar(bar) : bar;
 };
 
 export const fetchBars = async (): Promise<Bar[]> => {
@@ -55,21 +58,17 @@ export const fetchBars = async (): Promise<Bar[]> => {
         const querySnapshot = await getDocs(q);
         
         const bars: Bar[] = [];
-        const seenNames = new Set<string>();
         
         querySnapshot.forEach((doc) => {
             const bar = mapDocToBar(doc);
             if (!bar) return;
-            if (!seenNames.has(bar.name)) {
-                seenNames.add(bar.name);
-                bars.push(bar);
-            }
+            bars.push(bar);
         });
         return bars;
     }, 'fetchBars');
 
-    // Si falla, retornem array buit (behavior per defecte en aquest servei)
-    return result.success && result.data ? result.data : [];
+    if (!result.success) throw new Error(result.error || 'No hem pogut carregar els bars.');
+    return result.data || [];
 };
 
 /**
@@ -98,21 +97,24 @@ export const fetchBarsInBounds = async (
             where('latitude', '<=', maxLat),
             firestoreLimit(max),
         );
-        const snap1 = await getDocs(q1);
+        const q2 = query(collection(db, 'bars'), where('location.latitude', '>=', minLat),
+            where('location.latitude', '<=', maxLat), firestoreLimit(max));
+        const snapshots = await Promise.all([getDocs(q1), getDocs(q2)]);
         const out: Bar[] = [];
         const seen = new Set<string>();
-        snap1.forEach((d) => {
+        snapshots.forEach(snapshot => snapshot.forEach((d) => {
             const bar = mapDocToBar(d);
             if (!bar) return;
             if (bar.longitude < minLng || bar.longitude > maxLng) return;
             if (seen.has(bar.id)) return;
             seen.add(bar.id);
             out.push(bar);
-        });
+        }));
         return out;
     }, 'fetchBarsInBounds');
 
-    return result.success && result.data ? result.data : [];
+    if (!result.success) throw new Error(result.error || 'No hem pogut carregar aquesta zona.');
+    return result.data || [];
 };
 
 
@@ -199,6 +201,7 @@ export const addUserReportedBar = async (osmBar: OSMBar, userId?: string): Promi
                 address: '',
                 amenities,
                 source: 'user_reported',
+                ...(osmBar.googlePlaceId ? { googlePlaceId: osmBar.googlePlaceId } : {}),
                 ...(userId ? { reportedBy: userId } : {}),
                 createdAt: serverTimestamp(),
                 isActive: false,
@@ -215,11 +218,11 @@ export const addUserReportedBar = async (osmBar: OSMBar, userId?: string): Promi
 
 /**
  * Cacheja les dades de Google Places a Firestore després de visualitzar un bar.
- * MOLT IMPORTANT: Només es crida UN COP després de getPlaceDetails (que ja s'ha fet).
- * No fa cap crida addicional a Google — només guarda les dades que ja tenim.
+ * Reutilitza la resposta de getPlaceDetails, sense crides addicionals a Google.
+ * Només escriu quan canvien dades; no refresca el timestamp en visites idèntiques.
  * 
  * Guarda:
- * - googlePlaceId (si no el tenia)
+ * - googlePlaceId (si falta o s'ha substituït)
  * - openingPeriods (per calcular obert/tancat localment en el futur)
  * - amenities (fusionades amb les de Google types)
  * - placesEnrichedAt (timestamp per saber que ja s'ha enriquit)
@@ -233,26 +236,28 @@ export const cacheBarPlaceData = async (bar: Bar, details: PlaceDetails): Promis
         const existingAmenities: BarAmenity[] = bar.amenities || [];
         const merged = mergeAmenities(existingAmenities, googleAmenities);
 
-        const updateData: Record<string, any> = {
-            amenities: merged,
-            placesEnrichedAt: serverTimestamp(),
-        };
+        const updateData: Partial<Pick<Bar, 'googlePlaceId' | 'amenities' | 'openingPeriods'>> = {};
+        if (JSON.stringify([...existingAmenities].sort()) !== JSON.stringify([...merged].sort())) updateData.amenities = merged;
 
         // Guardar googlePlaceId si no el tenia (per estalviar searchText la pròxima vegada)
-        if (!bar.googlePlaceId && details.placeId) {
+        if (bar.googlePlaceId !== details.placeId && details.placeId) {
             updateData.googlePlaceId = details.placeId;
         }
 
         // Guardar períodes d'obertura per calcular obert/tancat localment
-        if (details.openingPeriods && details.openingPeriods.length > 0) {
+        const periodKeys = (periods: OpeningPeriod[]) => periods.map(period =>
+            [period.openDay, period.openHour, period.openMinute, period.closeDay, period.closeHour, period.closeMinute].join(':')).sort();
+        if (details.openingPeriods?.length &&
+            JSON.stringify(periodKeys(bar.openingPeriods || [])) !== JSON.stringify(periodKeys(details.openingPeriods))) {
             updateData.openingPeriods = details.openingPeriods;
         }
 
-        await updateDoc(barRef, updateData);
+        if (!Object.keys(updateData).length) return;
+        await updateDoc(barRef, { ...updateData, placesEnrichedAt: serverTimestamp() });
         console.log(`[Cache] Bar "${bar.name}" → placeId=${details.placeId}, periods=${details.openingPeriods?.length || 0}, amenities=${merged.join(',')}`);
     } catch (error) {
         // Error de cache no és crític — no bloquejar l'UX
-        console.warn(`[Cache] Error guardant dades de ${bar.id}:`, error);
+        console.info(`[Cache] Error guardant dades de ${bar.id}:`, error);
     }
 };
 

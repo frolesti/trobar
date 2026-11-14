@@ -1,158 +1,118 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, ScrollView, useWindowDimensions, Animated, Easing } from 'react-native';
+import { View, TouchableOpacity, ScrollView, useWindowDimensions, Linking } from 'react-native';
 import Text from '../../components/AppText';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { RouteProp } from '@react-navigation/native';
-import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { RouteProp, useIsFocused } from '@react-navigation/native';
 import { EDITORIAL } from '../../theme/editorialTheme';
 import { useAuth } from '../../context/AuthContext';
 import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 import BarCard from '../../components/BarCard';
-import { showAlert } from '../../components/AlertBanner';
-import AppIcon from '../../components/AppIcon';
+import AlertBanner, { showAlert } from '../../components/AlertBanner';
+import UserNotice from '../../components/UserNotice';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'ReportBar'>;
     route: RouteProp<RootStackParamList, 'ReportBar'>;
 };
 
-const ReportBarScreen = ({ navigation, route }: Props) => {
-    const { osmBar } = route.params;
+export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, attributionInMap = false, onGoogleDetailsChange }: {
+    osmBar: RootStackParamList['ReportBar']['osmBar'];
+    onClose: () => void;
+    onRegistered: () => void;
+    onBusyChange?: (busy: boolean) => void;
+    attributionInMap?: boolean;
+    onGoogleDetailsChange?: (loaded: boolean) => void;
+}) => {
     const { user } = useAuth();
     const { height } = useWindowDimensions();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
-
-    // Animacions coincidents amb MapScreen
-    const bubbleScale = useRef(new Animated.Value(0)).current;
-    const bubbleOpacity = useRef(new Animated.Value(0)).current;
+    const busy = useRef(false);
+    const alive = useRef(true);
+    const closing = useRef(false);
+    const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        fetchDetails();
+        let current = true;
+        alive.current = true;
+        setPlaceDetails(null);
+        onGoogleDetailsChange?.(false);
+        const fetchDetails = async () => {
+            if (!osmBar.name || !Number.isFinite(osmBar.lat) || !Number.isFinite(osmBar.lon)) return;
+            setLoadingDetails(true);
+            try {
+                const details = await fetchBarPlaceDetails(osmBar.name, osmBar.lat, osmBar.lon, osmBar.googlePlaceId);
+                if (current) {
+                    setPlaceDetails(details);
+                    onGoogleDetailsChange?.(!!details);
+                }
+            } catch (error) {
+                console.info('[ReportBar] Failed to fetch place details', error);
+            } finally {
+                if (current) setLoadingDetails(false);
+            }
+        };
+        void fetchDetails();
 
-        // Disparar animació al muntar
-        Animated.parallel([
-            Animated.spring(bubbleScale, {
-                toValue: 1,
-                friction: 9,
-                tension: 50,
-                useNativeDriver: true,
-            }),
-            Animated.timing(bubbleOpacity, {
-                toValue: 1,
-                duration: 120,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, []);
+        return () => {
+            current = false;
+            alive.current = false;
+            if (returnTimer.current) clearTimeout(returnTimer.current);
+            onBusyChange?.(false);
+            onGoogleDetailsChange?.(false);
+        };
+    }, [osmBar.id, osmBar.googlePlaceId, osmBar.name, osmBar.lat, osmBar.lon]);
 
     const closeScreen = () => {
-        Animated.parallel([
-            Animated.timing(bubbleScale, {
-                toValue: 0,
-                duration: 200,
-                easing: Easing.in(Easing.back(2)),
-                useNativeDriver: true,
-            }),
-            Animated.timing(bubbleOpacity, {
-                toValue: 0,
-                duration: 150,
-                useNativeDriver: true,
-            }),
-        ]).start(() => {
-            navigation.goBack();
-        });
-    };
-
-    const fetchDetails = async () => {
-        if (!osmBar.name || !osmBar.lat || !osmBar.lon) return;
-        setLoadingDetails(true);
-        try {
-            const details = await fetchBarPlaceDetails(osmBar.name, osmBar.lat, osmBar.lon);
-            if (details) setPlaceDetails(details);
-        } catch (err) {
-            console.error('[ReportBar] Failed to fetch place details', err);
-        } finally {
-            setLoadingDetails(false);
-        }
+        if (closing.current || busy.current) return;
+        closing.current = true;
+        if (returnTimer.current) clearTimeout(returnTimer.current);
+        onClose();
     };
 
     const getAddress = () => {
         if (placeDetails?.formattedAddress) return placeDetails.formattedAddress;
+        if (osmBar.formattedAddress) return osmBar.formattedAddress;
         const t = osmBar.tags || {};
         const street = t['addr:street'] || '';
         const number = t['addr:housenumber'] || '';
-        const city = t['addr:city'] || 'Barcelona';
-        if (street) return `${street}, ${number}, ${city}`;
+        const city = t['addr:city'] || '';
+        if (street || city) return [[street, number].filter(Boolean).join(' '), city].filter(Boolean).join(', ');
         return 'Adreça no disponible';
     };
 
     const handleConfirm = async () => {
+        if (busy.current || submitSuccess || closing.current) return;
+        busy.current = true;
+        onBusyChange?.(true);
         setIsSubmitting(true);
         try {
             await addUserReportedBar(osmBar, user?.id);
+            if (!alive.current) return;
             setSubmitSuccess(true);
-            showAlert({ tone: 'success', message: 'Bar registrat! Gràcies per ajudar la comunitat.' });
-            setTimeout(() => {
-                navigation.navigate('Map', { refresh: Date.now() });
+            returnTimer.current = setTimeout(() => {
+                if (alive.current) onRegistered();
             }, 1800);
         } catch (error) {
-            console.error('[ReportBar] No s’ha pogut registrar el bar:', error);
-            showAlert({ tone: 'error', message: "No s'ha pogut guardar. Torna-ho a provar." });
+            console.info('[ReportBar] No s’ha pogut registrar el bar:', error);
+            if (alive.current) showAlert({ tone: 'error', message: "No s'ha pogut guardar. Torna-ho a provar." });
         } finally {
-            setIsSubmitting(false);
+            busy.current = false;
+            if (alive.current) {
+                onBusyChange?.(false);
+                setIsSubmitting(false);
+            }
         }
     };
 
     return (
-        <View style={{ flex: 1 }}>
-            {/* Fons per tancar amb un toc */}
-            <TouchableOpacity
-                style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
-                activeOpacity={1}
-                onPress={closeScreen}
-            />
-
-            {/* Bafarada flotant — posicionada perquè el triangle apunti al pin del bar */}
-            {/* El pin acaba al 25% des de baix després del desplaçament de càmera de MapScreen (0.002/0.008) */}
-            <Animated.View style={{
-                position: 'absolute',
-                bottom: Math.round(height * 0.25) + 30,
-                left: 14,
-                right: 14,
-                maxHeight: Math.round(height * 0.55),
-                opacity: bubbleOpacity,
-                transform: [{ scale: bubbleScale }]
-            }}>
-                {/* Cos de la targeta blanca */}
-                <View style={{
-                    backgroundColor: 'white',
-                    borderRadius: 8,
-                    padding: 14,
-                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10,
-                    elevation: 12,
-                }}>
-                    <ScrollView
-                        showsVerticalScrollIndicator={false}
-                        style={{ maxHeight: Math.round(height * 0.50) }}
-                        nestedScrollEnabled
-                    >
+        <View>
                         {submitSuccess ? (
-                            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: SKETCH_THEME.colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
-                                    <AppIcon name="check" size={32} color="white" />
-                                </View>
-                                <Text style={{ fontSize: 20, color: EDITORIAL.grana, fontFamily: EDITORIAL.fontBold, marginTop: 4, textAlign: 'center' }}>
-                                    Bar registrat correctament
-                                </Text>
-                                <Text style={{ fontSize: 14, color: EDITORIAL.inkMuted, fontFamily: EDITORIAL.fontRegular, marginTop: 6, textAlign: 'center' }}>
-                                    Gràcies per ajudar la comunitat. Aquest bar ja apareix al mapa.
-                                </Text>
-                            </View>
+                            <UserNotice tone="success" message="Bar registrat. Gràcies per ajudar la comunitat!" />
                         ) : (
                         <BarCard
                             name={osmBar.name}
@@ -162,31 +122,41 @@ const ReportBarScreen = ({ navigation, route }: Props) => {
                             placeDetails={placeDetails}
                             loadingPlaceDetails={loadingDetails}
                             verified={false}
+                            dense={height < 700}
+                            onClose={closeScreen}
                             onConfirm={handleConfirm}
                             onCancel={closeScreen}
                             isSubmitting={isSubmitting}
                         />
                         )}
-                    </ScrollView>
-                </View>
+                        {!attributionInMap && (osmBar.googlePlaceId || osmBar.source === 'google' || placeDetails) && <View style={{ marginTop: 6 }}>
+                            <Text style={{ color: '#F4E6CC', fontSize: 12 }}>Google Maps</Text>
+                            {osmBar.attributions?.map(item => <TouchableOpacity key={item.uri} accessibilityRole="link" onPress={() => {
+                                if (item.uri.startsWith('https://')) void Linking.openURL(item.uri).catch(error => console.info('[ReportBar] Attribution link failed', error));
+                            }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                                <Text style={{ color: '#F4E6CC', fontSize: 12 }}>{item.name}</Text>
+                            </TouchableOpacity>)}
+                        </View>}
+        </View>
+    );
+};
 
-                {/* Indicador triangular — idèntic a MapScreen */}
-                <View style={{
-                    alignSelf: 'center',
-                    marginTop: -1,
-                    width: 0, height: 0,
-                    borderLeftWidth: 14,
-                    borderRightWidth: 14,
-                    borderTopWidth: 16,
-                    borderLeftColor: 'transparent',
-                    borderRightColor: 'transparent',
-                    borderTopColor: 'white',
-                }} />
-                <View style={{ height: 10 }} />
-            </Animated.View>
+const ReportBarScreen = ({ navigation, route }: Props) => {
+    const focused = useIsFocused();
+    const { height } = useWindowDimensions();
+    const [busy, setBusy] = useState(false);
+    const close = () => { if (!busy) navigation.goBack(); };
+    return (
+        <View style={{ flex: 1 }}>
+            <TouchableOpacity accessibilityLabel="Tancar la fitxa del local" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }} activeOpacity={1} onPress={close} />
+            <View style={{ position: 'absolute', bottom: Math.round(height * 0.25) + 30, left: 14, right: 14, maxHeight: Math.round(height * 0.55), backgroundColor: EDITORIAL.granaDeep, borderRadius: 16, padding: 16 }}>
+                <ScrollView nestedScrollEnabled>
+                    <ReportBarContent osmBar={route.params.osmBar} onClose={close} onBusyChange={setBusy} onRegistered={() => navigation.navigate('Map', { refresh: Date.now() })} />
+                </ScrollView>
+            </View>
+            <AlertBanner active={focused} priority={1} />
         </View>
     );
 };
 
 export default ReportBarScreen;
-

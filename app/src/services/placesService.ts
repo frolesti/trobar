@@ -6,10 +6,15 @@
 
 import { BarAmenity, OpeningPeriod } from '../models/Bar';
 import { fetchWithTimeout } from '../api/core';
+import { searchGoogleVenues, isSameVenue } from './barDiscoveryService';
+export { mapGooglePlaceTypesToAmenities } from '../utils/googlePlaceAmenities';
 export type { OpeningPeriod };
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 const PLACES_BASE = 'https://places.googleapis.com/v1/places';
+const pendingDetails = new Map<string, Promise<PlaceDetails | null>>();
+const pendingBars = new Map<string, Promise<PlaceDetails | null>>();
+const knownPlaceIds = new Map<string, string>();
 
 export interface PlaceDetails {
     placeId: string;
@@ -37,55 +42,11 @@ export interface PlaceDetails {
  */
 export async function searchPlace(name: string, lat: number, lng: number): Promise<string | null> {
     try {
-        // Forçar "Bar" o "Pub" a la consulta per evitar trobar ciutats/carrers amb el mateix nom
-        // e.g. "Lleida" -> "Bar Lleida" or "Pub Lleida" or "Lleida bar"
-        const query = `${name} bar`;
-        
-        const response = await fetchWithTimeout(`${PLACES_BASE}:searchText`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': API_KEY,
-                'X-Goog-FieldMask': 'places.id,places.displayName,places.primaryType',
-            },
-            body: JSON.stringify({
-                textQuery: query,
-                locationBias: {
-                    circle: {
-                        center: { latitude: lat, longitude: lng },
-                        radius: 200, // Radi de 200 m
-                    },
-                },
-                maxResultCount: 3, // Obtenir-ne uns quants per filtrar per tipus si cal
-            }),
-        }, 'places.searchText', 15000);
-
-        if (!response.ok) {
-            if (response.status === 403) {
-                console.warn('Places API (New) not enabled. Enable "Places API (New)" at https://console.cloud.google.com/apis/library/places-backend.googleapis.com');
-            }
-            return null;
-        }
-
-        const data = await response.json();
-        
-        // Filtrar entitats administratives evidents (ciutats, barris)
-        if (data.places && data.places.length > 0) {
-            // Trobar la millor coincidència que sigui probablement un bar/restaurant
-            const bestMatch = data.places.find((p: any) => {
-                const type = p.primaryType || '';
-                // Evitar localitats, estacions de trànsit, etc.
-                const badTypes = ['locality', 'administrative_area_level_1', 'administrative_area_level_2', 'train_station'];
-                return !badTypes.includes(type);
-            });
-
-            if (bestMatch) return bestMatch.id;
-            // Alternativa: usar el primer resultat si res és explícitament "dolent", o si el filtratge ha estat massa agressiu
-            return data.places[0].id;
-        }
-        return null;
+        const candidates = await searchGoogleVenues(name, lat, lng);
+        const match = candidates.find(place => isSameVenue(place, { id: '', name, latitude: lat, longitude: lng }, 250));
+        return match?.googlePlaceId || null;
     } catch (error) {
-        console.error('Places searchText error:', error);
+        console.info('Places searchText error:', error);
         return null;
     }
 }
@@ -110,8 +71,10 @@ const DETAIL_FIELDS = [
 /**
  * Obté tots els detalls d'un lloc per place ID.
  */
-export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
-    try {
+function requestPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
+    const active = pendingDetails.get(placeId);
+    if (active) return active;
+    const request = (async (): Promise<PlaceDetails | null> => {
         const response = await fetchWithTimeout(`${PLACES_BASE}/${placeId}`, {
             method: 'GET',
             headers: {
@@ -123,9 +86,10 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 
         // Place ID antic / movent / no v\u00e0lid → no escupim error a la consola
         if (response.status === 404) return null;
+        if (!response.ok) throw new Error(`PLACES_DETAILS_HTTP_${response.status}`);
 
         const place = await response.json();
-        if (!place.id) return null;
+        if (!place.id) throw new Error('PLACES_DETAILS_INVALID_RESPONSE');
 
         // Construir URLs de fotos (màxim 3)
         const photoUrls: string[] = [];
@@ -177,8 +141,16 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
             photoUrls,
             types: place.types || [],
         };
+    })().finally(() => pendingDetails.delete(placeId));
+    pendingDetails.set(placeId, request);
+    return request;
+}
+
+export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
+    try {
+        return await requestPlaceDetails(placeId);
     } catch (error) {
-        console.error('Places getDetails error:', error);
+        console.info('Places getDetails error:', error);
         return null;
     }
 }
@@ -194,16 +166,31 @@ export async function fetchBarPlaceDetails(
     lng: number,
     existingPlaceId?: string,
 ): Promise<PlaceDetails | null> {
-    // Si ja tenim el placeId, directament detalls (1 crida en comptes de 2)
-    if (existingPlaceId) {
-        const cached = await getPlaceDetails(existingPlaceId);
-        if (cached) return cached;
-        // placeId obsolet (404 silenci\u00f3s) → continuem amb la cerca per nom
-    }
-    // Si no, cerca + detalls (2 crides, però guardem el placeId per la pròxima)
-    const placeId = await searchPlace(barName, lat, lng);
-    if (!placeId) return null;
-    return getPlaceDetails(placeId);
+    const key = JSON.stringify([barName.trim().toLowerCase(), lat, lng, existingPlaceId || '']);
+    const active = pendingBars.get(key);
+    if (active) return active;
+    const request = (async () => {
+        try {
+            const previousId = knownPlaceIds.get(key) || existingPlaceId;
+            let details = previousId ? await requestPlaceDetails(previousId) : null;
+            if (!details) {
+                knownPlaceIds.delete(key);
+                const placeId = await searchPlace(barName, lat, lng);
+                if (!placeId || placeId === previousId) return null;
+                details = await requestPlaceDetails(placeId);
+            }
+            if (details) {
+                if (!knownPlaceIds.has(key) && knownPlaceIds.size >= 200) knownPlaceIds.delete(knownPlaceIds.keys().next().value!);
+                knownPlaceIds.set(key, details.placeId);
+            }
+            return details;
+        } catch (error) {
+            console.info('Places bar details error:', error);
+            return null;
+        }
+    })().finally(() => pendingBars.delete(key));
+    pendingBars.set(key, request);
+    return request;
 }
 
 // ── Utilitat: obert/tancat local amb períodes cachejats ──────────────
@@ -229,64 +216,6 @@ export function isOpenNow(periods: OpeningPeriod[] | undefined): boolean | undef
         return adjusted >= openMins && adjusted < closeMins;
     });
 }
-
-// ── Google Places types → BarAmenity mapping ────────────────────────────
-// Referència: https://developers.google.com/maps/documentation/places/web-service/place-types
-// Només fem SERVIR això per bars verificats (amb googlePlaceId) i guardem el resultat a Firestore.
-// Així cada bar només costa 1 crida d'API — MAI MÉS.
-
-/**
- * Mapeja els tipus de Google Places (New) a les amenitats de l'app.
- * Complementa les dades d'OSM, NO les substitueix.
- */
-export const mapGooglePlaceTypesToAmenities = (
-    types: string[],
-    placeDetails?: Partial<PlaceDetails>
-): BarAmenity[] => {
-    const amenities: BarAmenity[] = [];
-    const typeSet = new Set(types);
-
-    // Menjar
-    if (typeSet.has('restaurant') || typeSet.has('food') || typeSet.has('meal_delivery') ||
-        typeSet.has('meal_takeaway') || typeSet.has('bakery') || typeSet.has('dine_in')) {
-        amenities.push('food_served');
-    }
-
-    // Bar esportiu
-    if (typeSet.has('sports_bar') || typeSet.has('sports_club')) {
-        amenities.push('sports_bar');
-    }
-
-    // Cervesa artesana -> craft_beer (si conté "brewery")  
-    if (typeSet.has('brewery')) {
-        amenities.push('craft_beer');
-    }
-
-    // Música en viu
-    if (typeSet.has('live_music_venue') || typeSet.has('night_club')) {
-        amenities.push('live_music');
-    }
-
-    // Nit (bars nocturns)
-    if (typeSet.has('night_club') || typeSet.has('bar')) {
-        amenities.push('late_night');
-    }
-
-    // Accessibilitat — Google Places (New) pot tenir-ho a `accessibilityOptions`
-    if (typeSet.has('wheelchair_accessible_entrance')) {
-        amenities.push('accessible');
-    }
-
-    // Aparcament
-    if (typeSet.has('parking')) {
-        amenities.push('parking');
-    }
-
-    // WiFi — inferim si el bar té ressenyes que ho mencionen (futur) 
-    // Per ara, no ho podem saber directament dels types
-
-    return amenities;
-};
 
 /**
  * Combina dues llistes d'amenitats sense duplicats.

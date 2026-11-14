@@ -11,7 +11,7 @@ function loadService(fetchWithTimeout) {
     vm.runInNewContext(code, {
         module: moduleStub, exports: moduleStub.exports,
         require: () => ({ fetchWithTimeout }),
-        Date, Map, console: { warn() {}, error() {} },
+        Date, Map, console: { warn() {}, error() {}, info() {} },
         process: { env: { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: 'test-key' } },
         setTimeout: callback => { callback(); return 0; },
     });
@@ -47,7 +47,7 @@ test('shares concurrent requests, caches results and drops invalid coordinates',
     assert.equal(first, second);
     assert.equal(first.length, 2);
     assert.equal(first[0].lat, 0);
-    assert.match(first[0].id, /^osm_[0-9]+$/);
+    assert.match(first[0].id, /^osm_(node|way|relation)_[0-9]+$/);
     await service.fetchBarsFromOSM(0, 0, 1);
     assert.equal(calls, 1);
 });
@@ -96,8 +96,8 @@ test('OSM map fallback produces map markers after Overpass fails and caches its 
     const result = await service.discoverUnregisteredBars(41, 2, 1);
     assert.equal(result.provider, 'openstreetmap');
     assert.equal(result.bars.length, 2);
-    assert.equal(result.bars[0].id, 'osm_1');
-    assert.equal(result.bars[1].id, 'osm_4');
+    assert.equal(result.bars[0].id, 'osm_node_1');
+    assert.equal(result.bars[1].id, 'osm_way_4');
     assert.equal(result.limitedArea, true);
     await service.discoverUnregisteredBars(41, 2, 1);
     assert.equal(calls.length, 3);
@@ -111,6 +111,21 @@ test('successful OSM and invalid search areas never trigger billable fallback', 
     assert.equal(calls, 1);
 });
 
+test('Overpass and map fallback include beer gardens, cafes, pubs and casual food venues', async () => {
+    let query;
+    const overpass = loadService(async (_url, options) => {
+        query = decodeURIComponent(options.body);
+        return response([]);
+    });
+    await overpass.fetchBarsFromOSM(41, 2, 1);
+    for (const type of ['bar', 'pub', 'cafe', 'biergarten', 'fast_food', 'food_court']) assert(query.includes(type));
+    const service = loadService(async () => response(['bar', 'pub', 'cafe', 'biergarten', 'fast_food', 'food_court', 'hospital'].map((amenity, id) => ({
+        id, type: 'node', lat: 41, lon: 2, tags: { name: `Local ${id}`, amenity },
+    }))));
+    const result = await service.discoverUnregisteredBars(41, 2, 0.1);
+    assert.equal(result.bars.length, 6);
+    assert(!result.bars.some(bar => bar.type === 'hospital'));
+});
 test('temporarily skips a failed mirror when a different area is searched', async () => {
     const calls = [];
     const service = loadService(async url => {

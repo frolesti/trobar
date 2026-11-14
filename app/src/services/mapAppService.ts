@@ -1,6 +1,7 @@
 import { Alert, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildBarNavigationUrls, Coordinates, validBarCoordinates } from '../utils/barNavigation';
+import { showAlert } from '../components/AlertBanner';
 
 export type MapAppId = 'google' | 'apple' | 'waze';
 const KEY = 'trobar.defaultMapApp';
@@ -36,7 +37,7 @@ export function nativeMapUrl(id: MapAppId, point: Coordinates) {
 
 export async function openBarMaps(point: Coordinates) {
     if (!validBarCoordinates(point)) {
-        Alert.alert('Ubicació no disponible', 'Aquest bar no té unes coordenades vàlides.');
+        showAlert({ tone: 'info', message: 'Aquest bar no té una ubicació disponible.' });
         return;
     }
     if (Platform.OS === 'web') {
@@ -51,15 +52,22 @@ export async function openBarMaps(point: Coordinates) {
             if (!await Linking.canOpenURL(url)) throw new Error('Unavailable');
             await Linking.openURL(url);
             return true;
-        } catch { Alert.alert('App no disponible', 'No es pot obrir aquesta aplicació de mapes.'); return false; }
+        } catch (error) {
+            console.info('[MapApps] Cannot open selected app', error);
+            showAlert({ tone: 'error', message: 'No es pot obrir aquesta aplicació de mapes.' });
+            return false;
+        }
     };
     if (apps.some(app => app.id === preferred)) { await open(preferred as MapAppId); return; }
     if (preferred) await setDefaultMapApp(null);
-    if (!apps.length) { Alert.alert('Cap app de mapes disponible', 'No hem detectat cap aplicació de mapes compatible instal·lada.'); return; }
+    if (!apps.length) { showAlert({ tone: 'info', message: 'No hem detectat cap aplicació de mapes compatible instal·lada.' }); return; }
     const choose = async (id: MapAppId) => {
         if (await open(id)) {
             try { await setDefaultMapApp(id); }
-            catch { Alert.alert('No s’ha pogut desar', 'La ruta s’ha obert, però caldrà tornar a triar l’app de mapes la pròxima vegada.'); }
+            catch (error) {
+                console.info('[MapApps] Cannot save preferred app', error);
+                showAlert({ tone: 'error', message: 'La ruta s’ha obert, però caldrà tornar a triar l’app de mapes la pròxima vegada.' });
+            }
         }
     };
     if (apps.length === 1) { await choose(apps[0].id); return; }

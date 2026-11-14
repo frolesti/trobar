@@ -18,6 +18,7 @@ import React, {
 } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Text from '../components/AppText';
+import UserNotice from '../components/UserNotice';
 import { GoogleMap, OverlayView, useJsApiLoader } from '@react-google-maps/api';
 
 const API_KEY = (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined) || '';
@@ -62,9 +63,10 @@ const MapView = forwardRef<any, any>((props, ref) => {
         googleMapsApiKey: API_KEY,
         libraries: LIBRARIES as any,
     });
+    useEffect(() => { if (loadError) console.info('[Map] Cannot load map', loadError); }, [loadError]);
 
     const mapRef = useRef<google.maps.Map | null>(null);
-    const containerRef = useRef<HTMLDivElement | null>(null);
+    const containerRef = useRef<HTMLElement | null>(null);
     const [mapReady, setMapReady] = useState(false);
 
     const initialCenter = useMemo(() => {
@@ -74,28 +76,33 @@ const MapView = forwardRef<any, any>((props, ref) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const mapOptions = useMemo<google.maps.MapOptions>(() => ({
+        center: { lat: initialCenter.lat, lng: initialCenter.lng },
+        zoom: regionToZoom(initialCenter.delta),
+        disableDefaultUI: true,
+        zoomControl: true,
+        maxZoom: maxZoomLevel,
+        minZoom: minZoomLevel,
+        zoomControlOptions: {
+            position: typeof window !== 'undefined' ? window.google?.maps?.ControlPosition?.LEFT_BOTTOM : undefined,
+        },
+        gestureHandling: 'greedy',
+        clickableIcons: false,
+        keyboardShortcuts: false,
+        fullscreenControl: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        rotateControl: false,
+        scaleControl: false,
+        styles: Array.isArray(customMapStyle) ? customMapStyle : undefined,
+    }), [isLoaded, initialCenter, maxZoomLevel, minZoomLevel, customMapStyle]);
+
     const onLoad = useCallback((map: google.maps.Map) => {
         mapRef.current = map;
-        try { containerRef.current = map.getDiv() as HTMLDivElement; } catch {}
+        containerRef.current = map.getDiv();
         setMapReady(true);
         onMapReady?.();
-        // Some webview/layout combinations leave the GoogleMap with a stale
-        // size on first paint (tiles look blank until the user interacts).
-        // Force a sequence of resize+recenter calls to cover late-mount layouts.
-        if (typeof window !== 'undefined' && window.google?.maps?.event) {
-            const recenter = () => {
-                window.google.maps.event.trigger(map, 'resize');
-                map.setCenter({ lat: initialCenter.lat, lng: initialCenter.lng });
-                // També disparem un esdeveniment global perquè qualsevol
-                // ResizeObserver/listener pendents s'activin.
-                try { window.dispatchEvent(new Event('resize')); } catch {}
-            };
-            // Multiple staggered triggers — covers slow webviews/embedded frames
-            [0, 50, 150, 400, 900, 1800, 3000].forEach((t) =>
-                t === 0 ? requestAnimationFrame(recenter) : setTimeout(recenter, t)
-            );
-        }
-    }, [initialCenter, onMapReady]);
+    }, [onMapReady]);
 
     // Observe container size; when it actually changes (e.g. layout settles
     // after fonts load or panels mount) re-trigger a Google Maps resize so
@@ -146,13 +153,19 @@ const MapView = forwardRef<any, any>((props, ref) => {
                 const map = mapRef.current;
                 if (!map) return;
                 map.panTo({ lat: r.latitude, lng: r.longitude });
-                if (r.latitudeDelta) map.setZoom(regionToZoom(r.latitudeDelta));
+                const width = map.getDiv().clientWidth;
+                const zoom = r.longitudeDelta && width
+                    ? Math.log2(360 * width / (256 * r.longitudeDelta))
+                    : r.latitudeDelta ? regionToZoom(r.latitudeDelta) : undefined;
+                if (zoom !== undefined && Math.abs(zoom - (map.getZoom() ?? 0)) > 0.000001) map.setZoom(zoom);
             },
             animateCamera: (cam: any) => {
                 const map = mapRef.current;
                 if (!map) return;
                 if (cam?.center) map.panTo({ lat: cam.center.latitude, lng: cam.center.longitude });
                 if (typeof cam?.zoom === 'number') map.setZoom(cam.zoom);
+                if (typeof cam?.heading === 'number') map.setHeading(cam.heading);
+                if (typeof cam?.pitch === 'number') map.setTilt(cam.pitch);
             },
             fitToCoordinates: (coords: LatLng[]) => {
                 const map = mapRef.current;
@@ -167,8 +180,8 @@ const MapView = forwardRef<any, any>((props, ref) => {
                 const c = mapRef.current?.getCenter();
                 return {
                     center: { latitude: c?.lat() || 0, longitude: c?.lng() || 0 },
-                    pitch: 0,
-                    heading: 0,
+                    pitch: mapRef.current?.getTilt() ?? 0,
+                    heading: mapRef.current?.getHeading() ?? 0,
                     zoom: mapRef.current?.getZoom() || 10,
                 };
             },
@@ -190,15 +203,43 @@ const MapView = forwardRef<any, any>((props, ref) => {
             setCamera: () => {},
             setMapBoundaries: () => {},
             takeSnapshot: async () => '',
-            pointForCoordinate: async () => ({ x: 0, y: 0 }),
-            coordinateForPoint: async () => ({ latitude: 0, longitude: 0 }),
+            pointForCoordinate: async (coordinate: LatLng) => {
+                const map = mapRef.current;
+                const projection = map?.getProjection();
+                const center = map?.getCenter();
+                const zoom = map?.getZoom();
+                if (!map || !projection || !center || zoom === undefined) throw new Error('Map projection is not ready');
+                const origin = projection.fromLatLngToPoint(center);
+                const point = projection.fromLatLngToPoint(new window.google.maps.LatLng(coordinate.latitude, coordinate.longitude));
+                if (!origin || !point) throw new Error('Map coordinate cannot be projected');
+                const scale = 2 ** zoom;
+                const worldOffsetX = ((point.x - origin.x + 128) % 256 + 256) % 256 - 128;
+                return {
+                    x: map.getDiv().clientWidth / 2 + worldOffsetX * scale,
+                    y: map.getDiv().clientHeight / 2 + (point.y - origin.y) * scale,
+                };
+            },
+            coordinateForPoint: async (point: { x: number; y: number }) => {
+                const map = mapRef.current;
+                const projection = map?.getProjection();
+                const center = map?.getCenter();
+                const zoom = map?.getZoom();
+                if (!map || !projection || !center || zoom === undefined) throw new Error('Map projection is not ready');
+                const origin = projection.fromLatLngToPoint(center);
+                if (!origin) throw new Error('Map center cannot be projected');
+                const scale = 2 ** zoom;
+                const coordinate = projection.fromPointToLatLng(new window.google.maps.Point(
+                    origin.x + (point.x - map.getDiv().clientWidth / 2) / scale,
+                    origin.y + (point.y - map.getDiv().clientHeight / 2) / scale,
+                ));
+                if (!coordinate) throw new Error('Map point cannot be unprojected');
+                return { latitude: coordinate.lat(), longitude: coordinate.lng() };
+            },
         }),
         []
     );
 
-    const flatStyle = Array.isArray(style)
-        ? Object.assign({}, ...style.filter(Boolean))
-        : style || {};
+    const flatStyle = StyleSheet.flatten(style) || {};
 
     // Quan el contenidor obt\u00e9 mida (fonts/layouts tard\u00e0ns), refor\u00e7em
     // un resize + recenter perqu\u00e8 les rajoles apareguin sense interacci\u00f3.
@@ -213,8 +254,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
         return (
             <View style={[styles.wrapper, flatStyle]}>
                 <View style={styles.errorOverlay}>
-                    <Text style={styles.errorText}>📍 Mapa no disponible</Text>
-                    <Text style={styles.errorSub}>{String(loadError.message || loadError)}</Text>
+                    <UserNotice tone="error" message="No hem pogut carregar el mapa. Comprova la connexió i torna-ho a provar." />
                 </View>
             </View>
         );
@@ -237,41 +277,11 @@ const MapView = forwardRef<any, any>((props, ref) => {
         <View style={[styles.wrapper, flatStyle]} onLayout={handleWrapperLayout}>
             <GoogleMap
                 mapContainerStyle={MAP_CONTAINER_STYLE}
-                // IMPORTANT: use uncontrolled defaultCenter/defaultZoom. Passing
-                // `center` as a controlled prop causes an infinite update loop
-                // because the parent's onRegionChangeComplete handler updates
-                // its own region state, which feeds back into a new center
-                // object, which re-pans, which fires `idle` again. Imperative
-                // panning (animateToRegion) still works through mapRef.
-                // @ts-ignore – defaultCenter/defaultZoom exist on GoogleMap props
-                defaultCenter={{ lat: initialCenter.lat, lng: initialCenter.lng }}
-                // @ts-ignore
-                defaultZoom={regionToZoom(initialCenter.delta)}
                 onLoad={onLoad}
                 onUnmount={onUnmount}
                 onIdle={handleIdle}
                 onClick={handleClick}
-                options={{
-                    disableDefaultUI: true,
-                    zoomControl: true,
-                    maxZoom: maxZoomLevel,
-                    minZoom: minZoomLevel,
-                    // Els botons +/- de Google a baix-esquerra perqu\u00e8 els nostres
-                    // FABs (GPS + cercar) viuen a baix-dreta.
-                    zoomControlOptions: {
-                        position: (window as any).google?.maps?.ControlPosition?.LEFT_BOTTOM,
-                    },
-                    gestureHandling: 'greedy',
-                    clickableIcons: false,
-                    // Amaga "Keyboard shortcuts" i les etiquetes del peu superflues.
-                    keyboardShortcuts: false,
-                    fullscreenControl: false,
-                    mapTypeControl: false,
-                    streetViewControl: false,
-                    rotateControl: false,
-                    scaleControl: false,
-                    styles: Array.isArray(customMapStyle) ? customMapStyle : undefined,
-                }}
+                options={mapOptions}
             >
                 <MapContext.Provider value={mapRef.current}>
                     {mapReady ? children : null}
@@ -305,7 +315,7 @@ const Marker: React.FC<any> = ({ coordinate, anchor, onPress, zIndex, children }
         const stop = (e: Event) => e.stopPropagation();
         const handler = (e: Event) => {
             e.stopPropagation();
-            onPress({ nativeEvent: {} });
+            onPress({ nativeEvent: {}, stopPropagation: () => e.stopPropagation() });
         };
         node.addEventListener('click', handler);
         node.addEventListener('mousedown', stop);
@@ -323,17 +333,24 @@ const Marker: React.FC<any> = ({ coordinate, anchor, onPress, zIndex, children }
         <OverlayView
             position={{ lat: coordinate.latitude, lng: coordinate.longitude }}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-            getPixelPositionOffset={(width, height) => ({
-                x: -(width * ax),
-                y: -(height * ay),
-            })}
         >
             <div
                 ref={divRef}
+                role={onPress ? 'button' : undefined}
+                tabIndex={onPress ? 0 : undefined}
+                aria-label={onPress ? 'Seleccionar local al mapa' : undefined}
+                onKeyDown={event => {
+                    if (onPress && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onPress({ nativeEvent: {}, stopPropagation: () => event.stopPropagation() });
+                    }
+                }}
                 style={{
                     cursor: onPress ? 'pointer' : 'default',
                     zIndex: typeof zIndex === 'number' ? zIndex : undefined,
                     display: 'inline-block',
+                    transform: `translate(${-ax * 100}%, ${-ay * 100}%)`,
                 }}
             >
                 {children}

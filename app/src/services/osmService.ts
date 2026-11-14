@@ -137,8 +137,11 @@ const searchOSM = async (gridKey: string, selector: string): Promise<OSMBar[]> =
     return request;
 };
 
+const VENUE_AMENITIES = 'bar|pub|cafe|restaurant|nightclub|club|biergarten|fast_food|food_court';
+const venueAmenity = new RegExp(`^(${VENUE_AMENITIES})$`);
+
 const requestOSM = async (selector: string): Promise<OSMBar[]> => {
-    const query = `[out:json][timeout:3];nwr["amenity"~"^(bar|pub|cafe|restaurant|nightclub|club)$"]${selector};out center tags qt;`;
+    const query = `[out:json][timeout:3];nwr["amenity"~"^(${VENUE_AMENITIES})$"]${selector};out center tags qt;`;
     for (let i = 0; i < OVERPASS_SERVERS.length; i++) {
         const server = OVERPASS_SERVERS[i];
         if (Date.now() < (serverRetryAfter.get(server) || 0)) continue;
@@ -154,7 +157,7 @@ const requestOSM = async (selector: string): Promise<OSMBar[]> => {
 
             if (response.status === 429 || response.status === 504 || !response.ok) {
                 serverRetryAfter.set(server, Date.now() + 30_000);
-                console.warn(`[OSM] Server ${server} failed with ${response.status} (${response.headers?.get('content-type') || 'unknown content type'}). Trying next...`);
+                console.info(`[OSM] Server ${server} failed with ${response.status} (${response.headers?.get('content-type') || 'unknown content type'}). Trying next...`);
                 if (i < OVERPASS_SERVERS.length - 1) await delay(500);
                 continue;
             }
@@ -170,7 +173,8 @@ const requestOSM = async (selector: string): Promise<OSMBar[]> => {
                 .map((el: any) => {
                     const osmTags = el.tags || {};
                     return {
-                        id: `osm_${el.id}`,
+                        id: `osm_${el.type}_${el.id}`,
+                        source: 'openstreetmap',
                         name: osmTags.name || osmTags['name:ca'] || osmTags['name:es'] || 'Bar sense nom',
                         lat: el.lat ?? el.center?.lat,
                         lon: el.lon ?? el.center?.lon,
@@ -189,7 +193,7 @@ const requestOSM = async (selector: string): Promise<OSMBar[]> => {
 
         } catch (error: any) {
             serverRetryAfter.set(server, Date.now() + 30_000);
-            console.warn(`[OSM] Error fetching from server ${i + 1}:`, error);
+            console.info(`[OSM] Error fetching from server ${i + 1}:`, error);
             if (i < OVERPASS_SERVERS.length - 1) await delay(500);
         }
     }
@@ -241,7 +245,7 @@ export const discoverUnregisteredBars = async (
     const preferMap = bounds ? bounds.north - bounds.south <= 0.01 && bounds.east - bounds.west <= 0.01 : radiusKm <= 0.4;
     if (preferMap) {
         try { return await discoverFromMap(lat, lon, radiusKm, bounds); }
-        catch { console.warn('[OSM] Small-area map request unavailable; trying Overpass.'); }
+        catch { console.info('[OSM] Small-area map request unavailable; trying Overpass.'); }
     }
     try {
         const bars = bounds
@@ -289,13 +293,13 @@ const discoverFromMap = async (
         for (const element of data.elements) {
             const tags = element.tags || {};
             const name = tags.name || tags['name:ca'] || tags['name:es'];
-            if (!name || !/^(bar|pub|cafe|restaurant|nightclub|club)$/.test(tags.amenity)) continue;
+            if (!name || !venueAmenity.test(tags.amenity)) continue;
             const points = element.type === 'node' ? [element] : (element.nodes || []).map((id: number) => nodes.get(id)).filter(Boolean);
             if (!points.length) continue;
             const latitude = points.reduce((sum: number, point: any) => sum + point.lat, 0) / points.length;
             const longitude = points.reduce((sum: number, point: any) => sum + point.lon, 0) / points.length;
             if (!validCoordinates(latitude, longitude) || latitude < area.south || latitude > area.north || longitude < area.west || longitude > area.east) continue;
-            bars.push({ id: `osm_${element.id}`, name, lat: latitude, lon: longitude, type: tags.amenity, tags, amenities: mapOSMTagsToAmenities(tags) });
+            bars.push({ id: `osm_${element.type}_${element.id}`, source: 'openstreetmap', name, lat: latitude, lon: longitude, type: tags.amenity, tags, amenities: mapOSMTagsToAmenities(tags) });
         }
         const result = deduplicateByProximity(bars);
         if (Object.keys(cache).length >= 100) delete cache[Object.keys(cache)[0]];

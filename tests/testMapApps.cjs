@@ -5,14 +5,14 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 function load(os, installed, preferred) {
-    const opened = [], alerts = [], stored = new Map(preferred ? [['trobar.defaultMapApp', preferred]] : []);
+    const opened = [], alerts = [], notices = [], stored = new Map(preferred ? [['trobar.defaultMapApp', preferred]] : []);
     const module = { exports: {} };
     const native = { Platform: { OS: os }, Linking: { canOpenURL: async url => installed.some(scheme => url.startsWith(scheme)), openURL: async url => opened.push(url) }, Alert: { alert: (...args) => alerts.push(args) } };
     vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/services/mapAppService.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText, {
         module, exports: module.exports,
-        require: name => name === 'react-native' ? native : name.includes('async-storage') ? { getItem: async key => stored.get(key) || null, setItem: async (key, value) => stored.set(key, value), removeItem: async key => stored.delete(key) } : { validBarCoordinates: point => Number.isFinite(point.latitude) && Number.isFinite(point.longitude), buildBarNavigationUrls: () => ({ googleUrl: 'https://maps.google.com' }) },
+        require: name => name === 'react-native' ? native : name.endsWith('AlertBanner') ? { showAlert: notice => notices.push(notice) } : name.includes('async-storage') ? { getItem: async key => stored.get(key) || null, setItem: async (key, value) => stored.set(key, value), removeItem: async key => stored.delete(key) } : { validBarCoordinates: point => Number.isFinite(point.latitude) && Number.isFinite(point.longitude), buildBarNavigationUrls: () => ({ googleUrl: 'https://maps.google.com' }) },
     });
-    return { service: module.exports, opened, alerts, stored };
+    return { service: module.exports, opened, alerts, notices, stored };
 }
 
 test('only installed apps appear; native links never use web fallbacks', async () => {
@@ -28,7 +28,9 @@ test('removed default is cleared and never redirects to its website', async () =
     await state.service.openBarMaps({ latitude: 41, longitude: 2 });
     assert.equal(state.opened.length, 0);
     assert.equal(state.stored.size, 0);
-    assert.equal(state.alerts[0][0], 'Cap app de mapes disponible');
+    assert.equal(state.alerts.length, 0);
+    assert.equal(state.notices[0].tone, 'info');
+    assert.equal(state.notices[0].message, 'No hem detectat cap aplicació de mapes compatible instal·lada.');
 });
 test('Android Google navigation and remembered selection open exact coordinates', async () => {
     const state = load('android', ['google.navigation:', 'waze://'], 'google');

@@ -10,4 +10,9 @@ export interface OSMBar {
     /** Amenitats derivades dels tags d'OSM */
     amenities?: BarAmenity[];
     attributions?: { name: string; uri: string }[];
+    googlePlaceId?: string;
+    formattedAddress?: string;
+    source?: 'openstreetmap' | 'google';
+    /** Fonts presents al resultat unificat, només durant la sessió de descoberta. */
+    sources?: ('openstreetmap' | 'google')[];
 }

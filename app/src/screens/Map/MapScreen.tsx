@@ -4,6 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, Platform, Image, Keyboard, Scr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as Location from 'expo-location';
+import { Image as MapImage } from 'expo-image';
 
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
@@ -14,13 +15,13 @@ import { fetchBars, fetchBarsForMatch, fetchBarsInBounds, cacheBarPlaceData } fr
 import { useAuth } from '../../context/AuthContext';
 import { useScreenLoading } from '../../context/SplashContext';
 
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 import { Bar, BarAmenity } from '../../models/Bar';
 
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Camera, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { sketchShadow, SKETCH_THEME } from '../../theme/sketchTheme';
 
@@ -41,7 +42,9 @@ import styles from './MapScreen.styles';
 
 import MatchCardStack from '../../components/MatchCardStack';
 import VerifiedBarBadge, { isVerifiedBar } from '../../components/VerifiedBarBadge';
-import { showAlert } from '../../components/AlertBanner';
+import { showAlert, AlertBannerHost } from '../../components/AlertBanner';
+import UserNotice from '../../components/UserNotice';
+import MapDataAttribution from '../../components/MapDataAttribution';
 import { EDITORIAL } from '../../theme/editorialTheme';
 import { useClusters, ClusterablePoint } from '../../hooks/useClusters';
 
@@ -50,13 +53,23 @@ import BarCard from '../../components/BarCard';
 import BarListItem from '../../components/BarListItem';
 
 import BarProfileModal from '../../components/BarProfileModal';
+import PremiumBarSheet from '../../components/PremiumBarSheet';
 
 
 import { fetchBarPlaceDetails, PlaceDetails, isOpenNow } from '../../services/placesService';
+import { discoverMapBars, searchMapLocations, MapSuggestion, isSameVenue, mergeDiscoveredBars } from '../../services/barDiscoveryService';
 import { getBarReviewStats } from '../../services/reviewService';
+import { getPremiumDemoReviewStats, enrichPremiumDemoBar, isPremiumDemoBar } from '../../data/premiumDemoProfiles';
 import { BarReviewStats } from '../../models/Review';
+import OwnerBottomNav from '../../components/OwnerBottomNav';
+import { getOwnedBar } from '../../services/barOwnerService';
+import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
-
+import { BarFilterKey, matchesBarFilters } from '../../utils/barFilters';
+import { alternativeMapMatch, isWomenMatch, upcomingMapMatches } from '../../utils/mapMatches';
+import { MapRegion, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
+import { ReportBarContent } from '../ReportBar/ReportBarScreen';
+import { getMapIcon } from '../../utils/mapIcons';
 
 
 // Funció utilitat per calcular distància en km (fórmula de Haversine)
@@ -129,36 +142,41 @@ const decodePolyline = (encoded: string) => {
 
 const CAMP_NOU_FALLBACK = { latitude: 41.3809, longitude: 2.1228 };
 const EMULATOR_DEFAULT_LOC = { latitude: 37.4219983, longitude: -122.084 };
-const MAP_PIN_3D = require('../../../../assets/app/img/map-icons/map-pin-3d.png');
-// Pin diferent (xinxeta) per a bars trobats a Google Maps encara no confirmats
-const MAP_PIN_SCANNED_3D = require('../../../../assets/app/img/map-icons/pin-scanned-3d.png');
-// Icones 3D consistents per als controls flotants i el badge de clúster
-const MAP_TARGET_3D = require('../../../../assets/app/img/map-icons/target-3d.png');
-const MAP_ZOOM_3D = require('../../../../assets/app/img/map-icons/zoom-3d.png');
 const MAP_MAX_ZOOM = 18;
 
 const ConfirmedBarMarker: React.FC<{
     bar: Bar;
     isPremium: boolean;
     isSelected: boolean;
+    isOwned?: boolean;
     zoom: number;
     onPress: () => void;
-}> = React.memo(({ bar, isPremium, isSelected, zoom = 15, onPress }) => {
-    const [loaded, setLoaded] = useState(false);
-    const [crestLoaded, setCrestLoaded] = useState(false);
-    const scale = Math.min(1, Math.max(0.32, Math.pow(2, (zoom - 15) / 4)));
-    const size = Math.round((isSelected ? 64 : 52) * scale);
+}> = React.memo(({ bar, isPremium, isSelected, isOwned = false, zoom = 15, onPress }) => {
+    const [tracking, setTracking] = useState(true);
+    const [pinLoaded, setPinLoaded] = useState(false);
+    const size = mapMarkerSize(zoom, isSelected);
+    useEffect(() => {
+        setTracking(true);
+        const timer = setTimeout(() => setTracking(false), 350);
+        return () => clearTimeout(timer);
+    }, [size, isOwned, isSelected, pinLoaded]);
     return (
         <Marker
             coordinate={{ latitude: bar.latitude, longitude: bar.longitude }}
             anchor={{ x: 0.5, y: 1.0 }}
-            tracksViewChanges={!loaded || (isVerifiedBar(bar) && !crestLoaded) || isSelected}
+            centerOffset={Platform.OS === 'ios' ? { x: 0, y: -(size + (isOwned ? 26 : 0)) / 2 } : undefined}
+            tracksViewChanges={tracking || !pinLoaded || isSelected}
             onPress={onPress}
-            zIndex={isPremium ? 100 : 1}
+            accessibilityLabel={isOwned ? `El teu bar: ${bar.name}` : bar.name}
+            zIndex={isOwned ? 500 : isSelected ? 200 : isPremium ? 100 : 1}
         >
-            <View style={[styles.markerContainer, { width: size, height: size }]}>
-                <Image source={MAP_PIN_3D} style={[isSelected ? styles.markerPinSelected3d : styles.markerPin3d, { width: size, height: size }]} resizeMode="contain" onLoad={() => setLoaded(true)} />
-                <VerifiedBarBadge bar={bar} scale={scale} onLoad={() => setCrestLoaded(true)} />
+            <View style={[styles.markerContainer, { width: isOwned ? Math.max(90, size) : size, height: size + (isOwned ? 26 : 0) }]}>
+                {isOwned && <View style={{ backgroundColor: EDITORIAL.grana, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 2, borderColor: EDITORIAL.matchday }}><Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: EDITORIAL.fontBold }}>El teu bar</Text></View>}
+                <View collapsable={false} style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+                    {isVerifiedBar(bar)
+                        ? <VerifiedBarBadge bar={bar} size={size} onLoad={() => setPinLoaded(true)} />
+                        : <MapImage testID="confirmed-bar-pin" source={getMapIcon('registered')} contentFit="contain" transition={0} style={[styles.markerPin3d, { width: size, height: size }]} onDisplay={() => setPinLoaded(true)} />}
+                </View>
             </View>
         </Marker>
     );
@@ -167,18 +185,30 @@ const ConfirmedBarMarker: React.FC<{
 /** Marcador d'un bar trobat a Google Maps encara no confirmat. Mateix gate de càrrega que `ConfirmedBarMarker`. */
 const ScannedBarMarker: React.FC<{
     osmBar: OSMBar;
+    zoom?: number;
+    isSelected?: boolean;
     onPress: () => void;
-}> = React.memo(({ osmBar, onPress }) => {
+}> = React.memo(({ osmBar, zoom = 15, isSelected = false, onPress }) => {
+    const [tracking, setTracking] = useState(true);
+    const [loaded, setLoaded] = useState(false);
+    const size = mapMarkerSize(zoom, isSelected);
+    useEffect(() => {
+        setTracking(true);
+        const timer = setTimeout(() => setTracking(false), 350);
+        return () => clearTimeout(timer);
+    }, [size, loaded]);
     return (
         <Marker
             coordinate={{ latitude: osmBar.lat, longitude: osmBar.lon }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-            onPress={onPress}
-            zIndex={1}
+            anchor={{ x: 0.5, y: 1 }}
+            centerOffset={Platform.OS === 'ios' ? { x: 0, y: -Math.max(44, size) / 2 } : undefined}
+            tracksViewChanges={tracking || !loaded}
+            stopPropagation
+            onPress={event => { event.stopPropagation(); onPress(); }}
+            zIndex={isSelected ? 200 : 1}
         >
-            <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
-                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#8B8E93', borderWidth: 2, borderColor: '#FFFFFF' }} />
+            <View accessible accessibilityRole="button" accessibilityLabel={`Veure ${osmBar.name}`} style={{ width: Math.max(44, size), height: Math.max(44, size), alignItems: 'center', justifyContent: 'flex-end' }}>
+                <MapImage testID="discovered-bar-pin" source={getMapIcon('discovered')} contentFit="contain" transition={0} style={{ width: size, height: size }} onDisplay={() => setLoaded(true)} />
             </View>
         </Marker>
     );
@@ -278,13 +308,6 @@ const MapScreen = () => {
 
     const navigation = useNavigation<any>();
 
-    // Bar owners no tenen accés al mapa
-    useEffect(() => {
-        if (user?.role === 'bar_owner') {
-            navigation.reset({ index: 0, routes: [{ name: 'BarDashboard' }] });
-        }
-    }, [user]);
-
     const route = useRoute<RouteProp<RootStackParamList, 'Map'>>();
 
     const matchIdFromNav = route.params?.matchId ?? null;
@@ -315,6 +338,10 @@ const MapScreen = () => {
 
 
     const [selectedBar, setSelectedBar] = useState<Bar | null>(null);
+    const [selectedDiscoveredBar, setSelectedDiscoveredBar] = useState<OSMBar | null>(null);
+    const [isReporting, setIsReporting] = useState(false);
+    const [ownerBar, setOwnerBar] = useState<Bar | null>(null);
+    const ownerEntryHandledRef = useRef(false);
     const lastMarkerPressRef = useRef(0);
 
     const [showBarProfile, setShowBarProfile] = useState(false);
@@ -322,8 +349,9 @@ const MapScreen = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // Suggeriments de geocodificació (Nominatim)
-    const [geoSuggestions, setGeoSuggestions] = useState<{display_name: string, lat: string, lon: string}[]>([]);
-    const searchTimerRef = useRef<any>(null);
+    const [geoSuggestions, setGeoSuggestions] = useState<MapSuggestion[]>([]);
+    const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const searchRequestRef = useRef(0);
 
     // Filtratge per viewport (el radi ja no s'utilitza)
 
@@ -331,6 +359,11 @@ const MapScreen = () => {
 
     const [currentZoom, setCurrentZoom] = useState(14);
     const [scanMessage, setScanMessage] = useState<string | null>(null);
+    useEffect(() => {
+        if (!scanMessage) return;
+        const timer = setTimeout(() => setScanMessage(null), 3500);
+        return () => clearTimeout(timer);
+    }, [scanMessage]);
     const lastRegionRef = useRef<{ latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null>(null);
 
 
@@ -344,16 +377,38 @@ const MapScreen = () => {
     // Partit seleccionat des de la pantalla de Partits (diferent de nextMatch)
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
-    
+    const [matchNotice, setMatchNotice] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedMatch?.id) {
+            setMatchNotice(null);
+            return;
+        }
+        setMatchNotice('Mostrant els locals que han confirmat aquest partit.');
+        const timer = setTimeout(() => setMatchNotice(null), 2400);
+        return () => clearTimeout(timer);
+    }, [selectedMatch?.id]);
 
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
     const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[] | null>(null);
+    const routeRequestId = useRef(0);
+
+    useEffect(() => {
+        routeRequestId.current += 1;
+        setRouteInfo(null);
+        setRouteCoords(null);
+        setSelectedBar(null);
+        setSelectedDiscoveredBar(null);
+        restoreMapViewport();
+        setShowBarProfile(false);
+    }, [selectedMatch?.id]);
 
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
 
     const [loadingPlaceDetails, setLoadingPlaceDetails] = useState(false);
 
     const [selectedBarReviewStats, setSelectedBarReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
+    const selectedBarReviewRequestId = useRef(0);
 
 
 
@@ -367,7 +422,7 @@ const MapScreen = () => {
     const [defaultCategory, setDefaultCategory] = useState<string>('all');
 
     // Filtres actius (multi-filtre)
-    const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+    const [activeFilters, setActiveFilters] = useState<Set<BarFilterKey>>(new Set());
     const [showFiltersPanel, setShowFiltersPanel] = useState(false);
 
     // Dades
@@ -376,43 +431,38 @@ const MapScreen = () => {
     // True un cop hem completat la PRIMERA càrrega de bars (per al splash global)
     const [initialBarsLoaded, setInitialBarsLoaded] = useState(false);
 
-    // True quan el mapa s'ha renderitzat completament (onRegionChangeComplete cridat)
     const [mapReady, setMapReady] = useState(false);
+    const [nativeMapRevision, setNativeMapRevision] = useState(0);
+    const nativeMapRevisionRef = useRef(nativeMapRevision);
+    nativeMapRevisionRef.current = nativeMapRevision;
+    const [mapLoadFailed, setMapLoadFailed] = useState(false);
+    useEffect(() => {
+        if (mapReady) return;
+        const timeout = setTimeout(() => {
+            console.info('[MapScreen] Map did not report readiness', { platform: Platform.OS, nativeMapRevision });
+            setMapLoadFailed(true);
+        }, 8000);
+        return () => clearTimeout(timeout);
+    }, [mapReady, nativeMapRevision]);
 
     const [filteredBars, setFilteredBars] = useState<Bar[]>([]);
 
     // El mapa ha de romandre muntat per rebre els bounds i l'estat de renderitzat.
     // Per això aquesta càrrega es gestiona localment i no bloqueja l'splash global.
-    const isLoading = !visibleBounds || !initialBarsLoaded || !mapReady;
-
-    useScreenLoading('MapScreen', isLoading);
-
-    useEffect(() => {
-        console.log('[MapScreen] Loading state changed - visibleBounds:', !!visibleBounds, 'initialBarsLoaded:', initialBarsLoaded, 'isLoading:', isLoading);
-    }, [isLoading, visibleBounds, initialBarsLoaded]);
+    useScreenLoading('MapScreen', false);
 
     
 
     // OSM / Escaneig
 
     const [scannedBars, setScannedBars] = useState<OSMBar[]>([]);
+    const [discoveredGoogleDetails, setDiscoveredGoogleDetails] = useState(false);
 
     const [isScanning, setIsScanning] = useState(false);
 
     // Bars escanejats filtrats per amenitats actives (dinàmic)
     const filteredScannedBars = useMemo(() => {
-        if (activeFilters.size === 0) return scannedBars;
-        // Filtres que no apliquen a bars escanejats
-        const skip = new Set(['open_now']);
-        const amenityFilters = Array.from(activeFilters).filter(f => !skip.has(f));
-        if (amenityFilters.length === 0) return scannedBars;
-        return scannedBars.filter(b => {
-            const barAmenities = b.amenities || [];
-            return amenityFilters.every(f => {
-                if (f === 'projector') return barAmenities.includes('projector') || barAmenities.includes('multiple_screens') || barAmenities.includes('sports_bar');
-                return barAmenities.includes(f as any);
-            });
-        });
+        return scannedBars.filter(bar => matchesBarFilters(bar, activeFilters));
     }, [scannedBars, activeFilters]);
 
 
@@ -427,13 +477,13 @@ const MapScreen = () => {
         | { kind: 'scanned'; bar: OSMBar };
 
     const clusterPointsConfirmed = useMemo<ClusterablePoint<ClusterBar>[]>(() => {
-        return filteredBars.map((b) => ({
+        return filteredBars.filter(bar => bar.id !== ownerBar?.id).map((b) => ({
             id: `c-${b.id}`,
             latitude: b.latitude,
             longitude: b.longitude,
             data: { kind: 'confirmed' as const, bar: b },
         }));
-    }, [filteredBars]);
+    }, [filteredBars, ownerBar?.id]);
 
     const clusterPointsScanned = useMemo<ClusterablePoint<ClusterBar>[]>(() => {
         return filteredScannedBars.map((b) => ({
@@ -483,13 +533,10 @@ const MapScreen = () => {
 
     
 
-    // Regió exacta del mapa abans d'obrir ReportBar, per restaurar-la en qualsevol tancament.
-    const preReportPositionRef = useRef<{
-        latitude: number;
-        longitude: number;
-        latitudeDelta: number;
-        longitudeDelta: number;
-    } | null>(null);
+    const preSelectionRegionRef = useRef<MapRegion | null>(null);
+    const preSelectionCameraRef = useRef<Camera | null>(null);
+    const selectionCameraRequestRef = useRef(0);
+    const anchorRequestRef = useRef(0);
 
     // Animació d'instruccions
 
@@ -503,7 +550,11 @@ const MapScreen = () => {
     // just a sobre seu en lloc de deixar-la fixa a baix de la pantalla.
     const [barCardAnchorY, setBarCardAnchorY] = useState<number | null>(null);
     const [barCardAnchorX, setBarCardAnchorX] = useState<number | null>(null);
-    const [barCardHeight, setBarCardHeight] = useState(220);
+    const selectedVenueId = selectedBar ? `registered:${selectedBar.id}` : selectedDiscoveredBar ? `discovered:${selectedDiscoveredBar.id}` : null;
+    const [venueMeasurement, setVenueMeasurement] = useState<{ id: string; height: number } | null>(null);
+    const venueCardHeight = venueMeasurement?.id === selectedVenueId ? venueMeasurement?.height ?? 280 : 280;
+    const [mobileHeaderHeight, setMobileHeaderHeight] = useState(0);
+    const [desktopCardTop, setDesktopCardTop] = useState(280);
 
 
 
@@ -519,6 +570,22 @@ const MapScreen = () => {
     const mobileHeaderTop = safeTopInset + 8;
     const mobileDropdownTop = mobileHeaderTop + 58;
     const mobileFabBottom = safeBottomInset + (user ? 88 : 16);
+    const mapAttributionBottom = user ? 88 : 36;
+    const selectedPinY = Math.min(
+        height - safeBottomInset - (user ? 72 : 8) - 8,
+        height - mapAttributionBottom - 48,
+    );
+    const mapControlsBottom = isDesktop ? 20 : mobileFabBottom;
+    const mapControlsInline = !isDesktop && !!(selectedBar || selectedDiscoveredBar);
+    const mapSearchBottom = mapControlsBottom + (mapControlsInline ? 0 : 56);
+    const mapSearchRight = mapControlsInline ? 76 : 20;
+    const mapNoticeBottom = mapControlsBottom;
+    // Reserve the entire control column, including when notice text wraps.
+    const mapNoticeRight = 20 + 48 + 12;
+    const mapNoticeLeft = mapNoticeRight;
+    const [mapNoticeHeight, setMapNoticeHeight] = useState(48);
+    const [transientAlertVisible, setTransientAlertVisible] = useState(false);
+    const isFocused = useIsFocused();
 
 
 
@@ -544,7 +611,7 @@ const MapScreen = () => {
                     setDefaultCategory(prefs.display.defaultCategory);
                 }
             } catch (e) {
-                console.warn('No s\'han pogut carregar les preferències de radi:', e);
+                console.info('No s\'han pogut carregar les preferències de radi:', e);
             }
         })();
     }, [user]);
@@ -585,9 +652,12 @@ const MapScreen = () => {
     // 1. Localització GPS
 
     useEffect(() => {
+        if (user?.role === 'bar_owner') return;
+        let active = true;
 
         (async () => {
             const applyInitialRegion = (loc: { latitude: number; longitude: number }) => {
+                if (!active) return;
                 console.log('[MapScreen GPS] applyInitialRegion called with:', loc);
                 const delta = radiusToLatDelta(searchRadiusKm);
                 setCenterLocation(loc);
@@ -610,12 +680,12 @@ const MapScreen = () => {
                 if (Platform.OS === 'web') {
                     [0, 220, 500].forEach((ms) => {
                         setTimeout(() => {
-                            mapRefNative.current?.animateToRegion(region, 0);
+                            if (active) mapRefNative.current?.animateToRegion(region, 0);
                         }, ms);
                     });
                 } else {
                     setTimeout(() => {
-                        mapRefNative.current?.animateToRegion(region, 0);
+                        if (active) mapRefNative.current?.animateToRegion(region, 0);
                     }, 0);
                 }
             };
@@ -623,10 +693,11 @@ const MapScreen = () => {
             try {
                 console.log('[MapScreen GPS] Requesting foreground permissions...');
                 const { status } = await Location.requestForegroundPermissionsAsync();
+                if (!active) return;
                 console.log('[MapScreen GPS] Permission status:', status);
 
                 if (status !== 'granted') {
-                    console.warn('[MapScreen GPS] Permís de localització denegat, usant fallback Camp Nou');
+                    console.info('[MapScreen GPS] Permís de localització denegat, usant fallback Camp Nou');
                     showAlert({
                         tone: 'info',
                         eyebrow: 'Ubicacio no disponible',
@@ -644,13 +715,14 @@ const MapScreen = () => {
 
                 console.log('[MapScreen GPS] Getting current position...');
                 const location = await Location.getCurrentPositionAsync({});
+                if (!active) return;
                 console.log('[MapScreen GPS] Location obtained:', location.coords.latitude, location.coords.longitude);
                 const rawLat = location.coords.latitude;
                 const rawLng = location.coords.longitude;
                 const useFallback = Platform.OS === 'android' && isLikelyEmulatorDefaultLocation(rawLat, rawLng);
                 const resolved = useFallback ? CAMP_NOU_FALLBACK : { latitude: rawLat, longitude: rawLng };
                 if (useFallback) {
-                    console.warn('[MapScreen GPS] Coordenada per defecte de l\'emulador detectada. Usem Camp Nou.');
+                    console.info('[MapScreen GPS] Coordenada per defecte de l\'emulador detectada. Usem Camp Nou.');
                     showAlert({
                         tone: 'info',
                         eyebrow: 'GPS de simulador',
@@ -668,9 +740,10 @@ const MapScreen = () => {
                 });
                 applyInitialRegion(resolved);
             } catch (e) {
-                console.warn('[MapScreen GPS] Error obtaining location. Using Camp Nou as fallback.', e);
+                if (!active) return;
+                console.info('[MapScreen GPS] Error obtaining location. Using Camp Nou as fallback.', e);
                 showAlert({
-                    tone: 'warning',
+                    tone: 'info',
                     eyebrow: 'GPS no disponible',
                     message: 'No hem pogut obtenir la ubicacio. Et situem al Camp Nou.',
                     duration: 5000,
@@ -680,7 +753,8 @@ const MapScreen = () => {
 
         })();
 
-    }, []);
+        return () => { active = false; };
+    }, [user?.id, user?.role]);
 
 
 
@@ -691,16 +765,12 @@ const MapScreen = () => {
     const loadBars = useCallback(async () => {
 
         try {
-            console.log('[MapScreen] loadBars() started');
             const firestoreBars = await fetchBars();
-            console.log('[MapScreen] fetchBars() completed, bars:', firestoreBars.length);
-            setBars(firestoreBars);
+            setBars(previous => Array.from(new Map([...previous, ...firestoreBars].map(bar => [bar.id, bar])).values()));
         } catch (error) {
-            console.warn('[MapScreen] Error carregant bars:', error);
-            // Fins i tot si hi ha error, marquem com a carregat per desactivar el splash
-            setBars([]);
+            console.info('[MapScreen] Error carregant bars:', error);
+            showAlert({ tone: 'error', message: 'No hem pogut actualitzar els bars. Conservem els locals carregats.' });
         } finally {
-            console.log('[MapScreen] Setting initialBarsLoaded = true');
             setInitialBarsLoaded(true);
         }
 
@@ -729,22 +799,20 @@ const MapScreen = () => {
         if (bboxFetchTimerRef.current) clearTimeout(bboxFetchTimerRef.current);
         bboxFetchTimerRef.current = setTimeout(async () => {
             const { minLat, maxLat, minLng, maxLng } = visibleBounds;
-            // Arrodonim a 2 decimals (~1.1 km) per agrupar bbox semblants a la cache
-            const key = `${minLat.toFixed(2)},${maxLat.toFixed(2)},${minLng.toFixed(2)},${maxLng.toFixed(2)}`;
+            const key = `${minLat.toFixed(5)},${maxLat.toFixed(5)},${minLng.toFixed(5)},${maxLng.toFixed(5)}`;
             const last = bboxCacheRef.current.get(key);
             if (last && Date.now() - last < BBOX_CACHE_TTL_MS) return; // ja és recent
-            bboxCacheRef.current.set(key, Date.now());
             try {
                 const extra = await fetchBarsInBounds(minLat, maxLat, minLng, maxLng, 300);
+                if (bboxCacheRef.current.size >= 100) bboxCacheRef.current.clear();
+                bboxCacheRef.current.set(key, Date.now());
                 if (extra.length === 0) return;
                 setBars((prev) => {
-                    const seen = new Set(prev.map((b) => b.id));
-                    const merged = prev.slice();
-                    extra.forEach((b) => { if (!seen.has(b.id)) merged.push(b); });
-                    return merged;
+                    return Array.from(new Map([...prev, ...extra].map(bar => [bar.id, bar])).values());
                 });
-            } catch {
-                /* ignore */
+            } catch (error) {
+                console.info('[MapScreen] Bounds refresh failed', error);
+                showAlert({ tone: 'error', message: 'No hem pogut actualitzar aquesta zona. Torna-ho a provar.' });
             }
         }, 400);
         return () => {
@@ -752,58 +820,103 @@ const MapScreen = () => {
         };
     }, [visibleBounds]);
 
-    // Navegar a ReportBar centrant el mapa sobre el bar
-    const navigateToReportBar = useCallback((osmBar: any) => {
-        const currentRegion = lastRegionRef.current;
-        const currentDelta = currentRegion?.latitudeDelta ?? radiusToLatDelta(searchRadiusKm);
-        const latitudeDelta = Math.min(Math.max(currentDelta * 1.35, MAP_REGION_DELTA), 0.04);
-        const longitudeDelta = (currentRegion?.longitudeDelta ?? currentDelta) * (latitudeDelta / currentDelta);
-        const originalRegion = currentRegion ?? {
-            latitude: centerLocation?.latitude ?? osmBar.lat,
-            longitude: centerLocation?.longitude ?? osmBar.lon,
-            latitudeDelta: currentDelta,
-            longitudeDelta: currentDelta,
-        };
-        preReportPositionRef.current = originalRegion;
+    function restoreMapViewport() {
+        anchorRequestRef.current++;
+        selectionCameraRequestRef.current++;
+        const saved = preSelectionRegionRef.current;
+        const camera = preSelectionCameraRef.current;
+        preSelectionRegionRef.current = null;
+        preSelectionCameraRef.current = null;
+        selectionCameraRequestRef.current++;
+        preSelectionCameraRef.current = null;
+        if (saved) {
+            lastRegionRef.current = saved;
+            if (camera) mapRefNative.current?.animateCamera(camera, { duration: 350 });
+            else mapRefNative.current?.animateToRegion(saved, 350);
+        }
+    }
 
-        // La targeta acaba prop del 70% de l'alçada; deixem el pin just a sota,
-        // amb una mica més de camp visible al voltant del local.
-        const pinTargetY = height * 0.72;
-        mapRefNative.current?.animateToRegion({
-            latitude: osmBar.lat + ((pinTargetY - height / 2) / height) * latitudeDelta,
-            longitude: osmBar.lon,
-            latitudeDelta,
-            longitudeDelta,
-        }, 420);
-        navigation.navigate('ReportBar' as any, { osmBar });
-    }, [centerLocation, height, navigation, searchRadiusKm]);
+    const beginBarSelection = useCallback(() => {
+        selectionCameraRequestRef.current++;
+        if (!preSelectionRegionRef.current) {
+            preSelectionRegionRef.current = { ...(lastRegionRef.current ?? {
+                ...(centerLocation ?? CAMP_NOU_FALLBACK),
+                latitudeDelta: radiusToLatDelta(searchRadiusKm),
+                longitudeDelta: radiusToLatDelta(searchRadiusKm),
+            }) };
+        }
+        anchorRequestRef.current++;
+        setBarCardAnchorX(null);
+        setBarCardAnchorY(null);
+        lastMarkerPressRef.current = Date.now();
+        searchRequestRef.current++;
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        setGeoSuggestions([]);
+        routeRequestId.current++;
+        setRouteInfo(null);
+        setRouteCoords(null);
+        setShowBarProfile(false);
+    }, [centerLocation, searchRadiusKm]);
 
-    // Restaurar posició del mapa quan ReportBar es tanca (detectat via canvi d'estat de navegació)
-    useEffect(() => {
-        const unsubscribe = navigation.addListener('state', (e: any) => {
-            const state = e.data?.state;
-            if (!state) return;
-            const routes = state.routes || [];
-            const hasReportBar = routes.some((r: any) => r.name === 'ReportBar');
-            if (!hasReportBar && preReportPositionRef.current) {
-                const saved = preReportPositionRef.current;
-                preReportPositionRef.current = null;
-                // Restaurar també en cancel·lar, després que la bafarada s'hagi tancat.
-                setTimeout(() => {
-                    if (mapRefNative.current) {
-                        mapRefNative.current.animateToRegion(saved, 420);
-                    }
-                }, 220);
-            }
+    const handleSelectBar = useCallback((bar: Bar) => {
+        if (isReporting || selectedBar?.id === bar.id) return;
+        beginBarSelection();
+        setSelectedDiscoveredBar(null);
+        setSelectedBar(bar);
+    }, [isReporting, selectedBar?.id, beginBarSelection]);
+
+    const focusOwnedBar = useCallback((bar: Bar) => {
+        const region = { latitude: bar.latitude, longitude: bar.longitude, latitudeDelta: MAP_REGION_DELTA, longitudeDelta: MAP_REGION_DELTA };
+        lastRegionRef.current = region;
+        setCenterLocation({ latitude: bar.latitude, longitude: bar.longitude });
+        setVisibleBounds({
+            minLat: bar.latitude - MAP_REGION_DELTA / 2, maxLat: bar.latitude + MAP_REGION_DELTA / 2,
+            minLng: bar.longitude - MAP_REGION_DELTA / 2, maxLng: bar.longitude + MAP_REGION_DELTA / 2,
         });
-        return unsubscribe;
-    }, [navigation]);
+        setCurrentZoom(Math.log2(360 / MAP_REGION_DELTA));
+        setSearchQuery('');
+        setShowBarProfile(false);
+        handleSelectBar(bar);
+        mapRefNative.current?.animateToRegion(region, 450);
+    }, [handleSelectBar]);
+
+    useFocusEffect(useCallback(() => {
+        ownerEntryHandledRef.current = false;
+        if (user?.role !== 'bar_owner') { setOwnerBar(null); return; }
+        let active = true;
+        setOwnerBar(null);
+        getOwnedBar(user.id).then(bar => {
+            if (!active) return;
+            if (!bar || !Number.isFinite(bar.latitude) || !Number.isFinite(bar.longitude) || Math.abs(bar.latitude) > 90 || Math.abs(bar.longitude) > 180) {
+                showAlert({ tone: 'error', message: 'No hem pogut situar el teu bar. Pots cercar-lo o fer servir la teva ubicació.' });
+                return;
+            }
+            setOwnerBar(ownerDemoCopy(bar));
+        }).catch(error => {
+            if (!active) return;
+            console.info('[MapScreen] Owned bar unavailable', error);
+            showAlert({ tone: 'error', message: 'No hem pogut carregar el teu bar. Torna a entrar al mapa per reintentar-ho.' });
+        });
+        return () => { active = false; ownerEntryHandledRef.current = true; };
+    }, [user?.id, user?.role]));
+
+    useEffect(() => {
+        if (!ownerBar || !mapReady || ownerEntryHandledRef.current) return;
+        ownerEntryHandledRef.current = true;
+        focusOwnedBar(ownerBar);
+    }, [ownerBar, mapReady, focusOwnedBar]);
+
+    const navigateToReportBar = useCallback((osmBar: OSMBar) => {
+        if (isReporting || selectedDiscoveredBar?.id === osmBar.id) return;
+        beginBarSelection();
+        setSelectedBar(null);
+        setSelectedDiscoveredBar(osmBar);
+    }, [isReporting, beginBarSelection, selectedDiscoveredBar?.id]);
 
     useFocusEffect(
 
         useCallback(() => {
 
-            console.log('[MapScreen] Focus effect: calling loadBars()');
             loadBars();
             // Recarregar preferències (categoria pot haver canviat a SettingsModal)
             if (user) {
@@ -812,13 +925,13 @@ const MapScreen = () => {
                     if (prefs.display.defaultCategory) {
                         setDefaultCategory(prefs.display.defaultCategory);
                     }
-                }).catch(() => {});
+                }).catch(error => console.info('[MapScreen] Preferences refresh failed', error));
             }
             // Tancar desplegables en tornar a la pantalla
             setShowFiltersPanel(false);
             setGeoSuggestions([]);
 
-        }, [loadBars])
+        }, [loadBars, user?.id])
 
     );
 
@@ -830,26 +943,7 @@ const MapScreen = () => {
 
         if (!centerLocation) return; // Esperant ubicació
 
-        // Helper: aplicar filtres (open_now usa períodes cachejats, NO el camp estàtic isOpen)
-        const applyFilters = (list: Bar[]) => {
-            if (activeFilters.size === 0) return list;
-            return list.filter(b => {
-                // Filtre obert/tancat: usar períodes cachejats de Google Places
-                if (activeFilters.has('open_now')) {
-                    const openStatus = isOpenNow(b.openingPeriods);
-                    if (openStatus === false) return false;
-                }
-
-                // Filtre projector: incloure multiple_screens
-                if (activeFilters.has('projector') && !(b.amenities?.some(a => a === 'projector' || a === 'multiple_screens'))) return false;
-                // Tots els altres filtres d'amenities: comprovació dinàmica
-                const amenityKeys = AMENITY_OPTIONS.map(a => a.key).filter(k => k !== 'projector');
-                for (const key of amenityKeys) {
-                    if (activeFilters.has(key) && !(b.amenities?.includes(key))) return false;
-                }
-                return true;
-            });
-        };
+        const applyFilters = (list: Bar[]) => list.filter(bar => matchesBarFilters(bar, activeFilters));
 
         // Si hi ha un partit seleccionat (filtre overlay), pre-filtrar per bars que l'emeten
         const activeMatchId = selectedMatch?.id ?? null;
@@ -903,15 +997,7 @@ const MapScreen = () => {
 
         const cleaned = scannedBars.filter(osmItem => {
 
-            return !bars.some(b => {
-
-                if (b.id === osmItem.id) return true;
-
-                const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
-
-                return dist < 0.05;
-
-            });
+            return !bars.some(bar => isSameVenue(osmItem, bar));
 
         });
 
@@ -1046,56 +1132,20 @@ const MapScreen = () => {
 
             // Usar els bounds visibles del mapa si estan disponibles, sinó radi
 
-            const discovery = await discoverUnregisteredBars(
+            const discovery = await discoverMapBars(
                 centerLocation.latitude, centerLocation.longitude, searchRadiusKm,
                 visibleBounds ? { south: visibleBounds.minLat, west: visibleBounds.minLng, north: visibleBounds.maxLat, east: visibleBounds.maxLng } : undefined,
             );
-            const osmData = discovery.bars;
-
-            
-
-            // Deduplicar contra els bars de FIRESTORE
-
-            const newScanned = osmData.filter(osmItem => {
-
-                const alreadyExists = bars.some(b => {
-
-                     // Comprovar per ID o proximitat
-
-                     if (b.id === osmItem.id) return true;
-
-                     const dist = getDistanceFromLatLonInKm(osmItem.lat, osmItem.lon, b.latitude, b.longitude);
-
-                     return dist < 0.05; 
-
-                });
-
-                return !alreadyExists;
-
-            });
-            setScanMessage(discovery.limitedArea
-                ? `${newScanned.length} locals sense registrar · Zona central del mapa`
-                : `${newScanned.length} locals sense registrar · Pins grisos`);
-
-            
-
-            // Deduplicar contra bars ja escanejats (acumulació)
-
-            setScannedBars(prev => {
-
-                const combined = [...prev, ...newScanned];
-
-                // Únics per ID
-
-                const unique = Array.from(new globalThis.Map(combined.map(item => [item.id, item])).values()) as OSMBar[];
-
-                return unique;
-
-            });
+            const newScanned = discovery.bars.filter(item => !bars.some(bar => isSameVenue(item, bar)));
+            setScanMessage(`${newScanned.length} locals sense registrar. ${discovery.partial
+                ? 'Cobertura parcial; una font no ha pogut completar la cerca.'
+                : 'Toca un pin gris per veure el local. Cerca limitada als resultats disponibles.'}`);
+            setScannedBars(prev => mergeDiscoveredBars(prev, newScanned));
 
 
 
         } catch (e) {
+            console.info('[MapScreen] Discovery failed', e);
             setScanMessage(e instanceof OSMSearchError && e.code === 'OSM_AREA_TOO_LARGE'
                     ? 'Apropa el mapa per cercar bars en una zona de menys de 10 km.'
                     : 'Cerca no disponible. Conservem els locals carregats. Torna-ho a provar.');
@@ -1128,9 +1178,7 @@ const MapScreen = () => {
     };
 
     const getAlternativeMatch = (current: Match | null) => {
-        if (!current) return null;
-        const isWomen = (match: Match) => match.category === 'femenino' || /women|femen|liga f|uwcl|reina/i.test(`${match.competition?.name || ''} ${typeof match.homeTeam === 'string' ? match.homeTeam : match.homeTeam?.name || ''} ${typeof match.awayTeam === 'string' ? match.awayTeam : match.awayTeam?.name || ''}`);
-        return upcomingMatches.find(match => isWomen(match) !== isWomen(current) && match.date.getTime() > Date.now()) || null;
+        return alternativeMapMatch(upcomingMatches, current);
     };
 
     const toggleMatchCategory = () => {
@@ -1148,58 +1196,19 @@ const MapScreen = () => {
 
         let isMounted = true;
 
-        // Helper per detectar si un partit és femení
-        const isFemenino = (match: Match | any): boolean => {
-            const getTeamName = (t: any) => (typeof t === 'string' ? t : (t?.name || t?.shortName || ''));
-            const homeName = getTeamName(match.homeTeam).toLowerCase();
-            const awayName = getTeamName(match.awayTeam).toLowerCase();
-            const leagueName = (match.league || '').toLowerCase();
-            return match.category === 'femenino' ||
-                   homeName.includes('women') || awayName.includes('women') ||
-                   homeName.includes('femeni') || awayName.includes('femeni') ||
-                   leagueName.includes('liga f') || leagueName.includes('femen');
-        };
-
         const loadMatches = async () => {
 
             try {
 
                 const { matches } = await fetchAllMatches();
 
-                if (isMounted && matches && matches.length > 0) {
-
-                    const now = new Date();
-
-                    const upcoming = matches
-
-                        .filter(m => {
-
-                            // @ts-ignore
-
-                            const d = m.date && m.date.toDate ? m.date.toDate() : new Date(m.date);
-
-                            return d > now;
-
-                        })
-
-                        .sort((a, b) => {
-
-                            // @ts-ignore
-
-                            const dA = a.date && a.date.toDate ? a.date.toDate() : new Date(a.date);
-
-                            // @ts-ignore
-
-                            const dB = b.date && b.date.toDate ? b.date.toDate() : new Date(b.date);
-
-                            return dA.getTime() - dB.getTime();
-
-                        });
+                if (isMounted) {
+                    const upcoming = upcomingMapMatches(matches);
 
                     // Filtrar per categoria preferida
                     const catFiltered = upcoming.filter(m => {
                         if (defaultCategory === 'all') return true;
-                        const isFem = isFemenino(m);
+                        const isFem = isWomenMatch(m);
                         return defaultCategory === 'femenino' ? isFem : !isFem;
                     });
 
@@ -1208,7 +1217,7 @@ const MapScreen = () => {
 
                     if (preferredUpcoming.length > 0) {
 
-                        setNextMatch(preferredUpcoming[0]);
+                        setNextMatch(previous => preferredUpcoming.find(match => match.id === previous?.id) || preferredUpcoming[0]);
 
                         setUpcomingMatches(upcoming);
 
@@ -1232,7 +1241,7 @@ const MapScreen = () => {
 
             } catch (e) {
 
-                console.warn("Failed to load matches for map banner", e);
+                console.info("Failed to load matches for map banner", e);
 
             }
 
@@ -1288,26 +1297,72 @@ const MapScreen = () => {
 
     // Calcula la posició en píxels del pin seleccionat (via l'API nativa del
     // mapa) perquè la targeta del bar pugui ancorar-se just a sobre seu.
+    const selectedLocation = useMemo(() => selectedBar
+        ? { latitude: selectedBar.latitude, longitude: selectedBar.longitude }
+        : selectedDiscoveredBar ? { latitude: selectedDiscoveredBar.lat, longitude: selectedDiscoveredBar.lon } : null,
+    [selectedBar, selectedDiscoveredBar]);
     const updateBarCardAnchor = useCallback(async () => {
-        if (!selectedBar || !mapRefNative.current?.pointForCoordinate) {
+        const request = ++anchorRequestRef.current;
+        if (!selectedLocation || !mapRefNative.current?.pointForCoordinate) {
             setBarCardAnchorY(null);
             setBarCardAnchorX(null);
             return;
         }
         try {
-            const point = await mapRefNative.current.pointForCoordinate({
-                latitude: selectedBar.latitude,
-                longitude: selectedBar.longitude,
-            });
-            if (point && typeof point.y === 'number' && typeof point.x === 'number') {
-                setBarCardAnchorY(point.y);
-                setBarCardAnchorX(point.x);
-            }
-        } catch {
+            const point = await mapRefNative.current.pointForCoordinate(selectedLocation);
+            if (request !== anchorRequestRef.current) return;
+            if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Invalid map projection');
+            setBarCardAnchorY(point.y);
+            setBarCardAnchorX(point.x);
+        } catch (error) {
+            if (request !== anchorRequestRef.current) return;
+            console.info('[MapScreen] No es pot ancorar la fitxa al pin', error);
             setBarCardAnchorY(null);
             setBarCardAnchorX(null);
+            setSelectedBar(null);
+            setSelectedDiscoveredBar(null);
+            restoreMapViewport();
+            showAlert({ tone: 'error', message: 'No hem pogut situar la fitxa del local. Torna a tocar el pin.' });
         }
-    }, [selectedBar]);
+    }, [selectedLocation]);
+
+    useEffect(() => {
+        if (!selectedLocation) {
+            anchorRequestRef.current++;
+            setBarCardAnchorX(null);
+            setBarCardAnchorY(null);
+            return;
+        }
+        const request = ++selectionCameraRequestRef.current;
+        const positionVenue = async () => {
+            try {
+                const map = mapRefNative.current;
+                if (!map) throw new Error('Map is not ready');
+                if (!isDesktop) {
+                    const camera: Camera = await map.getCamera();
+                    if (request !== selectionCameraRequestRef.current) return;
+                    if (!preSelectionCameraRef.current) preSelectionCameraRef.current = camera;
+                    const point = await map.pointForCoordinate(selectedLocation);
+                    const center = await map.coordinateForPoint({ x: point.x, y: point.y + height / 2 - selectedPinY });
+                    if (request !== selectionCameraRequestRef.current) return;
+                    if (!Number.isFinite(center.latitude) || !Number.isFinite(center.longitude)) throw new Error('Invalid map center');
+                    // Copy heading, pitch and zoom/altitude; region animations can reset MapKit's orientation.
+                    map.animateCamera({ ...camera, center }, { duration: 350 });
+                }
+                timer = setTimeout(() => { void updateBarCardAnchor(); }, 380);
+            } catch (error) {
+                if (request !== selectionCameraRequestRef.current) return;
+                console.info('[MapScreen] No es pot posicionar el local', error);
+                setSelectedBar(null);
+                setSelectedDiscoveredBar(null);
+                restoreMapViewport();
+                showAlert({ tone: 'error', message: 'No hem pogut situar la fitxa del local. Torna a tocar el pin.' });
+            }
+        };
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        void positionVenue();
+        return () => { clearTimeout(timer); selectionCameraRequestRef.current++; anchorRequestRef.current++; };
+    }, [selectedLocation, isDesktop, height, selectedPinY, updateBarCardAnchor]);
 
 
 
@@ -1318,6 +1373,7 @@ const MapScreen = () => {
     useEffect(() => {
 
          // Reiniciar estat de la bafarada
+         const reviewRequestId = ++selectedBarReviewRequestId.current;
 
          setBubbleReady(false);
 
@@ -1371,39 +1427,7 @@ const MapScreen = () => {
             }
 
 
-         // Natiu: Centrar exactament sobre el bar
-
-         if (selectedBar && mapRefNative.current) {
-                 const pinGap = 42;
-                 const reservedCardHeight = Math.max(barCardHeight, height * 0.5);
-                 const minPinY = mobileHeaderTop + 100;
-                 const maxPinY = height - reservedCardHeight - mobileFabBottom - pinGap;
-                 const targetPinY = Math.max(minPinY, Math.min(height * 0.31, maxPinY));
-                 const cameraLatOffset = ((targetPinY - height / 2) / height) * MAP_REGION_DELTA;
-
-             const newRegion = {
-                     // El bar queda a la part superior del mapa per reservar espai a sota.
-                     latitude: selectedBar.latitude + cameraLatOffset,
-
-                longitude: selectedBar.longitude,
-
-                latitudeDelta: MAP_REGION_DELTA,
-
-                longitudeDelta: MAP_REGION_DELTA,
-
-             };
-
-             mapRefNative.current.animateToRegion(newRegion, 500);
-
-             // Un cop la càmera s'ha assentat, calculem on ha quedat el pin.
-             setTimeout(() => { updateBarCardAnchor(); }, 520);
-
-             // Obtenir info de ruta (distància / temps caminant)
-             fetchRoute(selectedBar);
-         } else {
-             setBarCardAnchorY(null);
-             setBarCardAnchorX(null);
-         }
+         if (selectedBar) void fetchRoute(selectedBar);
 
 
 
@@ -1417,12 +1441,18 @@ const MapScreen = () => {
 
              setSelectedBarReviewStats({ averageRating: 0, totalReviews: 0 });
 
-             // Carregar ressenyes internes en paral·lel amb placeDetails
-             getBarReviewStats(selectedBar.id)
-                 .then(stats => setSelectedBarReviewStats(stats))
-                 .catch(() => {});
+             const demoStats = getPremiumDemoReviewStats(selectedBar);
+             if (demoStats) {
+                 setSelectedBarReviewStats(demoStats);
+             } else {
+                 getBarReviewStats(selectedBar.id)
+                     .then(stats => {
+                         if (reviewRequestId === selectedBarReviewRequestId.current) setSelectedBarReviewStats(stats);
+                     })
+                     .catch(error => console.info('[MapScreen] No es poden carregar les valoracions del bar', error));
+             }
 
-             if (selectedBar.isTestData) {
+             if (selectedBar.isTestData || demoStats) {
                  setLoadingPlaceDetails(false);
                  return;
              }
@@ -1434,18 +1464,22 @@ const MapScreen = () => {
              fetchBarPlaceDetails(cleanName, selectedBar.latitude, selectedBar.longitude, selectedBar.googlePlaceId)
 
                  .then((details) => {
+                     if (reviewRequestId !== selectedBarReviewRequestId.current) return;
                      setPlaceDetails(details);
                      // Cacheja placeId + períodes + amenitats a Firestore (0 crides API extra)
-                     if (details) {
+                     if (details && (user?.id === selectedBar.ownerId || user?.role === 'admin')) {
                          cacheBarPlaceData(selectedBar, details).catch(() => {});
                      }
                  })
 
-                 .catch(() => setPlaceDetails(null))
+                 .catch(error => {
+                     console.info('[MapScreen] No es poden carregar les dades de Google Maps', error);
+                     if (reviewRequestId === selectedBarReviewRequestId.current) setPlaceDetails(null);
+                 })
 
                  .finally(() => {
 
-                     setLoadingPlaceDetails(false);
+                     if (reviewRequestId === selectedBarReviewRequestId.current) setLoadingPlaceDetails(false);
 
                  });
 
@@ -1503,36 +1537,55 @@ const MapScreen = () => {
 
     // --- AJUDANTS WEB ---
 
-    // Cerca Nominatim (OpenStreetMap) — substitueix Google Places Autocomplete
     const searchNominatim = useCallback(async (query: string) => {
+        const request = ++searchRequestRef.current;
         if (query.length < 3) { setGeoSuggestions([]); return; }
         try {
-            const res = await fetchWithTimeout(
-                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=es&accept-language=ca`,
-                { headers: { 'User-Agent': 'troBar/1.3 (contact@trobar.app)' } },
-                'nominatim.search',
-                10000,
-            );
-            const data = await res.json();
-            setGeoSuggestions(data);
+            const result = await searchMapLocations(query, centerLocation?.latitude ?? 41.3851, centerLocation?.longitude ?? 2.1734);
+            if (request !== searchRequestRef.current) return;
+            setGeoSuggestions(result.suggestions);
+            if (result.partial) showAlert({ tone: 'info', message: 'La cerca té cobertura parcial. Prova el nom del local i el municipi.' });
+            else if (!result.suggestions.length) showAlert({ tone: 'info', message: 'No hem trobat coincidències. Prova el nom del local i el municipi.' });
         } catch (e) {
-            console.error('Error Nominatim:', e);
+            console.info('[MapScreen] Search failed', e);
+            if (request !== searchRequestRef.current) return;
             setGeoSuggestions([]);
+            showAlert({ tone: 'error', message: 'Ara no podem cercar locals. Torna-ho a provar.' });
         }
+    }, [centerLocation?.latitude, centerLocation?.longitude]);
+
+    useEffect(() => () => {
+        searchRequestRef.current++;
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     }, []);
 
     const handleSearchInput = useCallback((text: string) => {
         setSearchQuery(text);
+        searchRequestRef.current++;
+        setGeoSuggestions([]);
         setShowFiltersPanel(false); // Tancar filtres quan es busca
         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-        searchTimerRef.current = setTimeout(() => searchNominatim(text), 350);
+        searchTimerRef.current = setTimeout(() => searchNominatim(text), 1000);
     }, [searchNominatim]);
 
-    const selectGeoSuggestion = useCallback((s: {display_name: string, lat: string, lon: string}) => {
-        const newLocation = { latitude: parseFloat(s.lat), longitude: parseFloat(s.lon) };
+    const selectGeoSuggestion = useCallback((s: MapSuggestion) => {
+        searchRequestRef.current++;
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        const newLocation = { latitude: Number(s.lat), longitude: Number(s.lon) };
         setCenterLocation(newLocation);
         setSearchQuery(s.display_name.split(',').slice(0, 2).join(','));
         setGeoSuggestions([]);
+        if (s.venue) {
+            const registered = bars.find(bar => isSameVenue(s.venue!, bar));
+            if (registered) {
+                handleSelectBar(registered);
+                return;
+            } else {
+                setScannedBars(previous => mergeDiscoveredBars(previous, [s.venue!]));
+                navigateToReportBar(s.venue);
+                return;
+            }
+        }
         if (mapRefNative.current) {
             mapRefNative.current.animateToRegion({
                 latitude: newLocation.latitude,
@@ -1541,13 +1594,14 @@ const MapScreen = () => {
                 longitudeDelta: 0.01,
             }, 500);
         }
-    }, []);
+    }, [bars, navigateToReportBar, handleSelectBar]);
 
 
 
     const fetchRoute = async (bar: Bar) => {
 
-        if (!centerLocation) return;
+        const requestId = ++routeRequestId.current;
+        if (!centerLocation || (bar.id === ownerBar?.id && !userLocation)) return;
 
         const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
@@ -1590,6 +1644,7 @@ const MapScreen = () => {
             }, 'routes.compute', 15000);
 
             const result = await response.json();
+            if (requestId !== routeRequestId.current) return;
 
             if (result.routes && result.routes.length > 0) {
 
@@ -1633,6 +1688,7 @@ const MapScreen = () => {
     // --- ACCIONS COMPARTIDES ---
 
     const centerMapToGPS = async () => {
+         ownerEntryHandledRef.current = true;
 
          let target = userLocation ? {
             latitude: userLocation.coords.latitude,
@@ -1640,6 +1696,11 @@ const MapScreen = () => {
          } : null;
 
          try {
+            const permission = await Location.requestForegroundPermissionsAsync();
+            if (permission.status !== 'granted') {
+                showAlert({ tone: 'info', message: 'Activa el permís d’ubicació per situar-te al mapa. El teu bar continua disponible.' });
+                return;
+            }
             const fresh = await Location.getCurrentPositionAsync({});
             const freshLat = fresh.coords.latitude;
             const freshLng = fresh.coords.longitude;
@@ -1653,13 +1714,19 @@ const MapScreen = () => {
                     longitude: target.longitude,
                 },
             });
-         } catch {
-            // Si falla la lectura en viu, fem servir l'última ubicació coneguda.
+         } catch (error) {
+            console.info('[MapScreen] Current location unavailable', error);
+            showAlert({ tone: 'error', message: target ? 'No hem pogut actualitzar la ubicació. Mostrem l’última posició coneguda.' : 'No hem pogut obtenir la ubicació. Torna-ho a provar.' });
          }
 
          if (!target) return;
 
          setCenterLocation(target);
+         setSelectedBar(null);
+         setSelectedDiscoveredBar(null);
+         preSelectionRegionRef.current = null;
+         anchorRequestRef.current++;
+         setShowBarProfile(false);
          setSearchQuery('');
          setGeoSuggestions([]);
 
@@ -1675,57 +1742,24 @@ const MapScreen = () => {
 
 
      const openExternalMaps = (bar: Bar) => {
-        void openBarMaps(bar).catch(() => Alert.alert('Mapes no disponibles', 'No s’ha pogut obrir l’aplicació de mapes.'));
+        void openBarMaps(bar).catch(() => showAlert({ tone: 'error', message: 'No s’ha pogut obrir l’aplicació de mapes. Torna-ho a provar.' }));
     };
 
-    const handleSelectBar = useCallback((bar: Bar) => {
-        lastMarkerPressRef.current = Date.now();
-        console.log('[MapScreen] Marker selected:', bar.name);
-        if (selectedBar?.id !== bar.id) {
-            // Si canviem de bar, esborrem la ruta anterior immediatament.
-            setRouteInfo(null);
-            setRouteCoords(null);
-        }
-        setSelectedBar(bar);
-    }, [selectedBar?.id]);
-
-
-
     const closeBarBubble = () => {
+        if (isReporting) return;
+        searchRequestRef.current++;
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        routeRequestId.current += 1;
+        setRouteInfo(null);
+        setRouteCoords(null);
 
-        Animated.parallel([
-
-            Animated.timing(bubbleScale, {
-
-                toValue: 0,
-
-                duration: 200,
-
-                easing: Easing.in(Easing.back(2)),
-
-                useNativeDriver: true,
-
-            }),
-
-            Animated.timing(bubbleOpacity, {
-
-                toValue: 0,
-
-                duration: 150,
-
-                useNativeDriver: true,
-
-            }),
-
-        ]).start(() => {
-
-            setSelectedBar(null);
-
-            setBubbleReady(false);
-
-            setShowBarProfile(false);
-
-        });
+        setSelectedBar(null);
+        setSelectedDiscoveredBar(null);
+        setBarCardAnchorX(null);
+        setBarCardAnchorY(null);
+        setBubbleReady(false);
+        setShowBarProfile(false);
+        restoreMapViewport();
         // Tancar desplegables de cerca/filtres
         setShowFiltersPanel(false);
         setGeoSuggestions([]);
@@ -1736,7 +1770,6 @@ const MapScreen = () => {
         // react-native-maps iOS can bubble a marker tap to MapView.onPress.
         // Do not close the card that was just opened by that same tap.
         if (Date.now() - lastMarkerPressRef.current < 700) {
-            console.log('[MapScreen] Ignoring bubbled map press after marker tap');
             return;
         }
         // Amb un toc explícit al mapa fora d'un bar: netegem selecció i ruta.
@@ -1751,9 +1784,17 @@ const MapScreen = () => {
 
 
 
-    const renderContentPanel = () => {
+    const renderContentPanel = (insidePremiumSheet = false) => {
+        if (selectedDiscoveredBar) {
+            return <ReportBarContent key={selectedDiscoveredBar.id} osmBar={selectedDiscoveredBar} onClose={closeBarBubble} onBusyChange={setIsReporting}
+                attributionInMap onGoogleDetailsChange={setDiscoveredGoogleDetails} onRegistered={() => {
+                closeBarBubble();
+                void loadBars();
+            }} />;
+        }
 
          if (selectedBar) {
+            const profileBar = enrichPremiumDemoBar(selectedBar);
 
             const distanceText = routeInfo 
 
@@ -1777,7 +1818,8 @@ const MapScreen = () => {
 
                     placeDetails={placeDetails}
 
-                    gallery={selectedBar.gallery}
+                    gallery={profileBar.gallery}
+                    demo={isPremiumDemoBar(selectedBar)}
 
                     loadingPlaceDetails={loadingPlaceDetails}
 
@@ -1794,8 +1836,11 @@ const MapScreen = () => {
                     onNavigate={() => openExternalMaps(selectedBar)}
 
                     tier={selectedBar.tier || 'free'}
+                    promotionalText={selectedBar.promotionalText}
 
                     onProfileOpen={() => setShowBarProfile(true)}
+                    profileHandleHidden={insidePremiumSheet}
+                    dense={height < 700}
 
                     reviewAvgRating={selectedBarReviewStats.averageRating}
 
@@ -1895,7 +1940,7 @@ const MapScreen = () => {
 
     // -- Configuració de filtres (dinàmica des de amenities.ts) --
     const FILTER_OPTIONS = useMemo(() => {
-        const opts: { key: string; label: string; icon: string; iconFamily?: 'feather' | 'mci'; category?: string }[] = [
+        const opts: { key: BarFilterKey; label: string; icon: string; iconFamily?: 'feather' | 'mci'; category?: string }[] = [
             { key: 'open_now', label: 'Oberts ara', icon: 'clock', iconFamily: 'feather' },
         ];
         // Totes les amenities agrupades
@@ -1905,7 +1950,7 @@ const MapScreen = () => {
         return opts;
     }, []);
 
-    const toggleFilter = useCallback((key: string) => {
+    const toggleFilter = useCallback((key: BarFilterKey) => {
         setActiveFilters(prev => {
             const next = new Set(prev);
             if (next.has(key)) next.delete(key);
@@ -1930,78 +1975,83 @@ const MapScreen = () => {
             return (
                 <TouchableOpacity
                     key={f.key}
-                    style={{
-                        flexDirection: 'row', alignItems: 'center',
-                        paddingVertical: 10, paddingHorizontal: 14,
-                        backgroundColor: isActive ? 'rgba(0,77,152,0.08)' : 'transparent',
-                    }}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={f.label}
+                    accessibilityState={{ checked: isActive }}
+                    aria-checked={isActive}
+                    testID={`map-filter-${f.key}`}
+                    style={[styles.filterChip, isActive && styles.filterChipActive]}
                     onPress={() => toggleFilter(f.key)}
                 >
                     <View style={{
                         width: 28, height: 28, borderRadius: 14,
-                        backgroundColor: isActive ? SKETCH_THEME.colors.primary : 'rgba(0,0,0,0.06)',
+                        backgroundColor: isActive ? EDITORIAL.granaDeep : 'rgba(255,255,255,0.08)',
                         justifyContent: 'center', alignItems: 'center', marginRight: 10,
                     }}>
-                        <IconComp name={f.icon as any} size={14} color={isActive ? 'white' : SKETCH_THEME.colors.textMuted} />
+                        <IconComp name={f.icon as any} size={16} color={isActive ? EDITORIAL.matchday : EDITORIAL.onBackgroundMuted} />
                     </View>
                     <Text style={{
-                        flex: 1, fontSize: 14, fontFamily: 'Lora',
-                        color: isActive ? SKETCH_THEME.colors.primary : SKETCH_THEME.colors.text,
-                        fontWeight: isActive ? '600' : '400',
+                        flex: 1, fontSize: 14, fontFamily: isActive ? EDITORIAL.fontBold : EDITORIAL.fontRegular,
+                        color: isActive ? EDITORIAL.granaDeep : EDITORIAL.onBackground,
                     }}>{f.label}</Text>
-                    {isActive && <Feather name="check" size={16} color={SKETCH_THEME.colors.primary} />}
+                    <Feather name={isActive ? 'minus' : 'plus'} size={16} color={isActive ? EDITORIAL.granaDeep : EDITORIAL.onBackgroundMuted} />
                 </TouchableOpacity>
             );
         };
 
         return (
-            <View style={{
-                backgroundColor: SKETCH_THEME.colors.card,
-                borderRadius: 12,
-                borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+            <View testID="map-filters-panel" style={{
+                backgroundColor: EDITORIAL.granaDeep,
+                borderRadius: 20,
+                borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
                 overflow: 'hidden',
-                maxHeight: height * 0.55,
+                maxHeight: Math.min(height * 0.65, height - mobileDropdownTop - safeBottomInset - 16),
                 ...Platform.select({
                     ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
                     android: { elevation: 10 },
                     default: {},
                 }),
             }}>
-                <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 14, fontFamily: 'Lora', fontWeight: '700', color: SKETCH_THEME.colors.text }}>Filtres</Text>
+                <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                        <Text style={{ fontSize: 20, fontFamily: EDITORIAL.fontBold, color: EDITORIAL.onBackground }}>Troba el teu bar</Text>
+                        <Text style={{ fontSize: 12, fontFamily: EDITORIAL.fontRegular, color: EDITORIAL.onBackgroundMuted }}>Combina els filtres al teu gust</Text>
+                    </View>
                     {activeFilters.size > 0 && (
-                        <TouchableOpacity onPress={() => setActiveFilters(new Set())}>
-                            <Text style={{ fontSize: 12, fontFamily: 'Lora', color: SKETCH_THEME.colors.primary }}>Netejar tot</Text>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Netejar tots els filtres" onPress={() => setActiveFilters(new Set())} style={{ minHeight: 44, justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontFamily: EDITORIAL.fontBold, color: EDITORIAL.matchday }}>Netejar tot</Text>
                         </TouchableOpacity>
                     )}
                 </View>
                 <ScrollView
-                    style={{ maxHeight: height * 0.48 }}
+                    style={{ flexShrink: 1 }}
+                    contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 14 }}
                     bounces={false}
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator={true}
                 >
-                    {/* Filtres especials: obert ara, confirmat que emet */}
-                    {specialFilters.map(renderFilterRow)}
-
-                    {/* Separador */}
-                    <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)', marginVertical: 4, marginHorizontal: 14 }} />
+                    <View style={styles.filterChipGrid}>{specialFilters.map(renderFilterRow)}</View>
+                    {activeFilters.has('open_now') && <Text style={styles.filterHint}>Només locals amb horari conegut i oberts ara.</Text>}
 
                     {/* Amenities agrupades per categoria */}
                     {grouped.map(cat => (
                         <View key={cat.key}>
                             <Text style={{
-                                fontSize: 11, fontFamily: 'Lora', fontWeight: '700',
-                                color: SKETCH_THEME.colors.textMuted,
-                                textTransform: 'uppercase', letterSpacing: 0.8,
-                                paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2,
+                                fontSize: 12, fontFamily: EDITORIAL.fontBold,
+                                color: EDITORIAL.onBackgroundMuted,
+                                letterSpacing: 1.2, textTransform: 'uppercase',
+                                paddingTop: 16, paddingBottom: 8,
                             }}>
                                 {cat.label}
                             </Text>
-                            {cat.items.map(renderFilterRow)}
+                            <View style={styles.filterChipGrid}>{cat.items.map(renderFilterRow)}</View>
                         </View>
                     ))}
                 </ScrollView>
-                <View style={{ height: 8 }} />
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Veure resultats dels filtres" onPress={() => setShowFiltersPanel(false)} style={styles.filterResults}>
+                    <Text style={{ color: EDITORIAL.granaDeep, fontFamily: EDITORIAL.fontBold, fontSize: 14 }}>
+                        Veure resultats{activeFilters.size > 0 ? ` · ${activeFilters.size} ${activeFilters.size === 1 ? 'filtre' : 'filtres'}` : ''}
+                    </Text>
+                </TouchableOpacity>
             </View>
         );
     };
@@ -2013,26 +2063,30 @@ const MapScreen = () => {
 
         const filterIconButton = (
             <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Filtres dels bars"
+                accessibilityState={{ expanded: showFiltersPanel }}
+                aria-expanded={showFiltersPanel}
                 onPress={() => {
                     setShowFiltersPanel(v => !v);
                     setGeoSuggestions([]); // Tancar suggeriments quan obrim filtres
                 }}
                 style={{
                     marginLeft: 6,
-                    width: 32, height: 32, borderRadius: 8,
-                    backgroundColor: hasActiveFilters ? SKETCH_THEME.colors.primary : 'transparent',
+                    width: 44, height: 44, borderRadius: 6,
+                    backgroundColor: hasActiveFilters || showFiltersPanel ? EDITORIAL.matchday : 'rgba(255,255,255,0.08)',
                     justifyContent: 'center', alignItems: 'center',
                 }}
             >
-                <Feather name="sliders" size={18} color={hasActiveFilters ? 'white' : SKETCH_THEME.colors.text} />
+                <Feather name="sliders" size={18} color={hasActiveFilters || showFiltersPanel ? EDITORIAL.granaDeep : EDITORIAL.onBackground} />
                 {hasActiveFilters && (
                     <View style={{
                         position: 'absolute', top: -4, right: -4,
                         width: 16, height: 16, borderRadius: 8,
-                        backgroundColor: SKETCH_THEME.colors.gold,
+                        backgroundColor: EDITORIAL.onBackground,
                         justifyContent: 'center', alignItems: 'center',
                     }}>
-                        <Text style={{ fontSize: 9, fontWeight: 'bold', color: SKETCH_THEME.colors.text }}>{activeFilters.size}</Text>
+                        <Text style={{ fontSize: 10, fontFamily: EDITORIAL.fontBold, color: EDITORIAL.granaDeep }}>{activeFilters.size}</Text>
                     </View>
                 )}
             </TouchableOpacity>
@@ -2040,19 +2094,21 @@ const MapScreen = () => {
 
         // Input natiu
         return (
-             <View style={styles.searchBar}>
-                <Feather name="search" size={18} color={SKETCH_THEME.colors.textMuted} style={{marginRight: 10}} />
+             <View testID="map-search-bar" style={styles.searchBar}>
+                <Feather name="search" size={18} color={EDITORIAL.onBackgroundMuted} style={{marginRight: 10}} />
                 <TextInput 
+                    accessibilityLabel="Cercar una ubicació"
                     placeholder={placeholderText} 
                     style={[styles.searchInput, { flex: 1 }]}
-                    placeholderTextColor="rgba(15,27,45,0.4)"
+                    placeholderTextColor={EDITORIAL.onBackgroundMuted}
+                    selectionColor={EDITORIAL.matchday}
                     value={searchQuery}
                     onChangeText={handleSearchInput}
-                    onSubmitEditing={() => searchNominatim(searchQuery)}
+                    onSubmitEditing={() => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); void searchNominatim(searchQuery); }}
                 />
                 {searchQuery !== '' && (
-                    <TouchableOpacity onPress={() => { setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{marginRight: 4}}>
-                        <Feather name="x" size={16} color={SKETCH_THEME.colors.textMuted} />
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Esborrar la cerca" onPress={() => { searchRequestRef.current++; if (searchTimerRef.current) clearTimeout(searchTimerRef.current); setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{ width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                        <Feather name="x" size={16} color={EDITORIAL.onBackground} />
                     </TouchableOpacity>
                 )}
                 {filterIconButton}
@@ -2071,25 +2127,27 @@ const MapScreen = () => {
                 <View style={{ zIndex: 9999 }}>
                     {showSuggestions && (
                         <View style={{
-                            backgroundColor: SKETCH_THEME.colors.card,
-                            borderRadius: 12,
-                            borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                            backgroundColor: EDITORIAL.granaDeep,
+                            borderRadius: 8,
+                            borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
                             overflow: 'hidden',
                             ...Platform.select({ default: {} }),
                         }}>
                             {geoSuggestions.map((s, i) => (
                                 <TouchableOpacity
                                     key={`${s.lat}-${s.lon}-${i}`}
+                                    accessibilityRole="button"
                                     style={{
-                                        paddingVertical: 10, paddingHorizontal: 14,
+                                        minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 14,
                                         borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
-                                        borderBottomColor: 'rgba(0,0,0,0.06)',
+                                        borderBottomColor: EDITORIAL.borderOnBackground,
                                     }}
                                     onPress={() => selectGeoSuggestion(s)}
                                 >
-                                    <Text numberOfLines={1} style={{ fontSize: 13, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+                                    <Text numberOfLines={2} style={{ fontSize: 14, fontFamily: EDITORIAL.fontRegular, color: EDITORIAL.onBackground }}>
                                         {s.display_name}
                                     </Text>
+                                    <Text style={{ fontSize: 11, color: EDITORIAL.onBackgroundMuted }}>{s.venue ? 'Google Maps' : 'OpenStreetMap'}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -2116,9 +2174,9 @@ const MapScreen = () => {
             >
                 {showSuggestions && (
                     <View style={{
-                        backgroundColor: SKETCH_THEME.colors.card,
-                        borderRadius: 12,
-                        borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                        backgroundColor: EDITORIAL.granaDeep,
+                        borderRadius: 8,
+                        borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
                         overflow: 'hidden',
                         ...Platform.select({
                             ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10 },
@@ -2129,16 +2187,18 @@ const MapScreen = () => {
                         {geoSuggestions.map((s, i) => (
                             <TouchableOpacity
                                 key={`${s.lat}-${s.lon}-${i}`}
+                                accessibilityRole="button"
                                 style={{
-                                    paddingVertical: 12, paddingHorizontal: 14,
+                                    minHeight: 44, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 14,
                                     borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
-                                    borderBottomColor: 'rgba(0,0,0,0.06)',
+                                    borderBottomColor: EDITORIAL.borderOnBackground,
                                 }}
                                 onPress={() => selectGeoSuggestion(s)}
                             >
-                                <Text numberOfLines={1} style={{ fontSize: 14, fontFamily: 'Lora', color: SKETCH_THEME.colors.text }}>
+                                <Text numberOfLines={2} style={{ fontSize: 14, fontFamily: EDITORIAL.fontRegular, color: EDITORIAL.onBackground }}>
                                     {s.display_name}
                                 </Text>
+                                <Text style={{ fontSize: 11, color: EDITORIAL.onBackgroundMuted }}>{s.venue ? 'Google Maps' : 'OpenStreetMap'}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -2166,7 +2226,12 @@ const MapScreen = () => {
 
     const renderHeader = () => (
 
-        <View style={isDesktop ? styles.desktopSidebarContent : [styles.topBarContainer, { top: mobileHeaderTop }]}>
+        <View
+            style={isDesktop ? styles.desktopSidebarContent : [styles.topBarContainer, { top: mobileHeaderTop }]}
+            onLayout={event => {
+                if (!isDesktop) setMobileHeaderHeight(mobileHeaderTop + event.nativeEvent.layout.height);
+            }}
+        >
 
              <View style={{flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-between'}}>
 
@@ -2198,7 +2263,7 @@ const MapScreen = () => {
 
              {/* Bàner del partit — seleccionat o pròxim */}
 
-             {(selectedMatch || nextMatch) && (
+             {(selectedMatch || nextMatch) && (isDesktop || (!selectedBar && !selectedDiscoveredBar)) && (
 
                 <View style={{ marginTop: 8, marginHorizontal: 4 }}>
 
@@ -2257,14 +2322,24 @@ const MapScreen = () => {
 
 
 
+    const availableBottom = height - mobileFabBottom - 12;
+    const minimumCardTop = Math.min(Math.max(mobileHeaderTop + 56, mobileHeaderHeight + 8), availableBottom - 100);
+    const selectedMarkerHeight = selectedDiscoveredBar ? Math.max(44, mapMarkerSize(currentZoom, true))
+        : mapMarkerSize(currentZoom, true) + (selectedBar?.id === ownerBar?.id && ownerBar ? 26 : 0);
+    const bubbleLayout = mapBubbleLayout({ x: barCardAnchorX ?? width / 2, y: barCardAnchorY ?? availableBottom - 12 }, height, width, minimumCardTop, height - availableBottom,
+        venueCardHeight, selectedMarkerHeight);
+    const cardTop = bubbleLayout.top;
+
     return (
 
         <View style={[styles.container, { position: 'relative' }, isDesktop && { flexDirection: 'row' }]}>
-            {scannedBars.length > 0 && (
-                <TouchableOpacity onPress={() => { void Linking.openURL('https://www.openstreetmap.org/copyright'); }} accessibilityRole="link" accessibilityLabel="Atribucio OpenStreetMap" style={{ position: 'absolute', bottom: user ? 88 : 36, left: 12, zIndex: 40, backgroundColor: EDITORIAL.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 11, color: EDITORIAL.ink }}>© OpenStreetMap contributors</Text>
-                </TouchableOpacity>
-            )}
+            <MapDataAttribution
+                venues={[...scannedBars, ...geoSuggestions.flatMap(suggestion => suggestion.venue ? [suggestion.venue] : [])]}
+                googleDetails={!!placeDetails || discoveredGoogleDetails}
+                osmGeocoding={geoSuggestions.some(suggestion => !suggestion.venue)}
+                googleMapAttributed={Platform.OS === 'android' || Platform.OS === 'web'}
+                style={{ position: 'absolute', bottom: mapLoadFailed || (!selectedLocation && (scanMessage || matchNotice)) ? mapNoticeBottom + mapNoticeHeight + 8 : mapAttributionBottom, left: 12, right: mapControlsInline ? 132 : mapNoticeRight, zIndex: 40 }}
+            />
             {/* BARRA LATERAL D'ESCRIPTORI */}
 
             {isDesktop && (
@@ -2277,12 +2352,8 @@ const MapScreen = () => {
                         {renderSearchDropdownOverlay()}
                     </View>
 
-                    {selectedBar ? (
-                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-                            <View style={{ backgroundColor: EDITORIAL.background, padding: 16, borderRadius: 8, borderWidth: selectedBar.tier === 'premium' ? 2 : 1, borderColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground }}>
-                                {renderContentPanel()}
-                            </View>
-                        </ScrollView>
+                    {selectedBar || selectedDiscoveredBar ? (
+                        <View onLayout={event => setDesktopCardTop(event.nativeEvent.layout.y + 16)} style={{ height: venueCardHeight + 32 }} />
                     ) : (
                         <View style={{ flex: 1, paddingHorizontal: 16 }}>
                             {renderContentPanel()}
@@ -2297,21 +2368,44 @@ const MapScreen = () => {
 
              {/* ÀREA DEL MAPA */}
 
-             <View style={styles.mapContainer}>
-                    {scanMessage && (
-                        <View accessibilityLiveRegion="polite" style={{ position: 'absolute', bottom: mobileFabBottom + 4, left: 52, right: 76, zIndex: 50, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: EDITORIAL.card, borderWidth: 1, borderColor: EDITORIAL.hairline, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            {isScanning && <ActivityIndicator size="small" color={EDITORIAL.grana} />}
-                            <Text style={{ flex: 1, fontFamily: EDITORIAL.fontRegular, fontSize: 12, color: EDITORIAL.ink }}>{scanMessage}</Text>
-                            {!isScanning && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tancar estat de cerca" onPress={() => setScanMessage(null)}><Feather name="x" size={16} color={EDITORIAL.ink} /></TouchableOpacity>}
+             <View style={styles.mapContainer} collapsable={false}>
+                    {!mapReady && !mapLoadFailed && (
+                        <ActivityIndicator accessibilityLabel="Carregant el mapa" color={EDITORIAL.grana} style={{ position: 'absolute', top: mobileHeaderHeight + 20, alignSelf: 'center', zIndex: 2 }} />
+                    )}
+                    {mapLoadFailed && !transientAlertVisible && (
+                        <View onLayout={event => setMapNoticeHeight(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, alignItems: 'center', zIndex: 51 }}>
+                            <View style={{ width: '100%', maxWidth: 480 }}>
+                            <UserNotice
+                                compact
+                                message="No s'ha pogut carregar el mapa. Torna-ho a provar."
+                                tone="error"
+                                action={{ label: 'Tornar-ho a provar', onPress: () => {
+                                    setMapReady(false);
+                                    setMapLoadFailed(false);
+                                    setNativeMapRevision(previous => previous + 1);
+                                } }}
+                            />
+                            </View>
+                        </View>
+                    )}
+                    {!mapLoadFailed && !transientAlertVisible && !selectedLocation && (scanMessage || matchNotice) && (
+                        <View pointerEvents="box-none" onLayout={event => setMapNoticeHeight(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, zIndex: 50, alignItems: 'center' }}>
+                            <View style={{ width: '100%', maxWidth: 480 }}>
+                                <UserNotice
+                                    compact
+                                    message={scanMessage || matchNotice!}
+                                />
+                            </View>
                         </View>
                     )}
 
                     <MapView
+                        key={nativeMapRevision}
                         ref={mapRefNative}
                         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
                         style={styles.map}
-                        customMapStyle={CUSTOM_MAP_STYLE}
-                        initialRegion={{
+                        customMapStyle={Platform.OS === 'ios' ? undefined : CUSTOM_MAP_STYLE}
+                        initialRegion={lastRegionRef.current ?? {
                             latitude: centerLocation?.latitude ?? 41.3851,
                             longitude: centerLocation?.longitude ?? 2.1734,
                             latitudeDelta: radiusToLatDelta(searchRadiusKm),
@@ -2320,17 +2414,14 @@ const MapScreen = () => {
                         showsUserLocation={true}
                         showsMyLocationButton={false}
                         showsCompass={false}
+                        rotateEnabled
+                        pitchEnabled
                         maxZoomLevel={MAP_MAX_ZOOM}
                         toolbarEnabled={false}
-                        onLayout={() => {
-                            if (!mapReady) {
-                                setMapReady(true);
-                                console.log('[MapScreen] Map layout ready - using layout fallback');
-                            }
-                        }}
                         onMapReady={() => {
+                            if (nativeMapRevision !== nativeMapRevisionRef.current) return;
                             setMapReady(true);
-                            console.log('[MapScreen] Map ready - mapReady = true');
+                            setMapLoadFailed(false);
                         }}
                         onPress={handleMapPress}
                         onRegionChangeComplete={(region: any) => {
@@ -2358,7 +2449,7 @@ const MapScreen = () => {
                             setCurrentZoom(approxZoom);
                             // Si hi ha un bar seleccionat, el pin pot haver canviat de
                             // posició a la pantalla (pan/zoom): recalculem l'ancoratge.
-                            if (selectedBar) updateBarCardAnchor();
+                            if (selectedLocation) void updateBarCardAnchor();
                         }}
                     >
 
@@ -2413,6 +2504,8 @@ const MapScreen = () => {
                                      <ScannedBarMarker
                                          key={`scanned-${osmBar.id}`}
                                          osmBar={osmBar}
+                                         zoom={currentZoom}
+                                         isSelected={selectedDiscoveredBar?.id === osmBar.id}
                                          onPress={() => navigateToReportBar(osmBar)}
                                      />
                                  );
@@ -2434,8 +2527,10 @@ const MapScreen = () => {
                              );
                          })}
 
+                        {ownerBar && <ConfirmedBarMarker key={`owner-${ownerBar.id}`} bar={ownerBar} zoom={currentZoom} isPremium={ownerBar.tier === 'premium'} isSelected={selectedBar?.id === ownerBar.id} isOwned onPress={() => handleSelectBar(ownerBar)} />}
+
                         {/* Ruta caminant fins al bar seleccionat */}
-                        {routeCoords && routeCoords.length > 1 && (
+                        {selectedBar && routeCoords && routeCoords.length > 1 && (
                             <Polyline
                                 coordinates={routeCoords}
                                 strokeColor={EDITORIAL.grana}
@@ -2445,6 +2540,12 @@ const MapScreen = () => {
                         )}
 
                     </MapView>
+                    <AlertBannerHost
+                       active={isFocused}
+                       bottomOffset={mapNoticeBottom}
+                       horizontalInsets={{ left: mapNoticeLeft, right: mapNoticeRight }}
+                       onVisibilityChange={setTransientAlertVisible}
+                    />
 
              </View>
 
@@ -2488,12 +2589,12 @@ const MapScreen = () => {
                     <TouchableOpacity
                         style={[
                             styles.fabGps,
-                            { bottom: mobileFabBottom },
+                            { bottom: mapControlsBottom },
                         ]}
                         onPress={centerMapToGPS}
                         accessibilityLabel="Centrar a la meva ubicaci\u00f3"
                     >
-                        <Image source={MAP_TARGET_3D} style={{ width: 26, height: 26 }} resizeMode="contain" />
+                        <MapImage source={getMapIcon('target')} style={{ width: 26, height: 26 }} contentFit="contain" transition={0} />
                     </TouchableOpacity>
 
                     {(() => {
@@ -2506,7 +2607,7 @@ const MapScreen = () => {
                             <TouchableOpacity
                                 style={[
                                     styles.fabGps,
-                                    { bottom: mobileFabBottom + 52 },
+                                    { bottom: mapSearchBottom, right: mapSearchRight },
                                 ]}
                                 onPress={handleScanToggle}
                                 disabled={isScanning}
@@ -2515,9 +2616,9 @@ const MapScreen = () => {
                                 {isScanning ? (
                                     <ActivityIndicator size="small" color={EDITORIAL.grana} />
                                 ) : scannedBars.length > 0 ? (
-                                    <Image source={MAP_PIN_SCANNED_3D} style={{ width: 26, height: 26, opacity: 0.55 }} resizeMode="contain" />
+                                    <MapImage source={getMapIcon('hide')} style={{ width: 30, height: 30 }} contentFit="contain" transition={0} />
                                 ) : (
-                                    <Image source={MAP_ZOOM_3D} style={{ width: 26, height: 26 }} resizeMode="contain" />
+                                    <MapImage source={getMapIcon('search')} style={{ width: 26, height: 26 }} contentFit="contain" transition={0} />
                                 )}
                             </TouchableOpacity>
                         );
@@ -2525,102 +2626,14 @@ const MapScreen = () => {
 
 
 
-                    {/* Targeta de detall del bar (mòbil), situada sempre sota el pin seleccionat. */}
-                    {selectedBar && barCardAnchorY != null && (() => {
-                        const GAP_BELOW_PIN = 42;
-                        const cardTop = barCardAnchorY + GAP_BELOW_PIN;
-                        // Triangle de bafarada: centrat sobre el pin (barCardAnchorX),
-                        // acotat perquè no surti fora dels marges de la targeta.
-                        const TRIANGLE_HALF = 9;
-                        const triangleX = barCardAnchorX != null
-                            ? Math.min(Math.max(barCardAnchorX - TRIANGLE_HALF, 12 + 14), width - 12 - 14 - TRIANGLE_HALF * 2)
-                            : null;
-                        const showTriangle = triangleX != null;
-                        return (
-                        <View
-                            pointerEvents="box-none"
-                            style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                zIndex: 1000,
-                                elevation: 1000,
-                            }}
-                        >
-                        <Animated.View
-                            onLayout={(e) => setBarCardHeight(e.nativeEvent.layout.height)}
-                            style={{
-                                position: 'absolute',
-                                left: 12,
-                                right: 12,
-                                top: cardTop,
-                                opacity: 1,
-                                transform: [{ scale: 1 }],
-                                zIndex: 100,
-                                backgroundColor: EDITORIAL.background,
-                                borderRadius: 8,
-                                padding: 16,
-                                borderWidth: selectedBar.tier === 'premium' ? 2 : 1,
-                                borderColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground,
-                                ...Platform.select({
-                                    web: { boxShadow: '0 8px 24px rgba(15,27,45,0.18)' } as any,
-                                    ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12 },
-                                    android: { elevation: 12 },
-                                }),
-                            }}
-                        >
-                            {renderContentPanel()}
-                        </Animated.View>
-                        {showTriangle && (
-                            <React.Fragment>
-                                {/* Vora del triangle (mateix color que la vora de la targeta) */}
-                                <View
-                                    pointerEvents="none"
-                                    style={{
-                                        position: 'absolute',
-                                        left: (triangleX as number) - 1,
-                                        top: cardTop - TRIANGLE_HALF - 1,
-                                        width: 0, height: 0,
-                                        borderLeftWidth: TRIANGLE_HALF + 1,
-                                        borderRightWidth: TRIANGLE_HALF + 1,
-                                        borderBottomWidth: TRIANGLE_HALF + 1,
-                                        borderLeftColor: 'transparent',
-                                        borderRightColor: 'transparent',
-                                        borderBottomColor: selectedBar.tier === 'premium' ? EDITORIAL.matchday : EDITORIAL.borderOnBackground,
-                                        zIndex: 19,
-                                    }}
-                                />
-                                {/* Cos del triangle */}
-                                <View
-                                    pointerEvents="none"
-                                    style={{
-                                        position: 'absolute',
-                                        left: triangleX as number,
-                                        top: cardTop - TRIANGLE_HALF,
-                                        width: 0, height: 0,
-                                        borderLeftWidth: TRIANGLE_HALF,
-                                        borderRightWidth: TRIANGLE_HALF,
-                                        borderBottomWidth: TRIANGLE_HALF,
-                                        borderLeftColor: 'transparent',
-                                        borderRightColor: 'transparent',
-                                        borderBottomColor: EDITORIAL.background,
-                                        zIndex: 20,
-                                    }}
-                                />
-                            </React.Fragment>
-                        )}
-                        </View>
-                        );
-                    })()}
-
-
-
-
                     {/* Barra de navegació inferior — Editorial */}
 
-                    {user && (
+                    {user?.role === 'bar_owner' && (
+                        <OwnerBottomNav active="map" onMap={() => { if (ownerBar) { ownerEntryHandledRef.current = true; focusOwnedBar(ownerBar); } }}
+                            onProfile={() => navigation.navigate('BarDashboard', { tab: 'profile' })}
+                            onSettings={() => navigation.navigate('BarDashboard', { tab: 'settings' })} />
+                    )}
+                    {user && user.role !== 'bar_owner' && (
 
                         <View style={{
 
@@ -2702,7 +2715,9 @@ const MapScreen = () => {
 
                             style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}
 
-                            onPress={() => navigation.navigate('Profile')}
+                            onPress={() => navigation.navigate(user?.role === 'bar_owner' ? 'BarDashboard' : 'Profile')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Obrir el perfil"
 
                         >
 
@@ -2756,11 +2771,11 @@ const MapScreen = () => {
              {isDesktop && (
                 <>
                     <TouchableOpacity
-                        style={[styles.fabGps, { right: 20, bottom: 20 }]}
+                        style={[styles.fabGps, { right: 20, bottom: mapControlsBottom }]}
                         onPress={centerMapToGPS}
                         accessibilityLabel="Centrar a la meva ubicaci\u00f3"
                     >
-                        <Image source={MAP_TARGET_3D} style={{ width: 26, height: 26 }} resizeMode="contain" />
+                        <MapImage source={getMapIcon('target')} style={{ width: 26, height: 26 }} contentFit="contain" transition={0} />
                     </TouchableOpacity>
 
                     {(() => {
@@ -2771,7 +2786,7 @@ const MapScreen = () => {
                         if (visibleBounds && visibleWidthKm > 2) return null;
                         return (
                             <TouchableOpacity
-                                style={[styles.fabGps, { right: 20, bottom: 64 }]}
+                                style={[styles.fabGps, { right: mapSearchRight, bottom: mapSearchBottom }]}
                                 onPress={handleScanToggle}
                                 disabled={isScanning}
                                 accessibilityLabel={scannedBars.length > 0 ? 'Amagar bars sense confirmar' : 'Cercar bars a la zona visible'}
@@ -2779,9 +2794,9 @@ const MapScreen = () => {
                                 {isScanning ? (
                                     <ActivityIndicator size="small" color={EDITORIAL.grana} />
                                 ) : scannedBars.length > 0 ? (
-                                    <Image source={MAP_PIN_SCANNED_3D} style={{ width: 26, height: 26, opacity: 0.55 }} resizeMode="contain" />
+                                    <MapImage source={getMapIcon('hide')} style={{ width: 30, height: 30 }} contentFit="contain" transition={0} />
                                 ) : (
-                                    <Image source={MAP_ZOOM_3D} style={{ width: 26, height: 26 }} resizeMode="contain" />
+                                    <MapImage source={getMapIcon('search')} style={{ width: 26, height: 26 }} contentFit="contain" transition={0} />
                                 )}
                             </TouchableOpacity>
                         );
@@ -2814,23 +2829,45 @@ const MapScreen = () => {
 
 
 
-            {/* Modal de perfil del bar premium */}
-
-            <BarProfileModal
-
-                visible={showBarProfile}
-
-                allMatches={upcomingMatches}
-
-                bar={selectedBar}
-
-                placeDetails={placeDetails}
-
-                onClose={() => setShowBarProfile(false)}
-
-                onNavigate={() => selectedBar && openExternalMaps(selectedBar)}
-
-            />
+            {selectedLocation && (isDesktop || barCardAnchorY != null) && (
+                <PremiumBarSheet
+                    key={selectedVenueId}
+                    layoutReady={venueMeasurement?.id === selectedVenueId}
+                    name={selectedBar?.name ?? selectedDiscoveredBar!.name}
+                    expandable={selectedBar?.tier === 'premium'}
+                    screenWidth={width}
+                    screenHeight={height}
+                    collapsedTop={isDesktop ? Math.max(8, Math.min(desktopCardTop, height - venueCardHeight - 12)) : cardTop}
+                    collapsedLeft={isDesktop ? 16 : 12}
+                    collapsedWidth={isDesktop ? 368 : width - 24}
+                    collapsedHeight={venueCardHeight}
+                    expanded={showBarProfile}
+                    onExpandedChange={setShowBarProfile}
+                    onCollapsedHeightChange={measuredHeight => {
+                        if (selectedVenueId) setVenueMeasurement({ id: selectedVenueId, height: measuredHeight });
+                    }}
+                    triangleLeft={isDesktop ? undefined : bubbleLayout.triangleLeft}
+                    triangleTop={isDesktop ? undefined : bubbleLayout.triangleTop}
+                    triangleBelow={bubbleLayout.placement === 'below'}
+                    compactContent={renderContentPanel(true)}
+                    renderExpanded={() => selectedBar?.tier === 'premium' ? (
+                        <BarProfileModal
+                            embedded
+                            visible
+                            bar={selectedBar}
+                            placeDetails={placeDetails}
+                            allMatches={upcomingMatches}
+                            onClose={() => setShowBarProfile(false)}
+                            onNavigate={() => openExternalMaps(selectedBar)}
+                            onReviewStatsChange={setSelectedBarReviewStats}
+                            onRequestLogin={() => {
+                                setShowBarProfile(false);
+                                navigation.navigate('Login');
+                            }}
+                        />
+                    ) : null}
+                />
+            )}
 
         </View>
 
@@ -2847,4 +2884,3 @@ const MapScreen = () => {
 
 
 export default MapScreen;
-

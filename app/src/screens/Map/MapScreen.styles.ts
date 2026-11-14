@@ -1,13 +1,26 @@
 import { StyleSheet, Platform } from 'react-native';
 import { SKETCH_THEME } from '../../theme/sketchTheme';
+import { EDITORIAL } from '../../theme/editorialTheme';
 
 // Nota: MapScreen usava una definició local de SKETCHY_COLORS que coincideix amb SKETCH_THEME.colors
 // Canviem a l'estàndard SKETCH_THEME.colors
 
 export default StyleSheet.create({
     container: { flex: 1, backgroundColor: SKETCH_THEME.colors.bg, ...Platform.select({ web: { overflow: 'hidden' as const, height: '100vh', maxHeight: '100vh' } as any }) },
-    mapContainer: { flex: 1, width: '100%', height: '100%', zIndex: 0, ...Platform.select({ web: { overflow: 'hidden' as const } }) },
-    map: { width: '100%', height: '100%' },
+    mapContainer: { flex: 1, width: '100%', zIndex: 0, ...Platform.select({ web: { overflow: 'hidden' as const } }) },
+    map: StyleSheet.absoluteFill,
+    filterChipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    filterChip: {
+        flexDirection: 'row', alignItems: 'center', flexGrow: 1, flexBasis: '45%', minWidth: 130,
+        minHeight: 48, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12, gap: 2,
+        backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
+    },
+    filterChipActive: { backgroundColor: EDITORIAL.matchday, borderColor: EDITORIAL.matchday },
+    filterHint: { fontSize: 12, color: EDITORIAL.onBackgroundMuted, paddingTop: 8, fontFamily: EDITORIAL.fontRegular },
+    filterResults: {
+        minHeight: 48, margin: 12, marginTop: 0, paddingHorizontal: 16, borderRadius: 12,
+        backgroundColor: EDITORIAL.matchday, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SKETCH_THEME.colors.primary },
     
     // Barra superior i capçalera
@@ -26,17 +39,18 @@ export default StyleSheet.create({
     scanButton: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
     searchBar: {
         flexDirection: 'row',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 4,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
+        backgroundColor: EDITORIAL.granaDeep,
+        borderRadius: 8,
+        minHeight: 54,
+        paddingVertical: 4,
+        paddingHorizontal: 12,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(15,27,45,0.14)',
+        borderColor: EDITORIAL.borderOnBackground,
         ...Platform.select({ web: { boxShadow: '0 2px 10px rgba(15,27,45,0.06)' } })
     },
     searchIconPlaceholder: { width: 12, height: 12, backgroundColor: '#0F1B2D', marginRight: 10, borderRadius: 6 },
-    searchInput: { flex: 1, fontSize: 15, color: '#0F1B2D', fontFamily: 'Lora_400Regular' },
+    searchInput: { flex: 1, minWidth: 0, minHeight: 44, fontSize: 15, color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontRegular },
     avatarButton: {
         width: 44, height: 44, borderRadius: 22, marginLeft: 10,
         backgroundColor: '#FFFFFF',
@@ -97,7 +111,9 @@ export default StyleSheet.create({
     // Botó flotant (Fab)
     fabGps: {
         position: 'absolute', right: 20, width: 48, height: 48, borderRadius: 24,
-        backgroundColor: 'rgba(255,255,255,0.01)',
+        backgroundColor: 'rgba(255,250,243,0.68)',
+        borderWidth: 1.5, borderColor: 'rgba(122,0,51,0.22)',
+        borderTopColor: 'rgba(255,255,255,0.95)', borderLeftColor: 'rgba(255,255,255,0.85)',
         justifyContent: 'center', alignItems: 'center', zIndex: 15,
         shadowColor: '#0F1B2D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, elevation: 5,
         ...Platform.select({ web: { boxShadow: '0 3px 8px rgba(15,27,45,0.28)', cursor: 'pointer' } })
