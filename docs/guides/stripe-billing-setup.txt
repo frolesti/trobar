@@ -2,7 +2,24 @@
   troBar — Guia pas a pas de la integració de facturació amb Stripe
 ═══════════════════════════════════════════════════════════════════════════
 
-Última actualització: 4 de novembre de 2026
+Última actualització: 6 de novembre de 2026
+
+  ESTAT VIGENT (les notes del 4 de novembre són històriques):
+    • L'usuari ha escollit continuar amb beta: Stripe sandbox, cap diner real.
+    • Alta sintètica real, Checkout allotjat amb targeta de proves, webhook
+      i activació Premium comprovats sense duplicar bar/client/sessió.
+    • Portal de factures/targeta/cancel·lació verificat amb el compte temporal.
+    • Final de prova i primera factura de 39 EUR pagada al sandbox.
+    • Corregit i desplegat getSubscriptionStatus per reconèixer cancel_at.
+    • Compte i bar temporals eliminats; client de prova eliminat i
+      subscripció de prova cancel·lada. La subscripció preexistent, intacta.
+    • EMAIL_PORTAL_READY=true només amb EMAIL_DELIVERY_MODE=internal i
+      frolesti4@gmail.com. STRIPE_ALLOW_LIVE_BILLING continua false.
+    • Les 18 plantilles estan publicades amb el disseny aprovat; sis
+      automatitzacions internes i el planificador real s'han comprovat.
+    • Verificació/recuperació continuen a Firebase. La personalització
+      necessita gestió manual de consola: l'API rebutja la modificació.
+    • Estat detallat i pendents: TRIAL_EMAIL_CAMPAIGN.md.
 
   Estat verificat i bloquejos del web Next: WEB_BAR_BETA.md.
   Les ordres que creen secrets, recursos Stripe o despleguen requereixen

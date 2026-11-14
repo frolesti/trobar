@@ -563,6 +563,27 @@ export const cancelSubscription = onCall(
 /* ═══════════════════════════════════════════════════════════════════════════
    getSubscriptionStatus — Retorna l'estat de la subscripció de l'usuari
    ═══════════════════════════════════════════════════════════════════════════ */
+export const createBillingPortalSession = onCall(
+  { region: "europe-west1", cors: true, secrets: [stripeSecretKey] },
+  async request => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Has d'iniciar sessió.");
+    if (!request.auth.token.email_verified) throw new HttpsError("failed-precondition", "Verifica el correu del teu compte.");
+    const owner = (await db.collection("barOwners").doc(request.auth.uid).get()).data();
+    if (!owner?.stripeCustomerId || !owner.stripeSubscriptionId) throw new HttpsError("not-found", "No s'ha trobat cap subscripció.");
+    await assertBillableBar(owner, request.auth.uid);
+    const stripe = getStripe(stripeSecretKey.value());
+    const subscription = await stripe.subscriptions.retrieve(owner.stripeSubscriptionId);
+    assertOwnedSubscription(subscription, owner, request.auth.uid);
+    if (subscription.livemode && process.env.STRIPE_ALLOW_LIVE_BILLING !== "true") {
+      throw new HttpsError("failed-precondition", "La facturació real encara no està activada.");
+    }
+    const session = await stripe.billingPortal.sessions.create({
+      customer: owner.stripeCustomerId, return_url: "https://www.trobar.cat/subscripcio",
+    });
+    return { url: session.url };
+  }
+);
+
 export const getSubscriptionStatus = onCall(
   { region: "europe-west1", cors: true, secrets: [stripeSecretKey] },
   async (request) => {
@@ -599,7 +620,7 @@ export const getSubscriptionStatus = onCall(
         billingCycle: subscriptionCycle(subscription),
         trialEnd: subscription.trial_end,
         currentPeriodEnd: subscriptionPeriodEnd(subscription),
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end || typeof subscription.cancel_at === "number",
       };
     } catch (error) {
       console.error("[Billing] Cannot retrieve subscription");

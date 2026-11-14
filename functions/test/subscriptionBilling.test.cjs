@@ -64,6 +64,7 @@ function harness({ demo = false, status = 'active', failRetrieve = false } = {})
         db, console: { info() {}, log() {}, error() {} }, HttpsError, URL, process: { env: {} },
         stripeSecretKey: { value: () => '' }, stripeWebhookSecret: { value: () => '' },
         getStripe: () => { calls.push(['client']); return stripe; },
+        planSubscriptionEmails: async (_db, _stripe, _event, latest) => { calls.push(['email-plan', latest.status]); },
         STRIPE_PRICE_IDS: { monthly: 'price_monthly', quarterly: 'price_quarterly', annual: 'price_annual' },
         FieldValue: { serverTimestamp: () => 999 },
         onCall: (_config, callback) => callback, onRequest: (_config, callback) => callback,
@@ -107,6 +108,20 @@ test('status reads the actual Stripe price and item period, and never disguises 
     await assert.rejects(failed.context.getSubscriptionStatus(request({})), error => error.code === 'unavailable');
 });
 
+test('status recognizes both Stripe cancellation indicators without ending current access', async () => {
+    for (const patch of [
+        { cancel_at_period_end: true, cancel_at: null },
+        { cancel_at_period_end: false, cancel_at: 123456 },
+        { cancel_at_period_end: false, cancel_at: null },
+    ]) {
+        const fixture = harness();
+        Object.assign(fixture.subscription, patch);
+        const status = await fixture.context.getSubscriptionStatus(request({}));
+        assert.equal(status.active, true);
+        assert.equal(status.cancelAtPeriodEnd, patch.cancel_at_period_end || patch.cancel_at !== null);
+    }
+});
+
 test('live cycle changes persist the cycle without changing the feature tier', async () => {
     const { context, records, calls } = harness();
     const result = await context.changeBillingCycle(request({ newCycle: 'annual' }));
@@ -136,11 +151,12 @@ test('atomic webhook synchronization grants trial Premium, revokes inactive plan
 });
 
 test('delayed subscription webhook uses the latest Stripe state rather than its stale payload', async () => {
-    const { context, records, subscription } = harness();
+    const { context, calls, records, subscription } = harness();
     context.event = { type: 'customer.subscription.updated', created: 10, data: { object: { ...subscription, status: 'past_due' } } };
     let received = false;
     const response = { status(code) { assert.equal(code, 200); return this; }, json(data) { received = data.received; } };
     await context.stripeWebhook({ method: 'POST', headers: { 'stripe-signature': 'fixture' }, rawBody: Buffer.from('fixture') }, response);
     assert.equal(received, true);
     assert.equal(records['bars/b'].tier, 'premium');
+    assert.deepEqual(calls.find(call => call[0] === 'email-plan'), ['email-plan', 'active']);
 });
