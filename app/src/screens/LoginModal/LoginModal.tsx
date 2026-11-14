@@ -9,18 +9,22 @@ import AppIcon from '../../components/AppIcon';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
 import { ensureLoraOnWeb, SKETCH_THEME } from '../../theme/sketchTheme';
-import { getUserFriendlyError } from '../../utils/errorHandler';
+import { getUserFriendlyError, STANDARD_MESSAGES } from '../../utils/errorHandler';
 import { auth as fbAuth } from '../../config/firebase';
-import { fetchSignInMethodsForEmail, sendPasswordResetEmail } from 'firebase/auth';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { showAlert } from '../../components/AlertBanner';
+import UserNotice from '../../components/UserNotice';
 import styles from './LoginModal.styles';
 import { useIsFocused } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useScreenLoading } from '../../context/SplashContext';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'Login'>;
 };
 
 const LoginModal = ({ navigation }: Props) => {
+    useScreenLoading('Login', false);
     const { user, loginGoogle, loginApple, loginEmail, registerEmail, isLoading } = useAuth();
     const isFocused = useIsFocused();
 
@@ -46,6 +50,8 @@ const LoginModal = ({ navigation }: Props) => {
     const [verificationSent, setVerificationSent] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [authInProgress, setAuthInProgress] = useState(false);
+    const [resetBusy, setResetBusy] = useState(false);
+    const operationPending = useRef(false);
 
     useEffect(() => {
         if (isFocused && user && !isLoading && !authInProgress) {
@@ -80,32 +86,39 @@ const LoginModal = ({ navigation }: Props) => {
     };
 
     const handleGoogleLogin = async () => {
+        if (operationPending.current) return;
+        operationPending.current = true;
         setLocalError(null);
         setAuthInProgress(true);
         try {
             const signedIn = await loginGoogle();
             if (signedIn) await postLoginRedirect();
-        } catch (e: any) {
+        } catch (e) {
             setLocalError(getUserFriendlyError(e));
         } finally {
+            operationPending.current = false;
             setAuthInProgress(false);
         }
     };
 
     const handleAppleLogin = async () => {
+        if (operationPending.current) return;
+        operationPending.current = true;
         setLocalError(null);
         setAuthInProgress(true);
         try {
             await loginApple();
             await postLoginRedirect();
-        } catch (e: any) {
+        } catch (e) {
             setLocalError(getUserFriendlyError(e));
         } finally {
+            operationPending.current = false;
             setAuthInProgress(false);
         }
     };
 
     const handleEmailSubmit = async () => {
+        if (operationPending.current) return;
         setLocalError(null);
         
         const cleanEmail = email.trim();
@@ -146,25 +159,10 @@ const LoginModal = ({ navigation }: Props) => {
             }
         }
 
+        operationPending.current = true;
+        setAuthInProgress(true);
         try {
             if (isRegistering) {
-                // Comprovem si l'email ja existeix amb un altre proveïdor abans de registrar
-                try {
-                    const methods = await fetchSignInMethodsForEmail(fbAuth, cleanEmail);
-                    if (methods.includes('google.com')) {
-                        setLocalError("Aquest correu ja està registrat amb Google. Torna enrere i clica 'Continuar amb Google'.");
-                        return;
-                    }
-                    if (methods.includes('apple.com')) {
-                        setLocalError("Aquest correu ja està registrat amb Apple. Torna enrere i clica 'Continuar amb Apple'.");
-                        return;
-                    }
-                    if (methods.includes('password')) {
-                        setLocalError("Aquest correu ja té compte. Torna a 'Inicia sessió' i posa la contrasenya.");
-                        setIsRegistering(false);
-                        return;
-                    }
-                } catch {}
                 await registerEmail(cleanEmail, password, fullName);
                 setVerificationSent(true);
             } else {
@@ -183,30 +181,13 @@ const LoginModal = ({ navigation }: Props) => {
                 }
                 navigation.goBack();
             }
-        } catch (e: any) {
-            // Si el login per email falla, comprovem si l'usuari ja existeix amb un altre proveïdor
-            if (!isRegistering && (e?.code === 'auth/wrong-password' || e?.code === 'auth/user-not-found' || e?.code === 'auth/invalid-credential')) {
-                try {
-                    const methods = await fetchSignInMethodsForEmail(fbAuth, cleanEmail);
-                    if (methods.includes('google.com')) {
-                        setLocalError("Aquest correu està registrat amb Google. Torna enrere i clica 'Continuar amb Google'.");
-                        return;
-                    }
-                    if (methods.includes('apple.com')) {
-                        setLocalError("Aquest correu està registrat amb Apple. Torna enrere i clica 'Continuar amb Apple'.");
-                        return;
-                    }
-                    if (methods.length === 0) {
-                        setLocalError("Aquest correu no té compte. Clica 'No tens compte? Registra't' per crear-lo.");
-                        return;
-                    }
-                } catch {}
-            }
+        } catch (e) {
             setLocalError(getUserFriendlyError(e));
-        }
+        } finally { operationPending.current = false; setAuthInProgress(false); }
     };
 
     const handlePasswordReset = async () => {
+        if (operationPending.current) return;
         setLocalError(null);
         const cleanEmail = email.trim();
         if (!cleanEmail) {
@@ -218,12 +199,17 @@ const LoginModal = ({ navigation }: Props) => {
             setLocalError("El format del correu electrònic no sembla vàlid.");
             return;
         }
+        operationPending.current = true;
+        setResetBusy(true);
         try {
+            fbAuth.languageCode = 'ca';
             await sendPasswordResetEmail(fbAuth, cleanEmail);
-            showAlert({ tone: 'success', message: `T'hem enviat un correu per restablir la contrasenya a ${cleanEmail}.` });
-        } catch (e: any) {
-            setLocalError(getUserFriendlyError(e));
-        }
+            showAlert({ tone: 'success', message: STANDARD_MESSAGES.resetSent });
+        } catch (e) {
+            console.info('[Auth] Password recovery unavailable', e);
+            if (e && typeof e === 'object' && 'code' in e && e.code === 'auth/user-not-found') showAlert({ tone: 'success', message: STANDARD_MESSAGES.resetSent });
+            else setLocalError(getUserFriendlyError(e));
+        } finally { operationPending.current = false; setResetBusy(false); }
     };
 
     const renderVerificationMessage = () => (
@@ -291,25 +277,25 @@ const LoginModal = ({ navigation }: Props) => {
             <TouchableOpacity
                 style={[styles.button, styles.primaryButton]}
                 onPress={handleEmailSubmit}
-                disabled={isLoading}
+                disabled={isLoading || authInProgress || resetBusy}
             >
-                {isLoading ? (
+                {isLoading || authInProgress ? (
                     <LoadingIndicator size="small" />
                 ) : (
                     <Text style={styles.primaryButtonText}>{isRegistering ? 'Registrar-se' : 'Entrar'}</Text>
                 )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)} style={styles.inlineLink}>
+            <TouchableOpacity disabled={isLoading || authInProgress || resetBusy} onPress={() => setIsRegistering(!isRegistering)} style={styles.inlineLink}>
                 <Text style={styles.inlineLinkText}>
                     {isRegistering ? 'Ja tens compte? Inicia sessió' : "No tens compte? Registra't"}
                 </Text>
             </TouchableOpacity>
 
             {!isRegistering && (
-                <TouchableOpacity onPress={handlePasswordReset} style={[styles.inlineLink, { marginTop: 4 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityState={{ busy: resetBusy, disabled: resetBusy || isLoading || authInProgress }} disabled={resetBusy || isLoading || authInProgress} onPress={handlePasswordReset} style={[styles.inlineLink, { marginTop: 4, opacity: resetBusy ? 0.6 : 1 }]}>
                     <Text style={[styles.inlineLinkText, { fontSize: 14 }]}>
-                        Has oblidat la contrasenya?
+                        {resetBusy ? 'Enviant les instruccions…' : 'Has oblidat la contrasenya?'}
                     </Text>
                 </TouchableOpacity>
             )}
@@ -317,6 +303,7 @@ const LoginModal = ({ navigation }: Props) => {
     );
 
     return (
+        <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
             style={styles.container}
@@ -326,12 +313,12 @@ const LoginModal = ({ navigation }: Props) => {
                 <View style={styles.panel}>
                     <View style={styles.topBar}>
                         <Image
-                            source={require('../../../../assets/app/img/logo/logo-nav.jpg')}
+                            source={require('../../../../assets/app/img/logo/mascot-open-cloche.png')}
                             style={styles.logoImg}
-                            resizeMode="cover"
+                            resizeMode="contain"
                         />
                         <TouchableOpacity 
-                            style={styles.closeButton} 
+                            style={[styles.closeButton, styles.topCloseButton]}
                             onPress={() => {
                                 if (showEmailForm && isRegistering) {
                                     // Des de registre → tornem al formulari de login per mail
@@ -357,17 +344,12 @@ const LoginModal = ({ navigation }: Props) => {
                     </View>
 
                     {localError && (
-                        <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>{localError}</Text>
-                        </View>
+                        <View style={{ width: '100%', marginBottom: 16 }}><UserNotice tone="error" message={localError} onDismiss={() => setLocalError(null)} /></View>
                     )}
 
                     {!showEmailForm && (
                         <View style={styles.header}>
-                            <Text style={styles.eyebrow}>Inicia sessió</Text>
-                            <Text style={styles.title}>
-                                Entra a <Text style={styles.titleItalic}>troBar</Text>
-                            </Text>
+                            <Text accessibilityRole="header" style={[styles.title, styles.wordmark]} numberOfLines={1}>troBar</Text>
                             <Text style={styles.subtitle}>
                                 Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic. Si encara no tens compte, el crearem automàticament la primera vegada.
                             </Text>
@@ -382,9 +364,11 @@ const LoginModal = ({ navigation }: Props) => {
                         ) : (
                             <>
                                 <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Continuar amb Google"
                                     style={[styles.button, styles.googleButton]}
                                     onPress={handleGoogleLogin}
-                                    disabled={isLoading}
+                                    disabled={isLoading || authInProgress || resetBusy}
                                     activeOpacity={0.85}
                                 >
                                     <AppIcon name="google" size={20} color="#EA4335" style={styles.buttonIcon} />
@@ -394,9 +378,11 @@ const LoginModal = ({ navigation }: Props) => {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Continuar amb Apple"
                                     style={[styles.button, styles.appleButton]}
                                     onPress={handleAppleLogin}
-                                    disabled={isLoading}
+                                    disabled={isLoading || authInProgress || resetBusy}
                                     activeOpacity={0.85}
                                 >
                                     <AppIcon name="logo-apple" size={20} color="#FFFFFF" style={styles.buttonIcon} />
@@ -415,30 +401,29 @@ const LoginModal = ({ navigation }: Props) => {
                                     activeOpacity={0.7}
                                 >
                                     <Text style={styles.emailLinkText}>
-                                        Inicia sessió amb el teu mail
+                                        Continuar amb el meu correu
                                     </Text>
                                 </TouchableOpacity>
                             </>
                         )}
                     </View>
-                </View>
-            </ScrollView>
-
             {!showEmailForm && !verificationSent && (
-                <View style={styles.disclaimerFixed} pointerEvents="box-none">
+                <View style={styles.disclaimerFixed}>
                     <View style={styles.disclaimerContainer}>
-                        <Text style={styles.disclaimer}>En continuar, acceptes els nostres </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('TermsOfService' as any)}>
+                        <Text style={styles.disclaimer}>Si és el primer accés, crearem el teu compte. Abans d’utilitzar-lo hauràs de llegir i acceptar els </Text>
+                        <TouchableOpacity accessibilityRole="link" onPress={() => navigation.navigate('TermsOfService')}>
                             <Text style={styles.linkText}>Termes de Servei</Text>
                         </TouchableOpacity>
                         <Text style={styles.disclaimer}> i </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy' as any)}>
+                        <TouchableOpacity accessibilityRole="link" onPress={() => navigation.navigate('PrivacyPolicy')}>
                             <Text style={styles.linkText}>Política de Privacitat</Text>
                         </TouchableOpacity>
                         <Text style={styles.disclaimer}>.</Text>
                     </View>
                 </View>
             )}
+                </View>
+            </ScrollView>
             <StatusBar style="light" />
 
             {/* Overlay de bloqueig durant autenticació externa */}
@@ -456,6 +441,7 @@ const LoginModal = ({ navigation }: Props) => {
                 </View>
             )}
         </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 

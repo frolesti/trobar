@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Image, Text, Platform, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { EDITORIAL } from '../theme/editorialTheme';
 
 interface SplashScreenProps {
@@ -10,6 +11,8 @@ interface SplashScreenProps {
 }
 
 const TITLE_COLOR = '#F4E6CC';
+export const SPLASH_GIF = require('../../../assets/app/gif/trobar.gif');
+const SPLASH_FALLBACK = require('../../../assets/app/img/logo/LOGO_blanc.png');
 const CURVED_TITLE = [
   { letter: 't', left: 18, top: 0, rotate: '12deg' },
   { letter: 'r', left: 57, top: 12, rotate: '8deg' },
@@ -24,97 +27,38 @@ const CURVED_TITLE = [
  * Es mostra fins que tota la pantalla destí està completament carregada.
  *
  * Nota: L'HTML estàtic (public/index.html) renderitza el MATEIX visual en paral·lel.
- * Quan aquest component es munta amb visible=true, elimina el splash estàtic perquè
- * React en prengui el control (sense que l'usuari noti cap canvi).
+ * React pren el control de l'HTML quan la seva imatge i les fonts estan preparades.
  */
 const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }) => {
-  const logoAnim = useRef(new Animated.Value(0)).current;
-
+  const [logoReady, setLogoReady] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const imageRevisionRef = useRef(0);
+  const imageRevision = imageRevisionRef.current;
   useEffect(() => {
-    if (!visible) {
-      logoAnim.stopAnimation();
-      logoAnim.setValue(0);
-      return;
-    }
+    if (!visible) { imageRevisionRef.current++; setLogoReady(false); setLogoFailed(false); }
+  }, [visible]);
 
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(logoAnim, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoAnim, {
-          toValue: 0,
-          duration: 900,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    loop.start();
-    return () => loop.stop();
-  }, [visible, logoAnim]);
-
-  const animatedLogoStyle = {
-    transform: [
-      {
-        translateY: logoAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -16],
-        }),
-      },
-      {
-        scale: logoAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 1.06],
-        }),
-      },
-    ],
-    opacity: logoAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.92, 1],
-    }),
-  };
-
-  // Elimina el splash estàtic del HTML quan aquest component es munta i està visible
+  // No retirem l'HTML abans que React pugui mostrar la mateixa identitat.
   useEffect(() => {
-    if (visible && Platform.OS === 'web' && typeof document !== 'undefined') {
-      console.log('[SplashScreen] visible=true, hiding static splash');
+    if ((!visible || (logoReady && fontReady)) && Platform.OS === 'web' && typeof document !== 'undefined') {
       const splashStatic = document.getElementById('splash-static');
       if (splashStatic) {
         splashStatic.style.display = 'none';
       }
     }
-  }, [visible]);
-
-  console.log('[SplashScreen] render - visible:', visible, 'fontReady:', fontReady);
+  }, [visible, logoReady, fontReady]);
 
   if (!visible) return null;
 
-  return (
+  const content = (
     <View
       style={{
-        ...Platform.select({
-          web: {
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 9999,
-          },
-          default: {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9999,
-          },
-        }),
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
         backgroundColor: EDITORIAL.background,
         justifyContent: 'center',
         alignItems: 'center',
@@ -122,21 +66,37 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }
       }}
     >
       {/* GIF del logo (auto-playing) */}
-      <Animated.View style={animatedLogoStyle}>
+      <View>
         <Image
-          source={require('../../../assets/app/gif/trobar.gif')}
+          key={logoFailed ? 'fallback' : 'animation'}
+          source={logoFailed ? SPLASH_FALLBACK : SPLASH_GIF}
+          accessibilityLabel="Logo de troBar"
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          priority="high"
+          autoplay
+          transition={0}
+          onDisplay={() => {
+            if (imageRevision === imageRevisionRef.current) setLogoReady(true);
+          }}
+          onError={event => {
+            if (imageRevision !== imageRevisionRef.current) return;
+            console.error('[SplashScreen] Logo could not be displayed', { fallback: logoFailed, error: event.error });
+            imageRevisionRef.current++;
+            setLogoReady(false);
+            setLogoFailed(true);
+          }}
           style={{
             width: 200,
             height: 200,
             marginBottom: 2,
             borderRadius: 100,
           }}
-          resizeMode="contain"
         />
-      </Animated.View>
+      </View>
 
       {/* Text "troBar" en Oi — només quan la font està llesta, per evitar FOUC */}
-      {fontReady ? (
+      {fontReady && logoReady ? (
         Platform.OS === 'web' ? (
           // SVG curvat a web
           React.createElement('div', {
@@ -150,7 +110,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }
                   <defs>
                     <path id="curved-path-react" d="M 40 35 Q 140 80 240 35" fill="none"/>
                   </defs>
-                  <text font-family="Oi, sans-serif" font-size="36" font-weight="400" fill="${TITLE_COLOR}" letter-spacing="1">
+                  <text font-family="Oi_400Regular, Oi, sans-serif" font-size="36" font-weight="400" fill="${TITLE_COLOR}" letter-spacing="1">
                     <textPath href="#curved-path-react" startOffset="50%" text-anchor="middle">
                       troBar
                     </textPath>
@@ -186,6 +146,12 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ visible, fontReady = true }
       )}
     </View>
   );
+
+  return Platform.OS === 'web'
+    ? React.createElement('div', {
+        style: { position: 'fixed', inset: 0, zIndex: 9999 },
+      }, content)
+    : content;
 };
 
 export default SplashScreen;

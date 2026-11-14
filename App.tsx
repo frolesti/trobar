@@ -1,9 +1,10 @@
 import 'react-native-gesture-handler'; // MUST BE AT THE TOP
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React from 'react';
-import { LogBox, Platform, Text } from 'react-native';
+import { LogBox, Platform, Text, Image as NativeImage, View, TouchableOpacity } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useFonts, Lora_400Regular, Lora_700Bold, Lora_400Regular_Italic } from '@expo-google-fonts/lora';
+import { useFonts } from 'expo-font';
 import { Oi_400Regular } from '@expo-google-fonts/oi';
 import { Barlow_400Regular, Barlow_600SemiBold, Barlow_400Regular_Italic } from '@expo-google-fonts/barlow';
 import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed';
@@ -12,9 +13,12 @@ import { AuthProvider } from './app/src/context/AuthContext';
 import { SplashProvider } from './app/src/context/SplashContext';
 import ErrorBoundary from './app/src/components/ErrorBoundary';
 import { AlertBannerHost } from './app/src/components/AlertBanner';
-import SplashScreen from './app/src/components/SplashScreen';
+import { SPLASH_GIF } from './app/src/components/SplashScreen';
 import GlobalSplash from './app/src/components/GlobalSplash';
 import { EDITORIAL } from './app/src/theme/editorialTheme';
+import LegalConsentGate from './app/src/components/LegalConsentGate';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { preloadMapIcons } from './app/src/utils/mapIcons';
 
 LogBox.ignoreLogs([
   'props.pointerEvents is deprecated',
@@ -92,21 +96,45 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 }
 
 export default function App() {
+  const [iconsReady, setIconsReady] = React.useState(false);
+  const [iconError, setIconError] = React.useState(false);
+  const [iconAttempt, setIconAttempt] = React.useState(0);
+  React.useEffect(() => {
+    let active = true;
+    setIconError(false);
+    void preloadMapIcons().then(() => {
+      if (active) setIconsReady(true);
+    }).catch(error => {
+      console.error('[App] Critical map icons could not be decoded', error);
+      if (active) setIconError(true);
+    });
+    return () => { active = false; };
+  }, [iconAttempt]);
+  React.useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const uri = NativeImage.resolveAssetSource(SPLASH_GIF).uri;
+    CachedImage.prefetch(uri, { cachePolicy: 'memory-disk' }).then(loaded => {
+      if (!loaded) console.warn('[SplashScreen] Animated logo prefetch failed');
+    }).catch(error => console.warn('[SplashScreen] Animated logo prefetch failed', error));
+  }, []);
   const [fontsLoaded] = useFonts({
-    Lora_400Regular,
-    Lora_700Bold,
-    Lora_400Regular_Italic,
-    // Alias perquè el codi llegat que fa servir `fontFamily: 'Lora'`
-    // continuï funcionant sense haver de tocar 170+ ocurrències.
-    Lora: Lora_400Regular,
+    ...Feather.font,
+    ...Ionicons.font,
+    ...MaterialCommunityIcons.font,
+    // Keep legacy family names on the same sans-serif family.
+    Lora_400Regular: Barlow_400Regular,
+    Lora_700Bold: Barlow_600SemiBold,
+    Lora_400Regular_Italic: Barlow_400Regular_Italic,
+    Lora: Barlow_400Regular,
     Oi_400Regular,
     Barlow_400Regular,
     Barlow_600SemiBold,
     Barlow_400Regular_Italic,
     BarlowCondensed_700Bold,
   });
+  const appReady = fontsLoaded && iconsReady;
 
-  // Aplicar Lora com a font per defecte a TOTS els <Text> de l'app
+  // Aplicar Barlow com a font per defecte a TOTS els <Text> de l'app
   // (alternativa a haver d'usar <AppText> sempre).
   React.useEffect(() => {
     if (!fontsLoaded) return;
@@ -120,22 +148,25 @@ export default function App() {
     ];
   }, [fontsLoaded]);
 
-  // Mentre carreguen les fonts, mostrem només el fons grana + GIF (sense text
-  // "troBar", per evitar el flash de tipografia de sistema → reflow a Oi).
-  if (!fontsLoaded) {
-    return <SplashScreen visible fontReady={false} />;
-  }
-
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: EDITORIAL.background }}>
       <SafeAreaProvider>
         <AuthProvider>
           <SplashProvider>
-            <AppNavigator />
+            {appReady && <AppNavigator />}
             <AlertBannerHost defaultPosition="bottom" bottomOffset={88} />
+            {appReady && <LegalConsentGate />}
             {/* Splash global: cobreix l'app mentre l'auth o qualsevol pantalla carreguen */}
-            <GlobalSplash />
+            <GlobalSplash fontReady={fontsLoaded} assetsReady={iconsReady} />
+            {iconError && (
+              <View testID="map-icons-error" accessibilityRole="alert" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 10000, backgroundColor: EDITORIAL.background, justifyContent: 'center', padding: 28, gap: 20 }}>
+                <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 20, textAlign: 'center' }}>No hem pogut carregar les icones.</Text>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setIconAttempt(attempt => attempt + 1)} style={{ minHeight: 48, borderRadius: 8, backgroundColor: EDITORIAL.matchday, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 16 }}>Torna-ho a provar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </SplashProvider>
         </AuthProvider>
       </SafeAreaProvider>

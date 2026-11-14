@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
  * Així garantim que l'usuari NO veu mai una pantalla a mig carregar:
  * només la pantalla grana amb el GIF i "troBar" fins que tot està llest.
  */
-const GlobalSplash: React.FC = () => {
+const GlobalSplash: React.FC<{ fontReady?: boolean; assetsReady?: boolean }> = ({ fontReady = true, assetsReady = true }) => {
   const { isAnyLoading, hasRegisteredScreen } = useSplashState();
   const { isLoading: authLoading } = useAuth();
   const [initialAnimationElapsed, setInitialAnimationElapsed] = useState(false);
@@ -23,9 +23,9 @@ const GlobalSplash: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const visible = authLoading || isAnyLoading || !hasRegisteredScreen || !initialAnimationElapsed;
+  const visible = !fontReady || !assetsReady || authLoading || isAnyLoading || !hasRegisteredScreen || !initialAnimationElapsed;
   console.log('[GlobalSplash] render - authLoading:', authLoading, 'isAnyLoading:', isAnyLoading, 'hasRegisteredScreen:', hasRegisteredScreen, 'visible:', visible);
-  return <SplashScreen visible={visible} />;
+  return <SplashScreen visible={visible} fontReady={fontReady} />;
 };
 
 export default GlobalSplash;

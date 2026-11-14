@@ -59,7 +59,9 @@
         width: 280px;
         height: 100px;
         margin-top: -20px;
+        visibility: hidden;
       }
+      .splash-overlay[data-logo-ready="true"] .splash-text-svg { visibility: visible; }
 
       .splash-text-svg text {
         font-family: 'Oi', sans-serif;
@@ -89,7 +91,7 @@
 
     <!-- Pantalla estàtica de càrrega (GIF + text curvat) — apareix instantàniament -->
     <div class="splash-overlay" id="splash-static">
-      <img src="/gif/trobar.gif" alt="troBar" class="splash-gif" />
+      <img src="/gif/trobar.gif" alt="troBar" class="splash-gif" onload="this.parentElement.dataset.logoReady='true'" onerror="console.error('troBar animated logo failed to load')" />
       <svg class="splash-text-svg" viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <path id="curved-path" d="M 40 35 Q 140 80 240 35" fill="none"/>
@@ -106,16 +108,6 @@
     <div id="root"></div>
 
     <script>
-      /**
-       * Quan React renderitza i el SplashScreen es munta amb visible=true,
-       * elimina aquest splash estàtic per evitar duplicar la pantalla.
-      *
-       * El SplashScreen React té el mateix estil + GIF, de manera que visualment
-       * no es nota cap canvi — simplement React pren el control de la pantalla.
-      *
-       * Timeout de seguretat: Si React no ha eliminat el splash en 10 segons,
-       * el fem invisible de totes maneres per evitar quedar-se enganxat.
-       */
       function removeSplashStatic() {
         const splash = document.getElementById('splash-static');
         if (splash) {
@@ -125,8 +117,6 @@
 
       window.removeSplashStatic = removeSplashStatic;
 
-      // Timeout de seguretat: Si React tarda més de 10 segons, fa invisible el splash
-      setTimeout(removeSplashStatic, 10000);
     </script>
     <!-- Expo Metro web injecta aquí el bundle automàticament -->
   </body>

@@ -1,5 +1,5 @@
 import { EDITORIAL } from '../../theme/editorialTheme';
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 const INK = EDITORIAL.ink;
 const INK_MUTED = EDITORIAL.onBackgroundMuted;
@@ -14,20 +14,22 @@ export default StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
-        paddingHorizontal: 36,
-        paddingTop: Platform.OS === 'ios' ? 48 : 28,
-        paddingBottom: 120,
+        paddingHorizontal: 24,
+        paddingTop: 16,
+        paddingBottom: 24,
     },
     panel: {
         alignSelf: 'center',
         width: '100%',
         maxWidth: 440,
+        flexGrow: 1,
     },
     topBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 28,
+        justifyContent: 'center',
+        position: 'relative',
+        marginBottom: 24,
     },
     closeButton: {
         flexDirection: 'row',
@@ -35,6 +37,7 @@ export default StyleSheet.create({
         paddingVertical: 8,
         paddingHorizontal: 4,
     },
+    topCloseButton: { position: 'absolute', right: 0, top: 0 },
     closeText: {
         fontSize: 14,
         color: INK_MUTED,
@@ -43,16 +46,12 @@ export default StyleSheet.create({
         letterSpacing: 0,
     },
     header: {
-        alignItems: 'flex-start',
+        alignItems: 'center',
         marginBottom: 28,
     },
     logoImg: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: HAIRLINE,
+        width: 96,
+        height: 116,
     },
     eyebrow: {
         fontSize: 12,
@@ -63,21 +62,24 @@ export default StyleSheet.create({
         marginBottom: 14,
     },
     title: {
-        fontSize: 32,
-        lineHeight: 38,
+        fontSize: 22,
+        lineHeight: 42,
+        flexShrink: 1,
         color: EDITORIAL.onBackground,
         fontFamily: EDITORIAL.fontBold,
         letterSpacing: 0,
     },
-    titleItalic: {
-        fontFamily: EDITORIAL.fontItalic,
-        fontWeight: '400',
-        color: GRANA,
+    wordmark: {
+        fontFamily: EDITORIAL.fontDisplay,
+        fontSize: 26,
+        lineHeight: 42,
+        color: EDITORIAL.onBackground,
     },
     subtitle: {
+        alignSelf: 'stretch',
         marginTop: 16,
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 17,
+        lineHeight: 25,
         color: INK_MUTED,
         fontFamily: EDITORIAL.fontRegular,
         maxWidth: 380,
@@ -93,9 +95,10 @@ export default StyleSheet.create({
     button: {
         flexDirection: 'row',
         width: '100%',
-        paddingVertical: 16,
+        minHeight: 54,
+        paddingVertical: 14,
         paddingHorizontal: 18,
-        borderRadius: 8,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 12,
@@ -105,8 +108,9 @@ export default StyleSheet.create({
         marginRight: 12,
     },
     buttonText: {
-        fontSize: 16,
-        fontFamily: EDITORIAL.fontBold,
+        fontSize: 17,
+        lineHeight: 24,
+        fontFamily: EDITORIAL.fontRegular,
         letterSpacing: 0,
     },
     googleButton: {
@@ -214,13 +218,9 @@ export default StyleSheet.create({
         fontSize: 14,
     },
     disclaimerFixed: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        paddingHorizontal: 36,
+        marginTop: 'auto',
         paddingTop: 16,
-        paddingBottom: 18,
+        paddingBottom: 8,
         backgroundColor: PAPER,
         borderTopWidth: 1,
         borderTopColor: HAIRLINE,
