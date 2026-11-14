@@ -63,6 +63,7 @@ function profileHarness() {
                 if (name.includes('userService')) return { updateUserProfile: async (id, data) => { writes.push({ id, data }); await pendingWrite; if (rejectSave) throw new Error('Save failed'); user = { ...user, ...data }; } };
                 if (name.includes('errorHandler')) return { getUserFriendlyError: (_error, fallback) => fallback };
                 if (name.includes('editorialTheme')) return { EDITORIAL: theme };
+                if (name.endsWith('UserNotice')) return { __esModule: true, default: 'UserNotice' };
                 if (name.endsWith('ProfileScreen.styles')) return { __esModule: true, default: load(path.join(path.dirname(file), 'ProfileScreen.styles.ts')) };
                 return { __esModule: true, default: name.endsWith('AppText') ? 'Text' : name.endsWith('AppIcon') ? 'AppIcon' : 'SettingsModal' };
             },
@@ -85,7 +86,7 @@ function profileHarness() {
         throw new Error('Profile did not settle');
     };
     const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
-    const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : typeof node === 'string' ? node : '';
+    const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? (node.props.message || '') + text(node.props.children) : typeof node === 'string' ? node : '';
     const find = predicate => nodes(render()).find(predicate);
     return {
         render, writes, actions,
@@ -124,6 +125,17 @@ test('profile embeds preferences and autosaves trimmed fields without a save but
     assert.equal(profile.find(node => node.type === 'SettingsModal').props.visible, true);
 });
 
+test('idle profile has no empty save-status spacer and settings use compact selector spacing', () => {
+    const profile = profileHarness();
+    assert.equal(profile.find(node => node.type === 'View' && node.props.style?.minHeight === 44 && node.props.style?.gap === 8), undefined);
+    const styleSource = fs.readFileSync(path.join(__dirname, '../app/src/screens/Profile/SettingsModal.styles.ts'), 'utf8');
+    assert.match(styleSource, /selectorRow: \{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingBottom: 4 \}/);
+    assert.match(styleSource, /marginTop: 20,\s+paddingTop: 20/);
+    assert.doesNotMatch(styleSource, /paddingTop: 32|paddingBottom: 16/);
+    const screenSource = fs.readFileSync(path.join(__dirname, '../app/src/screens/Profile/SettingsModal.tsx'), 'utf8');
+    assert.equal((screenSource.match(/style=\{styles\.selectorRow\}/g) || []).length, 3);
+});
+
 test('avatar refresh preserves name edits and empty names cannot be saved', async () => {
     const profile = profileHarness();
     profile.field('Nom').props.onChangeText('Nom pendent');
@@ -142,7 +154,7 @@ test('failed profile saves retain edits, expose an error and can be retried', as
     profile.rejectSave(true);
     await profile.flush();
     assert.equal(profile.field('Cognoms').props.value, 'Soler');
-    assert(profile.find(node => node.props.accessibilityRole === 'alert'));
+    assert(profile.find(node => node.type === 'UserNotice' && node.props.tone === 'error'));
     assert(profile.retry());
     profile.rejectSave(false);
     profile.retry().props.onPress();
@@ -188,7 +200,8 @@ test('inline settings have no sliding container, notification demo or invented v
     assert.match(styles, /logoutButton: \{[^}]*alignSelf: 'center'/);
     assert.match(styles, /footer: \{ marginTop: 8, paddingTop: 8/);
     assert(source.indexOf('Eliminar el compte</Text>') < source.indexOf('testID="profile-footer"'));
-    assert.match(source, /mailto:suport@trobar-app\.cat/);
+    assert.match(source, /navigation\.navigate\('Contact'\)/);
+    assert.doesNotMatch(source, /mailto:/);
 });
 
 test('editing during an in-flight save queues the latest values without disabling the fields', async () => {

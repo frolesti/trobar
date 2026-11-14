@@ -13,6 +13,7 @@ import { TermsOfService } from '../screens/Legal/TermsOfService';
 import { PrivacyPolicy } from '../screens/Legal/PrivacyPolicy';
 import NotFoundScreen from '../screens/NotFound/NotFoundScreen';
 import BarDashboardScreen from '../screens/BarDashboard/BarDashboardScreen';
+import ContactScreen from '../screens/Contact/ContactScreen';
 
 // Definir la llista de paràmetres del stack principal
 export type RootStackParamList = {
@@ -21,7 +22,8 @@ export type RootStackParamList = {
   Matches: undefined;
   Login: undefined;
   Profile: undefined;
-  BarDashboard: undefined;
+  Contact: undefined;
+  BarDashboard: { tab?: 'profile' | 'settings' } | undefined;
   ReportBar: { osmBar: OSMBar };
   TermsOfService: undefined;
   PrivacyPolicy: undefined;
@@ -37,9 +39,13 @@ const linking = {
     screens: {
       Startup: '',
       Map: 'map',
+      Matches: 'matches',
       Login: 'login',
       Profile: 'profile',
+      Contact: 'contacte',
       BarDashboard: 'bar-dashboard',
+      TermsOfService: 'terms',
+      PrivacyPolicy: 'privacy',
       
       ReportBar: 'report',
 
@@ -61,6 +67,7 @@ export default function AppNavigator() {
           headerShown: false,
           title: 'troBar', // Títol per defecte per a totes les pantalles
           cardStyle: { backgroundColor: EDITORIAL.background },
+          animation: 'slide_from_right',
           // Això assegura que l'animació de lliscament lateral funcioni també a web
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
@@ -74,6 +81,7 @@ export default function AppNavigator() {
             title: 'troBar',
             // Quan naveguem cap a Matches, lliscar des de l'esquerra (com si estigués a l'esquerra)
             gestureDirection: 'horizontal-inverted',
+            animation: 'slide_from_left',
             cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS
           }} 
         />
@@ -82,13 +90,14 @@ export default function AppNavigator() {
           component={ProfileScreen} 
           options={{ title: 'troBar' }}
         />
+        <Stack.Screen name="Contact" component={ContactScreen} options={{ title: 'troBar - Contacte' }} />
         <Stack.Screen 
           name="BarDashboard" 
           component={BarDashboardScreen} 
           options={{ title: 'troBar - Panell del bar' }}
         />
 
-        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'bar', presentation: 'transparentModal', animationEnabled: false, headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'transparent' } }} />
+        <Stack.Screen name="ReportBar" component={ReportBarScreen} options={{ title: 'bar', presentation: 'transparentModal', animation: 'none', headerShown: false, gestureEnabled: false, cardStyle: { backgroundColor: 'transparent' } }} />
         
         <Stack.Screen 
           name="Login" 

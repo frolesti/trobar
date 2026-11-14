@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigation, useIsFocused, usePreventRemove, NavigationAction } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import AppIcon from '../../components/AppIcon';
+import UserNotice from '../../components/UserNotice';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUserProfile, uploadProfileImage } from '../../services/userService';
 import { EDITORIAL } from '../../theme/editorialTheme';
@@ -110,7 +111,7 @@ export default function ProfileScreen() {
       await refreshProfile();
     } catch (error) {
       setAvatarUri(previousAvatar);
-      console.error('Error uploading image:', error);
+      console.info('Error uploading image:', error);
       showAlert({ tone: 'error', message: getUserFriendlyError(error, "No s'ha pogut actualitzar la foto.") });
     } finally {
       setIsLoading(false);
@@ -210,10 +211,10 @@ export default function ProfileScreen() {
                 <TextInput accessibilityLabel="Cognoms" style={styles.input} value={surname} editable={!isLoggingOut} onChangeText={value => changeField('surname', value)} onEndEditing={() => { void saveData(); }} placeholder="Els teus cognoms" placeholderTextColor="rgba(255,255,255,0.6)" autoCapitalize="words" autoComplete="family-name" textContentType="familyName" selectionColor={EDITORIAL.matchday} />
                 <Text style={styles.label}>Correu electrònic</Text>
                 <Text selectable style={styles.value}>{user.email}</Text>
-                <View style={styles.saveStatusRow}>
-                  <Text accessibilityLiveRegion="polite" accessibilityRole={saveError && saveStatus ? 'alert' : undefined} style={styles.saveStatus}>{isSaving ? 'Desant...' : saveStatus}</Text>
+                {(isSaving || !!saveStatus) && <View style={styles.saveStatusRow}>
+                  {saveError ? <View style={{ flex: 1 }}><UserNotice tone="error" message={saveStatus} /></View> : <Text accessibilityLiveRegion="polite" style={styles.saveStatus}>{isSaving ? 'Desant...' : saveStatus}</Text>}
                   {saveError && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reintentar desar el perfil" onPress={() => { void saveData(); }} style={styles.retryButton}><AppIcon name="refresh-cw" size={18} color="#FFFFFF" /></TouchableOpacity>}
-                </View>
+                </View>}
               </View>
               <ProfileSettings visible={isFocused} onLogout={() => { void handleLogout(); }} accountBusy={isLoading || isSaving || isLoggingOut} />
             </View>

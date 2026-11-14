@@ -108,11 +108,21 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
             if (value) {
                 const permission = await requestNotificationPermission();
                 if (permission !== 'granted') {
-                    Alert.alert('Notificacions desactivades', Platform.OS === 'web' ? 'Les notificacions estan disponibles a l’app mòbil.' : 'Activa el permís de notificacions a la configuració del dispositiu.', Platform.OS === 'web' ? undefined : [{ text: 'Cancel·la', style: 'cancel' }, { text: 'Obrir configuració', onPress: () => { void Linking.openSettings(); } }]);
+                    showAlert({
+                        tone: 'info',
+                        message: Platform.OS === 'web' ? 'Les notificacions estan disponibles a l’app mòbil.' : 'Activa el permís de notificacions a la configuració del dispositiu.',
+                        action: Platform.OS === 'web' ? undefined : {
+                            label: 'Obrir configuració',
+                            onPress: () => { void Linking.openSettings().catch(error => {
+                                console.info('[Settings] Cannot open device settings', error);
+                                showAlert({ tone: 'error', message: 'No hem pogut obrir la configuració del dispositiu.' });
+                            }); },
+                        },
+                    });
                     return;
                 }
                 if ((key === 'newBarNearby' || key === 'barPromotions') && !await saveNotificationArea(user.id)) {
-                    Alert.alert('Ubicació no disponible', 'Cal autoritzar la ubicació per rebre alertes dels bars de la teva zona.');
+                    showAlert({ tone: 'info', message: 'Cal autoritzar la ubicació per rebre alertes dels bars de la teva zona.' });
                     return;
                 }
             }
@@ -122,10 +132,11 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
             if (!notifications.newBarNearby && !notifications.barPromotions) await clearNotificationArea(user.id);
             if (value) {
                 const registration = await registerPushNotifications(user.id, false);
-                if (registration === 'error') Alert.alert('Registre pendent', 'La preferència s’ha desat, però no s’ha pogut registrar el dispositiu. Torna-ho a provar.');
+                if (registration === 'error') showAlert({ tone: 'info', message: 'La preferència s’ha desat, però no hem pogut activar els avisos en aquest dispositiu. Torna-ho a provar.' });
             }
-        } catch {
-            Alert.alert('No s’ha pogut desar', 'Torna-ho a provar.');
+        } catch (error) {
+            console.info('[Settings] Notification preference unavailable', error);
+            showAlert({ tone: 'error', message: 'No s’ha pogut desar la preferència. Torna-ho a provar.' });
         } finally { pending.current = false; setBusy(false); }
     };
 
@@ -155,7 +166,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
 
     const goTerms = () => { onClose?.(); navigation.navigate('TermsOfService'); };
     const goPrivacy = () => { onClose?.(); navigation.navigate('PrivacyPolicy'); };
-    const contactSupport = () => { void Linking.openURL('mailto:suport@trobar-app.cat').catch(() => showAlert({ tone: 'error', message: "No s'ha pogut obrir el correu de suport." })); };
+    const contactSupport = () => { onClose?.(); navigation.navigate('Contact'); };
 
     // ── Eliminar compte ──
     const handleDeleteAccount = () => {
@@ -164,7 +175,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                 setIsDeleting(true);
                 await deleteAccount();
             } catch (error) {
-                console.error(error);
+                console.info(error);
                 showAlert({ tone: 'error', message: "No s'ha pogut eliminar el compte. Torna-ho a provar." });
                 setIsDeleting(false);
             }
@@ -222,7 +233,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         <Text style={styles.sectionTitle}>Notificacions</Text>
 
                         {/* Recordatori de partit */}
-                        <View style={styles.row}>
+                        <View style={styles.selectorRow}>
                             <View style={styles.rowLeft}>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Recordatori de partit</Text>
@@ -300,7 +311,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         <Text style={styles.sectionTitle}>Visualització</Text>
 
                         {/* Categoria per defecte */}
-                        <View style={styles.row}>
+                        <View style={styles.selectorRow}>
                             <View style={styles.rowLeft}>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Categoria per defecte</Text>
@@ -316,7 +327,7 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                         />
 
                         {/* Radi de cerca */}
-                        <View style={[styles.row, styles.rowLast]}>
+                        <View style={styles.selectorRow}>
                             <View style={styles.rowLeft}>
                                 <View style={styles.rowTextGroup}>
                                     <Text style={styles.rowTitle}>Radi de cerca</Text>

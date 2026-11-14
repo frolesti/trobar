@@ -4,15 +4,17 @@ import { EDITORIAL } from '../../theme/editorialTheme';
 export default StyleSheet.create({
     /* ── Secció genèrica ── */
     section: {
-        paddingTop: 32,
-        paddingBottom: 16,
+        marginTop: 20,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.16)',
     },
     sectionTitle: {
         fontFamily: EDITORIAL.fontBold,
         color: '#FFFFFF',
         letterSpacing: 0,
         fontSize: 18,
-        marginBottom: 14,
+        marginBottom: 4,
     },
 
     /* ── Fila de toggle / selector ── */
@@ -20,8 +22,9 @@ export default StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 16,
+        paddingVertical: 12,
     },
+    selectorRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
     rowLast: {},
     rowLeft: {
         flexDirection: 'row',
@@ -50,8 +53,8 @@ export default StyleSheet.create({
     pillRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 8,
-        marginBottom: 16,
+        marginTop: 4,
+        marginBottom: 8,
         flexWrap: 'wrap',
     },
     pill: {
