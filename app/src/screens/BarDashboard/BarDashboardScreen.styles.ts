@@ -1,8 +1,18 @@
-import { EDITORIAL } from '../../theme/editorialTheme';
+import { EDITORIAL as APP_EDITORIAL } from '../../theme/editorialTheme';
 import { StyleSheet, Platform } from 'react-native';
 import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
 
-const GRANA = SKETCH_THEME.colors.bg;
+export const DASHBOARD_THEME = {
+    ...APP_EDITORIAL,
+    card: APP_EDITORIAL.matchCard,
+    ink: APP_EDITORIAL.onBackground,
+    inkMuted: APP_EDITORIAL.onBackgroundMuted,
+    hairline: APP_EDITORIAL.borderOnBackground,
+    hairlineStrong: APP_EDITORIAL.borderOnBackground,
+    granaSoft: 'rgba(255,255,255,0.12)',
+};
+const EDITORIAL = DASHBOARD_THEME;
+const GRANA = EDITORIAL.background;
 const NAV_HEIGHT = 72;
 const BOTTOM_SAFE = Platform.OS === 'web' ? 0 : 16;
 
@@ -32,6 +42,62 @@ export default StyleSheet.create({
         paddingTop: 8,
         paddingBottom: 24,
     },
+    settingsScrollContent: { flexGrow: 1 },
+    managerPage: { backgroundColor: '#F6F5F1' },
+    managerContent: { padding: 20, gap: 18, paddingBottom: 28 },
+    managerIdentity: { flexDirection: 'row', gap: 14, alignItems: 'center', paddingVertical: 4 },
+    managerCover: { width: 76, height: 84, borderRadius: 16 },
+    managerEyebrow: { fontFamily: EDITORIAL.fontBold, fontSize: 11, letterSpacing: 0.8, color: '#A50044' },
+    managerTitle: { fontFamily: EDITORIAL.fontBold, fontSize: 25, lineHeight: 30, color: '#202631' },
+    managerMuted: { fontSize: 14, lineHeight: 20, color: '#66707D' },
+    managerQuickActions: { gap: 10 },
+    managerPrimary: { minHeight: 50, flexDirection: 'row', gap: 10, borderRadius: 14, backgroundColor: '#A50044', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+    managerPrimaryText: { color: '#FFFFFF', fontFamily: EDITORIAL.fontBold, fontSize: 16 },
+    managerSecondary: { minHeight: 46, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4DDD9' },
+    managerSecondaryText: { color: '#A50044', fontFamily: EDITORIAL.fontBold, fontSize: 14 },
+    managerSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
+    managerSectionTitle: { color: '#202631', fontSize: 19, fontFamily: EDITORIAL.fontBold },
+    managerTextAction: { minHeight: 44, flexDirection: 'row', gap: 4, alignItems: 'center' },
+    managerCard: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: '#E9E4DF' },
+    managerGroup: { backgroundColor: '#FFFFFF', borderColor: '#E9E4DF' },
+    managerRow: { minHeight: 76, flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 6 },
+    managerIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: '#F8E8EF', justifyContent: 'center', alignItems: 'center' },
+    managerRowTitle: { color: '#202631', fontFamily: EDITORIAL.fontBold, fontSize: 15 },
+    managerLabel: { color: '#66707D' },
+    managerMatch: { backgroundColor: EDITORIAL.granaDeep, borderRadius: 18, padding: 12, overflow: 'hidden' },
+    managerMatchStatus: { color: EDITORIAL.matchday, fontFamily: EDITORIAL.fontBold, fontSize: 11, marginBottom: 8, letterSpacing: 0.4 },
+    managerMapAction: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 18, alignItems: 'center', backgroundColor: '#EEE6DF', minHeight: 88 },
+    managerReviews: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+    managerDraft: { borderRadius: 14, padding: 14, backgroundColor: '#F8E8EF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    subscriptionManageButton: { minHeight: 48, flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: EDITORIAL.borderOnBackground },
+    profileHero: { borderRadius: 16, overflow: 'hidden', backgroundColor: EDITORIAL.card, marginTop: 8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(244,211,94,0.35)' },
+    profileCover: { width: '100%', height: 144 },
+    profileHeroBody: { padding: 16 },
+    profileEyebrow: { color: EDITORIAL.matchday, fontFamily: EDITORIAL.fontBold, fontSize: 12, marginBottom: 6 },
+    profileHeadline: { color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 22, lineHeight: 28 },
+    profileIntro: { color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 15, lineHeight: 22 },
+    profileSummary: { color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 13, marginTop: 8 },
+    profileSection: { marginBottom: 14, padding: 18, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.045)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)' },
+    profileSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 },
+    profileSectionHint: { color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 14, lineHeight: 20, marginBottom: 14 },
+    sectionSaveButton: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: EDITORIAL.borderOnBackground },
+    sectionSaveText: { color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 14 },
+    settingsIntro: { paddingVertical: 18, gap: 6 },
+    settingsHeadline: { color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 28 },
+    settingsDescription: { color: EDITORIAL.onBackgroundMuted, fontSize: 15, lineHeight: 22, maxWidth: 340 },
+    settingsGroup: { borderWidth: 1, borderColor: EDITORIAL.borderOnBackground, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+    settingsAction: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 18, minHeight: 88 },
+    settingsActionIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+    settingsActionTitle: { color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 16 },
+    settingsActionHint: { color: EDITORIAL.onBackgroundMuted, fontSize: 14, lineHeight: 20 },
+    unsavedBackdrop: { flex: 1, backgroundColor: 'rgba(20,5,12,0.72)', justifyContent: 'center', padding: 24 },
+    unsavedCard: { backgroundColor: '#FFFDF9', borderRadius: 24, padding: 24, paddingTop: 28, gap: 14, width: '100%', maxWidth: 420, alignSelf: 'center' },
+    unsavedClose: { position: 'absolute', top: 10, right: 10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#F1ECEE', zIndex: 1 },
+    unsavedIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#F8E8EF', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+    unsavedTitle: { color: '#202631', fontFamily: EDITORIAL.fontBold, fontSize: 25, lineHeight: 31 },
+    unsavedBody: { color: '#66707D', fontSize: 16, lineHeight: 23, marginBottom: 8 },
+    unsavedSave: { minHeight: 52, borderRadius: 14, backgroundColor: EDITORIAL.grana, alignItems: 'center', justifyContent: 'center' },
+    unsavedDiscard: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
 
     /* ── Header ────────────────────────────────────────────────────────── */
     header: {
@@ -54,8 +120,8 @@ export default StyleSheet.create({
         textAlign: 'center',
     },
     headerBtn: {
-        width: 36,
-        height: 36,
+        width: 44,
+        height: 44,
         borderRadius: 18,
         backgroundColor: EDITORIAL.card,
         alignItems: 'center',
@@ -92,11 +158,13 @@ export default StyleSheet.create({
     },
     sectionCardTitle: {
         color: EDITORIAL.ink,
+        fontFamily: EDITORIAL.fontBold,
         fontSize: 16,
         fontWeight: '600',
     },
     sectionCardSubtitle: {
         color: EDITORIAL.inkMuted,
+        fontFamily: EDITORIAL.fontRegular,
         fontSize: 14,
         marginTop: 2,
     },
@@ -154,7 +222,7 @@ export default StyleSheet.create({
         width: 36,
         height: 4,
         borderRadius: 2,
-        backgroundColor: EDITORIAL.card,
+        backgroundColor: EDITORIAL.borderOnBackground,
         alignSelf: 'center',
         marginTop: 10,
         marginBottom: 4,
@@ -174,8 +242,8 @@ export default StyleSheet.create({
         fontWeight: '700',
     },
     sheetCloseBtn: {
-        width: 34,
-        height: 34,
+        width: 44,
+        height: 44,
         borderRadius: 17,
         backgroundColor: EDITORIAL.card,
         alignItems: 'center',
@@ -303,7 +371,7 @@ export default StyleSheet.create({
         marginRight: 12,
     },
     matchCheckActive: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: EDITORIAL.grana,
         borderColor: '#FFFFFF',
     },
     matchTeams: {
@@ -350,7 +418,7 @@ export default StyleSheet.create({
         borderColor: EDITORIAL.hairline,
     },
     matchGenderBadgeText: {
-        color: EDITORIAL.grana,
+        color: EDITORIAL.onBackground,
         fontSize: 12,
         fontWeight: '600',
     },
@@ -360,9 +428,11 @@ export default StyleSheet.create({
         marginBottom: 16,
     },
     genderFilterBtn: {
+        minHeight: 44,
+        justifyContent: 'center',
         paddingVertical: 6,
         paddingHorizontal: 14,
-        borderRadius: 16,
+        borderRadius: 8,
         backgroundColor: EDITORIAL.card,
         borderWidth: 1,
         borderColor: EDITORIAL.hairline,
@@ -383,6 +453,8 @@ export default StyleSheet.create({
     /* ── Save button ───────────────────────────────────────────────────── */
     saveButton: {
         backgroundColor: SKETCH_THEME.colors.primary,
+        borderWidth: 1,
+        borderColor: EDITORIAL.borderOnBackground,
         paddingVertical: 14,
         borderRadius: 8,
         alignItems: 'center',
@@ -496,8 +568,8 @@ export default StyleSheet.create({
     },
     planCard: {
         backgroundColor: EDITORIAL.card,
-        borderRadius: 8,
-        padding: 18,
+        borderRadius: 20,
+        padding: 20,
         borderWidth: 1,
         borderColor: 'rgba(255,215,0,0.15)',
     },
@@ -586,13 +658,15 @@ export default StyleSheet.create({
         fontSize: 16,
     },
     settingsFooter: {
-        alignItems: 'center',
+        alignItems: 'stretch',
         paddingVertical: 20,
         paddingHorizontal: 20,
-        marginTop: 12,
+        marginTop: 16,
     },
     logoutButton: {
         flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 10,
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 28,

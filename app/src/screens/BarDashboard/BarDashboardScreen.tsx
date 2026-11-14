@@ -1,11 +1,12 @@
-import { EDITORIAL } from '../../theme/editorialTheme';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Animated, Dimensions, StyleSheet, Linking, Platform } from 'react-native';
+import { View, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, StyleSheet, Linking, Platform, Switch, AppState, Modal, Animated, Easing, AccessibilityInfo, useWindowDimensions } from 'react-native';
+import Constants from 'expo-constants';
 import Text from '../../components/AppText';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useIsFocused, usePreventRemove, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../navigation/AppNavigator';
 import AppIcon from '../../components/AppIcon';
-import IconCredits from '../../components/IconCredits';
 import { useAuth } from '../../context/AuthContext';
 import { useScreenLoading } from '../../context/SplashContext';
 import { Bar, BarAmenity } from '../../models/Bar';
@@ -18,6 +19,7 @@ import { getBarReviewStats } from '../../services/reviewService';
 import { BarReviewStats } from '../../models/Review';
 import { registerPushNotifications, listenForegroundMessages, getNotificationPermissionStatus } from '../../services/notificationService';
 import { getUserPreferences, updateUserPreferences } from '../../services/userService';
+import BarEmailTips from '../../components/BarEmailTips';
 import { BarOwnerNotificationPreferences, DEFAULT_BAR_OWNER_NOTIFICATION_PREFS } from '../../models/UserProfile';
 import {
     BillingCycle as StripeBillingCycle,
@@ -26,47 +28,127 @@ import {
     cancelSubscription,
     getSubscriptionStatus,
     openCheckout,
+    openBillingPortal,
+    SubscriptionStatus,
 } from '../../services/subscriptionService';
 import BarCard from '../../components/BarCard';
 import BarProfileModal from '../../components/BarProfileModal';
 import { SKETCH_THEME, sketchShadow } from '../../theme/sketchTheme';
-import styles from './BarDashboardScreen.styles';
+import styles, { DASHBOARD_THEME as EDITORIAL } from './BarDashboardScreen.styles';
+import profileFooterStyles from '../Profile/SettingsModal.styles';
 import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
+import { showAlert } from '../../components/AlertBanner';
+import { getUserFriendlyError } from '../../utils/errorHandler';
+import { barProfileDraft } from '../../utils/barProfileDraft';
+import OwnerBottomNav from '../../components/OwnerBottomNav';
+import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
+import MatchCard from '../../components/MatchCard';
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 const SOCIAL_NETWORKS = [
-    { key: 'instagram', label: 'Instagram', icon: 'instagram' as const, placeholder: '@elteupub' },
-    { key: 'facebook',  label: 'Facebook',  icon: 'facebook'  as const, placeholder: 'facebook.com/elteupub' },
-    { key: 'twitter',   label: 'X (Twitter)', icon: 'twitter' as const, placeholder: '@elteupub' },
+    { key: 'instagram', label: 'Instagram', icon: 'instagram' as const, placeholder: 'elnostrebar' },
+    { key: 'facebook',  label: 'Facebook',  icon: 'facebook'  as const, placeholder: 'Enllaç a la pàgina del bar' },
+    { key: 'twitter',   label: 'X (Twitter)', icon: 'twitter' as const, placeholder: 'elnostrebar' },
     { key: 'whatsapp',  label: 'WhatsApp',  icon: 'phone'    as const, placeholder: '+34 612 345 678' },
-    { key: 'telegram',  label: 'Telegram',  icon: 'send'     as const, placeholder: '@elteupub' },
-    { key: 'website',   label: 'Pàgina web', icon: 'globe'   as const, placeholder: 'https://elteupub.cat' },
+    { key: 'telegram',  label: 'Telegram',  icon: 'send'     as const, placeholder: 'elnostrebar' },
+    { key: 'website',   label: 'Pàgina web', icon: 'globe'   as const, placeholder: 'Enllaç al web del bar' },
 ] as const;
 
-type Section = 'description' | 'promotions' | 'socials' | 'amenities' | 'matches';
-type Tab = 'map' | 'profile' | 'settings';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+type Section = 'description' | 'promotions' | 'socials' | 'amenities' | 'matches' | 'googleRating';
+type Tab = 'profile' | 'settings';
 
 /* ════════════════════════════════════════════════════════════════════════════
    BarDashboardScreen — 3 pestanyes (Mapa / Perfil / Configuració)
    ════════════════════════════════════════════════════════════════════════════ */
 export default function BarDashboardScreen() {
     const { user, logout, deleteAccount } = useAuth();
-    const navigation = useNavigation<any>();
+    const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'BarDashboard'>>();
+    const isFocused = useIsFocused();
+    const route = useRoute<RouteProp<RootStackParamList, 'BarDashboard'>>();
+    const insets = useSafeAreaInsets();
 
     const [bar, setBar] = useState<Bar | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const savingRef = useRef(false);
+    const savedProfile = useRef('');
+    const [showUnsavedChanges, setShowUnsavedChanges] = useState(false);
+    const [allowLeave, setAllowLeave] = useState(false);
+    const leaveAction = useRef<(() => void) | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('profile');
+    const [profileMode, setProfileMode] = useState<'overview' | 'edit'>('overview');
+    const editorScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+    const pendingEditorSection = useRef<Section | null>(null);
+    const contentSlide = useRef(new Animated.Value(0)).current;
+    const previousView = useRef('profile:overview');
+    const [reduceMotion, setReduceMotion] = useState(false);
+    const { width } = useWindowDimensions();
+    useEffect(() => {
+        let mounted = true;
+        AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); })
+            .catch(error => console.info('[Dashboard] Reduced motion preference unavailable', error));
+        const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+        return () => { mounted = false; listener.remove(); };
+    }, []);
+    useEffect(() => {
+        const view = `${activeTab}:${profileMode}`;
+        if (previousView.current === view) { contentSlide.setValue(0); return; }
+        const forward = activeTab === 'settings' || (activeTab === 'profile' && profileMode === 'edit');
+        previousView.current = view;
+        contentSlide.stopAnimation();
+        contentSlide.setValue(reduceMotion ? 0 : (forward ? 1 : -1) * Math.min(width, 480));
+        const animation = Animated.timing(contentSlide, { toValue: 0, duration: reduceMotion ? 0 : 280, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' });
+        animation.start();
+        return () => animation.stop();
+    }, [activeTab, profileMode, reduceMotion, width, contentSlide]);
+    const openEditor = (section?: Section) => {
+        pendingEditorSection.current = section ?? null;
+        setProfileMode('edit');
+    };
+    useEffect(() => { if (isFocused && route.params?.tab) setActiveTab(route.params.tab); }, [isFocused, route.params?.tab]);
 
     /* ── Dades editables ──────────────────────────────────────────────────── */
     const [description, setDescription] = useState('');
+    const [showGoogleRating, setShowGoogleRating] = useState(false);
     const [promotionalText, setPromotionalText] = useState('');
     const [socials, setSocials] = useState<Record<string, string>>({});
     const [selectedAmenities, setSelectedAmenities] = useState<Set<BarAmenity>>(new Set());
     const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
     const [broadcastingIds, setBroadcastingIds] = useState<Set<string>>(new Set());
+    const profileUpdate = barProfileDraft({
+        description, promotionalText, socialMedia: socials,
+        amenities: Array.from(selectedAmenities), broadcastingMatches: Array.from(broadcastingIds), showGoogleRating,
+    });
+    const profileDraftRef = useRef(profileUpdate);
+    profileDraftRef.current = profileUpdate;
+    const hasChanges = !!bar && JSON.stringify(profileUpdate) !== savedProfile.current;
+
+    const requestLeave = (action: () => void) => {
+        if (savingRef.current || showUnsavedChanges) return;
+        if (!hasChanges) { action(); return; }
+        leaveAction.current = action;
+        setShowUnsavedChanges(true);
+    };
+    const continueLeaving = () => {
+        setShowUnsavedChanges(false);
+        setAllowLeave(true);
+    };
+    usePreventRemove((hasChanges || saving) && !allowLeave, ({ data }) => {
+        requestLeave(() => navigation.dispatch(data.action));
+    });
+    useEffect(() => {
+        if (!allowLeave) return;
+        const action = leaveAction.current;
+        leaveAction.current = null;
+        action?.();
+    }, [allowLeave]);
+    useEffect(() => { if (isFocused) setAllowLeave(false); }, [isFocused]);
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !hasChanges) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [hasChanges]);
 
     /* ── Mapa ─────────────────────────────────────────────────────────────── */
     const [placeDetails, setPlaceDetails] = useState<PlaceDetails | null>(null);
@@ -74,12 +156,9 @@ export default function BarDashboardScreen() {
     const [reviewStats, setReviewStats] = useState<BarReviewStats>({ averageRating: 0, totalReviews: 0 });
     const [showBarProfile, setShowBarProfile] = useState(false);
 
-    /* ── Bottom sheet (per edició) ────────────────────────────────────────── */
-    const [activeSection, setActiveSection] = useState<Section | null>(null);
-    const [matchGenderFilter, setMatchGenderFilter] = useState<'all' | 'masculino' | 'femenino'>('all');
+    const [matchGenderFilter, setMatchGenderFilter] = useState<'masculino' | 'femenino' | null>(null);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
     const [isDeleting, setIsDeleting] = useState(false);
-    const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
     /* ── Modals de subscripció i eliminació ────────────────────────────────── */
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -88,7 +167,13 @@ export default function BarDashboardScreen() {
     const [showBillingConfirm, setShowBillingConfirm] = useState(false);
     const [pendingBillingCycle, setPendingBillingCycle] = useState<'monthly' | 'quarterly' | 'annual' | null>(null);
     const [isChangingPlan, setIsChangingPlan] = useState(false);
-    const [subscriptionActive, setSubscriptionActive] = useState(true);
+    const [subscriptionActive, setSubscriptionActive] = useState(false);
+    const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+    const [showBillingPlans, setShowBillingPlans] = useState(false);
+    const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+    const [subscriptionDetails, setSubscriptionDetails] = useState<SubscriptionStatus | null>(null);
+    const billingOperationRef = useRef(false);
+    const subscriptionRequestRef = useRef<Promise<void> | null>(null);
 
     /* ── Notificacions ────────────────────────────────────────────────────── */
     const [showNotifPrefs, setShowNotifPrefs] = useState(false);
@@ -98,32 +183,104 @@ export default function BarDashboardScreen() {
     const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: Date }>>([]);
 
     /* ── Toast ────────────────────────────────────────────────────────────── */
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const toastOpacity = useRef(new Animated.Value(0)).current;
-
     const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-        toastOpacity.setValue(0);
-        setToast({ message, type });
-        Animated.sequence([
-            Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-            Animated.delay(2500),
-            Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-        ]).start(() => setToast(null));
-    }, [toastOpacity]);
+        showAlert({ message, tone: type });
+    }, []);
 
-    /* ── Obrir / tancar bottom sheet amb spring ───────────────────────────── */
-    const openSheet = useCallback((section: Section) => {
-        setActiveSection(section);
-        Animated.spring(sheetTranslateY, {
-            toValue: 0, damping: 22, stiffness: 200, useNativeDriver: true,
-        }).start();
-    }, [sheetTranslateY]);
+    const refreshSubscription = useCallback((): Promise<void> => {
+        if (subscriptionRequestRef.current) return subscriptionRequestRef.current;
+        const request = Promise.resolve().then(async () => {
+            try {
+                const status = await getSubscriptionStatus();
+                setSubscriptionDetails(status);
+                if (status.billingCycle) setBillingCycle(status.billingCycle);
+                setSubscriptionActive(status.active);
+                setSubscriptionLoaded(true);
+                setBar(previous => previous && !previous.isTestData
+                    ? { ...previous, tier: status.active ? 'premium' : 'free' } : previous);
+            } catch (error) {
+                setSubscriptionDetails(null);
+                setSubscriptionLoaded(false);
+                console.info('[Dashboard] Subscription status unavailable', error);
+                showToast("No s'ha pogut comprovar la subscripció. Torna-ho a provar.", 'error');
+            } finally {
+                subscriptionRequestRef.current = null;
+            }
+        });
+        subscriptionRequestRef.current = request;
+        return request;
+    }, [showToast]);
 
-    const closeSheet = useCallback(() => {
-        Animated.timing(sheetTranslateY, {
-            toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true,
-        }).start(() => setActiveSection(null));
-    }, [sheetTranslateY]);
+    useEffect(() => {
+        if (!bar || bar.isTestData) return;
+        const listener = AppState.addEventListener('change', state => {
+            if (state === 'active') void refreshSubscription();
+        });
+        const onFocus = () => { void refreshSubscription(); };
+        if (Platform.OS === 'web') window.addEventListener('focus', onFocus);
+        return () => {
+            listener.remove();
+            if (Platform.OS === 'web') window.removeEventListener('focus', onFocus);
+        };
+    }, [bar?.id, bar?.isTestData, refreshSubscription]);
+
+    const handleManageSubscription = async () => {
+        if (!bar || billingOperationRef.current) return;
+        if (bar.isTestData) {
+            showAlert({ message: 'La demostració no té factures ni cap subscripció real.', tone: 'info' });
+            return;
+        }
+        billingOperationRef.current = true;
+        setIsOpeningPortal(true);
+        try {
+            await openBillingPortal();
+            await refreshSubscription();
+        } catch (error) {
+            console.info('[Dashboard] Billing portal unavailable', error instanceof Error ? error.name : 'unknown');
+            showToast(getUserFriendlyError(error, "No s'ha pogut obrir la gestió de la subscripció. Torna-ho a provar."), 'error');
+        } finally {
+            billingOperationRef.current = false;
+            setIsOpeningPortal(false);
+        }
+    };
+
+    const dismissBillingConfirmation = () => {
+        if (billingOperationRef.current) return;
+        setShowBillingConfirm(false);
+        setPendingBillingCycle(null);
+    };
+
+    const handleConfirmBillingChange = async () => {
+        if (!bar || !pendingBillingCycle || billingOperationRef.current) return;
+        if (!bar.isTestData && !subscriptionLoaded) {
+            showToast("Comprova l'estat de la subscripció abans de continuar.", 'error');
+            return;
+        }
+        const cycle = pendingBillingCycle;
+        billingOperationRef.current = true;
+        setIsChangingPlan(true);
+        try {
+            if (bar.isTestData) {
+                setBillingCycle(cycle);
+                showAlert({ message: 'Selecció guardada per a aquesta sessió. No s’ha fet cap càrrec.', tone: 'info' });
+            } else if (subscriptionActive) {
+                await stripeChangeBillingCycle(cycle);
+                setBillingCycle(cycle);
+                showToast(`Periodicitat canviada a ${BILLING_PLANS[cycle].label.toLowerCase()}`, 'success');
+            } else {
+                await openCheckout(cycle);
+                showAlert({ message: 'Completa el pagament a Stripe. Comprovarem la subscripció quan tornis.', tone: 'info' });
+            }
+            setShowBillingConfirm(false);
+            setPendingBillingCycle(null);
+        } catch (error) {
+            console.info('[Dashboard] Cannot change subscription', error);
+            showToast(getUserFriendlyError(error, "No s'ha pogut canviar la subscripció. Torna-ho a provar."), 'error');
+        } finally {
+            billingOperationRef.current = false;
+            setIsChangingPlan(false);
+        }
+    };
 
     /* ── Càrrega inicial ──────────────────────────────────────────────────── */
     useEffect(() => {
@@ -131,12 +288,15 @@ export default function BarDashboardScreen() {
         (async () => {
             setLoading(true);
             try {
-                const ownedBar = await getOwnedBar(user.id);
+                const loadedBar = await getOwnedBar(user.id);
+                const ownedBar = loadedBar ? ownerDemoCopy(loadedBar) : null;
                 if (ownedBar) {
                     setBar(ownedBar);
                     setDescription(ownedBar.description || '');
+                    setShowGoogleRating(ownedBar.showGoogleRating === true);
                     setPromotionalText(ownedBar.promotionalText || '');
                     setSocials({
+                        ...ownedBar.socialMedia,
                         instagram: ownedBar.socialMedia?.instagram || '',
                         facebook:  ownedBar.socialMedia?.facebook  || '',
                         twitter:   ownedBar.socialMedia?.twitter   || '',
@@ -148,34 +308,33 @@ export default function BarDashboardScreen() {
                     const validKeys = new Set(AMENITY_OPTIONS.map(o => o.key));
                     setSelectedAmenities(new Set((ownedBar.amenities || []).filter(a => validKeys.has(a))));
                     setBroadcastingIds(new Set(ownedBar.broadcastingMatches || []));
+                    savedProfile.current = JSON.stringify(barProfileDraft({
+                        ...ownedBar, amenities: (ownedBar.amenities || []).filter(a => validKeys.has(a)),
+                    }));
 
                     // Carregar placeDetails i ressenyes per a la previsualització
                     const cleanName = ownedBar.name.replace(/\s+\d+$/, '');
                     setLoadingPlaceDetails(true);
                     (ownedBar.isTestData ? Promise.resolve(null) : fetchBarPlaceDetails(cleanName, ownedBar.latitude, ownedBar.longitude, ownedBar.googlePlaceId))
                         .then(details => setPlaceDetails(details))
-                        .catch(() => setPlaceDetails(null))
+                        .catch(error => { console.info('[Dashboard] Place details unavailable', error); setPlaceDetails(null); })
                         .finally(() => setLoadingPlaceDetails(false));
                     getBarReviewStats(ownedBar.id)
                         .then(stats => setReviewStats(stats))
-                        .catch(() => {});
+                        .catch(error => console.info('[Dashboard] Review statistics unavailable', error));
 
                     // Carregar preferències de notificacions
                     getUserPreferences(user.id)
                         .then(prefs => {
                             if (prefs.barOwnerNotifications) setNotifPrefs(prefs.barOwnerNotifications);
                         })
-                        .catch(() => {});
+                        .catch(error => console.info('[Dashboard] Notification preferences unavailable', error));
 
                     // Carregar estat de la subscripció
                     if (ownedBar.isTestData) {
                         setSubscriptionActive(false);
-                    } else getSubscriptionStatus()
-                        .then(status => {
-                            if (status.billingCycle) setBillingCycle(status.billingCycle);
-                            setSubscriptionActive(status.active);
-                        })
-                        .catch(() => {});
+                        setSubscriptionLoaded(true);
+                    } else void refreshSubscription();
                 }
 
                 // Comprovar permís de notificacions
@@ -196,12 +355,12 @@ export default function BarDashboardScreen() {
                     .slice(0, 20);
                 setUpcomingMatches(future);
             } catch (e) {
-                console.error('Error loading bar dashboard:', e);
+                console.info('Error loading bar dashboard:', e);
             } finally {
                 setLoading(false);
             }
         })();
-    }, [user]);
+    }, [user?.id]);
 
     /* ── Notificacions push (registrar token + escoltar en primer pla) ───── */
     useEffect(() => {
@@ -226,50 +385,25 @@ export default function BarDashboardScreen() {
     }, [user, showToast]);
 
     /* ── Helpers ───────────────────────────────────────────────────────────── */
-    const configuredSocials = Object.values(socials).filter(v => v.trim()).length;
-
-    /* ── Desar per secció ─────────────────────────────────────────────────── */
-    const handleSaveSection = async (section: Section) => {
-        if (!bar) return;
+    const handleSaveProfile = async (): Promise<boolean> => {
+        if (!bar || savingRef.current) return false;
+        const update = profileDraftRef.current;
+        const snapshot = JSON.stringify(update);
+        if (snapshot === savedProfile.current) return true;
+        savingRef.current = true;
         setSaving(true);
         try {
-            let localUpdate: Partial<Bar> = {};
-            switch (section) {
-                case 'description':
-                    localUpdate = { description: description.trim() };
-                    await updateBarProfile(bar.id, localUpdate);
-                    break;
-                case 'promotions':
-                    localUpdate = { promotionalText: promotionalText.trim() || undefined };
-                    await updateBarProfile(bar.id, { promotionalText: promotionalText.trim() || null } as any);
-                    break;
-                case 'socials': {
-                    const clean: Record<string, string> = {};
-                    for (const net of SOCIAL_NETWORKS) {
-                        const val = socials[net.key]?.trim();
-                        if (val) clean[net.key] = val;
-                    }
-                    localUpdate = { socialMedia: clean as any };
-                    await updateBarProfile(bar.id, { socialMedia: clean as any });
-                    break;
-                }
-                case 'amenities':
-                    localUpdate = { amenities: Array.from(selectedAmenities) };
-                    await updateBarProfile(bar.id, { amenities: Array.from(selectedAmenities) });
-                    break;
-                case 'matches':
-                    localUpdate = { broadcastingMatches: Array.from(broadcastingIds) };
-                    await updateBarProfile(bar.id, { broadcastingMatches: Array.from(broadcastingIds) });
-                    break;
-            }
-            // Actualitzar l'estat local perquè la targeta reflecteixi els canvis
-            setBar(prev => prev ? { ...prev, ...localUpdate } : prev);
-            showToast('Canvis desats correctament', 'success');
-            closeSheet();
+            await updateBarProfile(bar.id, update);
+            savedProfile.current = snapshot;
+            setBar(prev => prev ? { ...prev, ...update } : prev);
+            showToast('Canvis desats', 'success');
+            return JSON.stringify(profileDraftRef.current) === snapshot;
         } catch (e) {
-            console.error('Error saving:', e);
+            console.info('Error saving:', e);
             showToast('Error en desar els canvis', 'error');
+            return false;
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -280,42 +414,13 @@ export default function BarDashboardScreen() {
     };
 
     /* ── Definició seccions perfil ─────────────────────────────────────────── */
-    const profileSections: { key: Section; title: string; subtitle: string; hasContent: boolean }[] = [
-        {
-            key: 'description', title: 'Descripció',
-            subtitle: description.trim()
-                ? description.trim().substring(0, 50) + (description.trim().length > 50 ? '…' : '')
-                : 'No definida',
-            hasContent: !!description.trim(),
-        },
-        {
-            key: 'promotions', title: 'Promoció',
-            subtitle: promotionalText.trim()
-                ? promotionalText.trim().substring(0, 50) + (promotionalText.trim().length > 50 ? '…' : '')
-                : 'Cap promoció activa',
-            hasContent: !!promotionalText.trim(),
-        },
-        {
-            key: 'socials', title: 'Xarxes Socials',
-            subtitle: configuredSocials > 0
-                ? `${configuredSocials} ${configuredSocials === 1 ? 'configurada' : 'configurades'}`
-                : 'Cap configurada',
-            hasContent: configuredSocials > 0,
-        },
-        {
-            key: 'amenities', title: 'Serveis',
-            subtitle: selectedAmenities.size > 0
-                ? `${selectedAmenities.size} ${selectedAmenities.size === 1 ? 'seleccionat' : 'seleccionats'}`
-                : 'Cap seleccionat',
-            hasContent: selectedAmenities.size > 0,
-        },
-        {
-            key: 'matches', title: 'Partits que emets',
-            subtitle: broadcastingIds.size > 0
-                ? `${broadcastingIds.size} ${broadcastingIds.size === 1 ? 'partit marcat' : 'partits marcats'}`
-                : 'Cap configurat',
-            hasContent: broadcastingIds.size > 0,
-        },
+    const profileSections: { key: Section; title: string }[] = [
+        { key: 'description', title: 'Descripció' },
+        { key: 'promotions', title: 'Promoció' },
+        { key: 'amenities', title: 'Serveis' },
+        { key: 'matches', title: 'Partits que emets' },
+        { key: 'socials', title: 'Xarxes socials' },
+        { key: 'googleRating', title: 'Puntuació de Google Maps' },
     ];
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -333,7 +438,7 @@ export default function BarDashboardScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <View style={{ width: 36 }} />
+                    <View style={{ width: 44 }} />
                     <Text style={styles.headerTitle}>Panell del bar</Text>
                     <TouchableOpacity onPress={handleLogout} style={styles.headerBtn}>
                         <AppIcon name="log-out" size={18} color="rgba(255,255,255,0.7)" />
@@ -351,43 +456,103 @@ export default function BarDashboardScreen() {
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       TAB 1: MAPA — Previsualització del bar tal com el veuen els usuaris
-    ═══════════════════════════════════════════════════════════════════════ */
-    const renderMapTab = () => (
-        <View style={{ flex: 1, position: 'relative', backgroundColor: SKETCH_THEME.colors.bg }}>
-            {/* Mapa a pantalla completa — TODO: renderitzar mapa actual */}
-        </View>
-    );
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       TAB 2: PERFIL (targetes de secció)
+       TAB 2: PERFIL (edició directa)
     ═══════════════════════════════════════════════════════════════════════ */
     const renderProfileTab = () => (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={webScreenScroll}>
-            <Text style={styles.panelSubtitle}>Gestiona el teu bar</Text>
+        <ScrollView ref={editorScrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={webScreenScroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
+            <View style={styles.profileHero}>
+                {bar.gallery?.[0] && <Image source={{ uri: bar.gallery[0] }} style={styles.profileCover} resizeMode="cover" />}
+                <View style={styles.profileHeroBody}>
+                    <Text style={styles.profileEyebrow}>{bar.tier === 'premium' ? 'EL TEU LOCAL · PREMIUM' : 'EL TEU LOCAL'}</Text>
+                    <Text style={styles.profileHeadline}>{bar.name}</Text>
+                    <Text style={styles.profileSummary}>Així et trobarà la gent quan busqui on veure el Barça.</Text>
+                </View>
+            </View>
             {profileSections.map(sec => (
-                <TouchableOpacity
+                <View
                     key={sec.key}
-                    style={styles.sectionCard}
-                    onPress={() => openSheet(sec.key)}
-                    activeOpacity={0.7}
+                    testID={`bar-profile-section-${sec.key}`}
+                    style={styles.profileSection}
+                    onLayout={({ nativeEvent: { layout } }) => {
+                        if (pendingEditorSection.current !== sec.key) return;
+                        pendingEditorSection.current = null;
+                        editorScrollRef.current?.scrollTo({ y: Math.max(0, layout.y - 12), animated: false });
+                    }}
                 >
-                    <View style={styles.sectionCardInfo}>
-                        <Text style={styles.sectionCardTitle}>{sec.title}</Text>
-                        <Text
-                            style={[styles.sectionCardSubtitle, sec.hasContent && styles.sectionCardSubtitleActive]}
-                            numberOfLines={1}
-                        >{sec.subtitle}</Text>
+                    <View style={styles.profileSectionHeader}>
+                        <Text accessibilityRole="header" style={[styles.sectionCardTitle, { flex: 1 }]}>{sec.title}</Text>
                     </View>
-                </TouchableOpacity>
+                    {renderSectionContent(sec.key)}
+                </View>
             ))}
+            <TouchableOpacity
+                testID="bar-profile-save" accessibilityRole="button" accessibilityLabel="Desar canvis"
+                accessibilityState={{ disabled: saving || !hasChanges, busy: saving }}
+                disabled={saving || !hasChanges}
+                onPress={async () => { if (await handleSaveProfile()) setProfileMode('overview'); }}
+                style={[styles.saveButton, { marginHorizontal: 0, opacity: saving || !hasChanges ? 0.6 : 1 }]}
+            >
+                {saving ? <ActivityIndicator color={EDITORIAL.onBackground} /> : <Text style={styles.saveButtonText}>Desar canvis</Text>}
+            </TouchableOpacity>
+        </ScrollView>
+    );
+
+    const nextOwnerMatch = upcomingMatches.find(match => broadcastingIds.has(match.id)) ?? upcomingMatches[0];
+    const renderOverview = () => (
+        <ScrollView testID="bar-management-overview" style={[styles.managerPage, webScreenScroll]} contentContainerStyle={styles.managerContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.managerIdentity}>
+                {bar.gallery?.[0] && <Image source={{ uri: bar.gallery[0] }} style={styles.managerCover} resizeMode="cover" />}
+                <View style={{ flex: 1, gap: 5 }}>
+                    <Text style={styles.managerEyebrow}>{bar.tier === 'premium' ? 'EL TEU BAR · PREMIUM' : 'EL TEU BAR'}</Text>
+                    <Text accessibilityRole="header" style={styles.managerTitle}>{bar.name}</Text>
+                    <Text numberOfLines={2} style={styles.managerMuted}>{bar.address}</Text>
+                </View>
+            </View>
+            {hasChanges && <TouchableOpacity accessibilityRole="button" onPress={() => openEditor()} style={styles.managerDraft}>
+                <AppIcon name="edit-3" size={18} color="#A50044" /><Text style={styles.managerRowTitle}>Tens canvis sense desar</Text><AppIcon name="chevron-right" size={18} color="#A50044" />
+            </TouchableOpacity>}
+            <View style={styles.managerQuickActions}>
+                <TouchableOpacity testID="bar-management-edit" accessibilityRole="button" onPress={() => openEditor()} style={styles.managerPrimary}>
+                    <AppIcon name="edit-3" size={19} color="#FFFFFF" /><Text style={styles.managerPrimaryText}>Editar el perfil</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setShowBarProfile(true)} style={styles.managerSecondary}>
+                    <AppIcon name="eye" size={19} color="#A50044" /><Text style={styles.managerSecondaryText}>Veure com queda</Text>
+                </TouchableOpacity>
+            </View>
+            <View style={styles.managerSectionHeader}>
+                <Text accessibilityRole="header" style={styles.managerSectionTitle}>La pròxima jornada</Text>
+                <TouchableOpacity accessibilityRole="button" onPress={() => openEditor('matches')} style={styles.managerTextAction}><Text style={styles.managerSecondaryText}>Triar partits</Text><AppIcon name="chevron-right" size={17} color="#A50044" /></TouchableOpacity>
+            </View>
+            {nextOwnerMatch ? <View style={styles.managerMatch}>
+                <Text style={styles.managerMatchStatus}>{broadcastingIds.has(nextOwnerMatch.id) ? 'HAS MARCAT QUE L’EMETS' : 'ENCARA NO HAS MARCAT SI L’EMETS'}</Text>
+                <MatchCard match={nextOwnerMatch} grana onPress={() => openEditor('matches')} />
+            </View> : <View style={styles.managerCard}><Text style={styles.managerRowTitle}>Encara no hi ha partits programats</Text><Text style={styles.managerMuted}>Quan hi hagi una nova jornada, podràs indicar quins partits emets.</Text></View>}
+            <Text accessibilityRole="header" style={styles.managerSectionTitle}>Posa el local a punt</Text>
+            <View style={styles.managerCard}>
+                {([
+                    { section: 'description', icon: 'file-text', title: 'La presentació del bar', detail: bar.description?.trim() ? 'La gent ja pot conèixer el teu local' : 'Explica què el fa especial' },
+                    { section: 'amenities', icon: 'coffee', title: 'Serveis i ambient', detail: bar.amenities?.length ? `${bar.amenities.length} serveis al perfil` : 'Pantalles, menjar, terrassa…' },
+                    { section: 'promotions', icon: 'tag', title: 'La teva promoció', detail: bar.promotionalText?.trim() || 'Tens alguna proposta per al dia de partit?' },
+                ] as const).map(item => <TouchableOpacity key={item.section} accessibilityRole="button" onPress={() => openEditor(item.section)} style={styles.managerRow}>
+                    <View style={styles.managerIcon}><AppIcon name={item.icon} size={21} color="#A50044" /></View>
+                    <View style={{ flex: 1, gap: 4 }}><Text style={styles.managerRowTitle}>{item.title}</Text><Text numberOfLines={2} style={styles.managerMuted}>{item.detail}</Text></View>
+                    <AppIcon name="chevron-right" size={18} color="#66707D" />
+                </TouchableOpacity>)}
+            </View>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Veure el meu bar al mapa" style={styles.managerMapAction}
+                onPress={() => requestLeave(() => navigation.popTo('Map'))}>
+                <View style={styles.managerIcon}><AppIcon name="map-pin" size={22} color="#A50044" /></View>
+                <View style={{ flex: 1, gap: 4 }}><Text style={styles.managerRowTitle}>El teu lloc al mapa</Text><Text style={styles.managerMuted}>Mira com et troba la gent.</Text></View>
+                <AppIcon name="arrow-up-right" size={20} color="#A50044" />
+            </TouchableOpacity>
+            <View style={styles.managerReviews}><AppIcon name="star" size={20} color="#A50044" /><Text style={styles.managerMuted}>{reviewStats.totalReviews ? `${reviewStats.averageRating.toFixed(1)} de 5 · ${reviewStats.totalReviews} ressenyes de troBar` : 'Encara no tens ressenyes de troBar.'}</Text></View>
         </ScrollView>
     );
 
     /* ═══════════════════════════════════════════════════════════════════════
        TAB 3: CONFIGURACIÓ
     ═══════════════════════════════════════════════════════════════════════ */
-    const currentTier = bar.tier || 'premium';
+    const currentTier = bar.tier || 'free';
 
     const NOTIF_OPTIONS: { key: keyof BarOwnerNotificationPreferences; label: string; desc: string }[] = [
         { key: 'newReviews', label: 'Noves ressenyes', desc: 'Quan algú escriu una ressenya al teu bar' },
@@ -403,15 +568,20 @@ export default function BarDashboardScreen() {
             showToast('Preferències desades', 'success');
             setShowNotifPrefs(false);
         } catch (e) {
+            console.info('[Dashboard] Cannot save notification preferences', e);
             showToast('Error en desar les preferències', 'error');
         }
     };
 
     const renderSettingsTab = () => (
-        <View style={[{ flex: 1, justifyContent: 'space-between' }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={webScreenScroll}>
+        <View style={[styles.managerPage, { flex: 1, justifyContent: 'space-between' }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
+            <ScrollView contentContainerStyle={[styles.scrollContent, styles.settingsScrollContent]} showsVerticalScrollIndicator={false} style={webScreenScroll}>
                 {/* Pla actual */}
-                <Text style={styles.settingSectionTitle}>Subscripció</Text>
+                <View style={styles.settingsIntro}>
+                    <Text style={[styles.settingsHeadline, styles.managerTitle]}>El compte del local</Text>
+                    <Text style={[styles.settingsDescription, styles.managerMuted]}>El pla i els avisos, al teu ritme.</Text>
+                </View>
+                <Text style={[styles.settingSectionTitle, styles.managerLabel]}>El teu pla</Text>
                 <View style={styles.planCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -419,60 +589,84 @@ export default function BarDashboardScreen() {
                             <Text style={styles.planName}>  {currentTier === 'premium' ? 'Premium' : 'Gratuït'}</Text>
                         </View>
                         <View style={{ backgroundColor: subscriptionActive ? 'rgba(255,215,0,0.2)' : 'rgba(165,0,68,0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                            <Text style={{ color: subscriptionActive ? EDITORIAL.success : EDITORIAL.grana, fontSize: 12, fontWeight: '700' }}>
-                                {bar?.isTestData ? 'PROVA' : subscriptionActive ? 'ACTIU' : 'INACTIU'}
+                            <Text style={{ color: subscriptionActive ? '#B6F1C3' : EDITORIAL.onBackground, fontSize: 12, fontWeight: '700' }}>
+                                {bar?.isTestData ? 'PREMIUM' : !subscriptionLoaded ? 'PENDENT' : subscriptionDetails?.cancelAtPeriodEnd ? 'NO ES RENOVA' : subscriptionActive ? 'ACTIU' : 'INACTIU'}
                             </Text>
                         </View>
                     </View>
 
-                    {bar?.isTestData && <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginTop: 12 }}>Premium de proves · Sense facturació</Text>}
-                    {currentTier === 'premium' && !bar?.isTestData && (
+                    <Text style={styles.profileSectionHint}>
+                        {bar.isTestData ? 'Dona protagonisme al teu local i prepara la pròxima jornada.'
+                            : subscriptionLoaded && subscriptionActive ? BILLING_PLANS[billingCycle].totalLabel
+                            : 'Premium · tria la periodicitat'}
+                    </Text>
+                    {subscriptionDetails?.cancelAtPeriodEnd && <Text style={styles.profileSectionHint}>
+                        Renovació cancel·lada. Mantens l'accés fins al final del període actual.
+                    </Text>}
+                    {!bar.isTestData && <TouchableOpacity
+                        testID="bar-subscription-manage"
+                        accessibilityRole="button"
+                        accessibilityLabel="Gestionar la subscripció a Stripe"
+                        style={styles.subscriptionManageButton}
+                        onPress={() => void handleManageSubscription()}
+                        disabled={isOpeningPortal || isChangingPlan}
+                        accessibilityState={{ disabled: isOpeningPortal || isChangingPlan, busy: isOpeningPortal }}
+                    >
+                        <Text style={styles.sectionSaveText}>{isOpeningPortal ? 'Obrint Stripe…' : 'Gestionar la subscripció'}</Text>
+                        {isOpeningPortal ? <ActivityIndicator color={EDITORIAL.onBackground} /> : <AppIcon name="external-link" size={18} color={EDITORIAL.onBackground} />}
+                    </TouchableOpacity>}
+                    {!bar.isTestData && <Text style={styles.profileSectionHint}>
+                        Factures, targeta i cancel·lació de la renovació a Stripe, la passarel·la segura de pagament.
+                    </Text>}
+                    <TouchableOpacity
+                        testID="bar-subscription-plans"
+                        accessibilityRole="button"
+                        style={styles.subscriptionManageButton}
+                        onPress={() => setShowBillingPlans(value => !value)}
+                        disabled={isOpeningPortal || isChangingPlan}
+                        accessibilityState={{ expanded: showBillingPlans, disabled: isOpeningPortal || isChangingPlan }}
+                    >
+                        <Text style={styles.sectionSaveText}>{showBillingPlans ? 'Tancar els plans' : subscriptionActive ? 'Canviar la periodicitat' : 'Veure els plans Premium'}</Text>
+                        <AppIcon name={showBillingPlans ? 'chevron-up' : 'chevron-right'} size={18} color={EDITORIAL.onBackground} />
+                    </TouchableOpacity>
+                    {!bar.isTestData && !subscriptionLoaded && (
+                        <TouchableOpacity accessibilityRole="button" style={styles.subscriptionManageButton} onPress={() => void refreshSubscription()}>
+                            <Text style={styles.sectionSaveText}>Comprovar subscripció</Text>
+                        </TouchableOpacity>
+                    )}
+                    {showBillingPlans && (
                         <View style={{ marginTop: 12 }}>
-                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginBottom: 10 }}>Periodicitat</Text>
                             <View style={{ flexDirection: 'row', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: EDITORIAL.hairline }}>
-                                {([{ key: 'monthly' as const, label: 'Mensual', price: '39€/mes', save: null },
-                                   { key: 'quarterly' as const, label: 'Trimestral', price: '33€/mes', save: '-15%' },
-                                   { key: 'annual' as const, label: 'Anual', price: '29€/mes', save: '-25%' }]
-                                ).map(opt => (
+                                {(['monthly', 'quarterly', 'annual'] as const).map(key => (
                                     <TouchableOpacity
-                                        key={opt.key}
+                                        key={key}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`${BILLING_PLANS[key].label}: ${BILLING_PLANS[key].totalLabel}`}
+                                        accessibilityState={{ selected: billingCycle === key, disabled: isOpeningPortal || isChangingPlan || (!bar.isTestData && !subscriptionLoaded) }}
+                                        disabled={isOpeningPortal || isChangingPlan || (!bar.isTestData && !subscriptionLoaded)}
                                         style={{
-                                            flex: 1, paddingVertical: 10, alignItems: 'center',
-                                            backgroundColor: billingCycle === opt.key ? EDITORIAL.granaSoft : EDITORIAL.card,
+                                            flex: 1, minHeight: 64, paddingVertical: 10, alignItems: 'center',
+                                            backgroundColor: billingCycle === key ? EDITORIAL.granaSoft : EDITORIAL.card,
                                         }}
                                         onPress={() => {
-                                            if (opt.key === billingCycle) return;
-                                            setPendingBillingCycle(opt.key);
+                                            if (key === billingCycle && (bar.isTestData || subscriptionActive)) return;
+                                            setPendingBillingCycle(key);
                                             setShowBillingConfirm(true);
                                         }}
                                         activeOpacity={0.7}
                                     >
-                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>{opt.label}</Text>
-                                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 2 }}>{opt.price}</Text>
-                                        {opt.save && (
-                                            <Text style={{ color: EDITORIAL.grana, fontSize: 12, fontWeight: '700', marginTop: 1 }}>{opt.save}</Text>
+                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>{BILLING_PLANS[key].label}</Text>
+                                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 2 }}>{BILLING_PLANS[key].priceLabel}</Text>
+                                        {BILLING_PLANS[key].save && (
+                                            <Text style={{ color: EDITORIAL.onBackground, fontSize: 12, fontWeight: '700', marginTop: 1 }}>{BILLING_PLANS[key].save}</Text>
                                         )}
                                     </TouchableOpacity>
                                 ))}
                             </View>
                             <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
-                                {billingCycle === 'monthly' ? 'Facturat 39€/mes' : billingCycle === 'quarterly' ? 'Facturat 99€ cada 3 mesos · Estalvies 72€/any' : 'Facturat 348€/any · Estalvies 120€/any'}
+                                {BILLING_PLANS[billingCycle].totalLabel}
                             </Text>
-
-                            {/* Botó gestionar pagament */}
-                            {!subscriptionActive && (
-                                <TouchableOpacity
-                                    style={{
-                                        marginTop: 12, paddingVertical: 10, paddingHorizontal: 16,
-                                        borderRadius: 8, backgroundColor: '#FFFFFF',
-                                        alignItems: 'center',
-                                    }}
-                                    onPress={() => openCheckout(billingCycle).catch(e => showToast('Error obrint el pagament: ' + e.message, 'error'))}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>Activar subscripció</Text>
-                                </TouchableOpacity>
-                            )}
+                            {!bar.isTestData && !subscriptionActive && <Text style={styles.profileSectionHint}>Selecciona una periodicitat per iniciar Premium. Stripe confirmarà les condicions i els 14 dies de prova.</Text>}
                         </View>
                     )}
                 </View>
@@ -480,70 +674,34 @@ export default function BarDashboardScreen() {
                 <View style={styles.settingDivider} />
 
                 {/* Notificacions */}
-                <Text style={styles.settingSectionTitle}>Notificacions</Text>
+                <Text style={[styles.settingSectionTitle, styles.managerLabel]}>Preferències</Text>
+                <View style={[styles.settingsGroup, styles.managerGroup]}>
+                    <BarEmailTips demo={bar.isTestData === true} />
+                </View>
 
-                <View style={styles.planCard}>
+                <View style={[styles.settingsGroup, styles.managerGroup]}>
                     {/* Botó de configurar preferències */}
                     <TouchableOpacity
-                        style={{
-                            flexDirection: 'row', alignItems: 'center', marginTop: 10,
-                            paddingVertical: 10, paddingHorizontal: 14,
-                            borderRadius: 8, backgroundColor: EDITORIAL.card,
-                            borderWidth: 1, borderColor: EDITORIAL.hairline,
-                        }}
+                        style={styles.settingsAction}
+                        accessibilityRole="button"
                         onPress={() => setShowNotifPrefs(true)}
                         activeOpacity={0.7}
                     >
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ color: EDITORIAL.ink, fontSize: 14, fontWeight: '600' }}>Preferències de notificacions</Text>
-                            <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12, marginTop: 1 }}>
-                                Tria quines notificacions vols rebre
-                            </Text>
+                        <View style={[styles.settingsActionIcon, styles.managerIcon]}><AppIcon name="bell" size={22} color="#A50044" /></View>
+                        <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={[styles.settingsActionTitle, styles.managerRowTitle]}>Els teus avisos</Text>
+                            <Text style={[styles.settingsActionHint, styles.managerMuted]}>Ressenyes, seguidors i partits.</Text>
                         </View>
+                        <AppIcon name="chevron-right" size={20} color="#66707D" />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.settingDivider} />
 
-                {/* Legal */}
-                <Text style={styles.settingSectionTitle}>Legal i suport</Text>
-
-                <TouchableOpacity
-                    style={styles.settingRow}
-                    onPress={() => navigation.navigate('TermsOfService')}
-                    activeOpacity={0.6}
-                >
-                    <View style={styles.settingRowLeft}>
-                        <Text style={styles.settingRowText}>Termes del servei</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.settingRow}
-                    onPress={() => navigation.navigate('PrivacyPolicy')}
-                    activeOpacity={0.6}
-                >
-                    <View style={styles.settingRowLeft}>
-                        <Text style={styles.settingRowText}>Política de privacitat</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.settingRow}
-                    onPress={() => {
-                        const email = 'contacte@trobar.cat';
-                        Linking.openURL(`mailto:${email}`);
-                    }}
-                    activeOpacity={0.6}
-                >
-                    <View style={styles.settingRowLeft}>
-                        <Text style={styles.settingRowText}>Contactar amb suport</Text>
-                    </View>
-                </TouchableOpacity>
-
                 {/* Logout + eliminar + versió (dins del scroll) */}
                 <View style={styles.settingsFooter}>
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.logoutButton} onPress={() => requestLeave(() => { void handleLogout(); })} activeOpacity={0.7}>
+                        <AppIcon name="log-out" size={18} color={EDITORIAL.onBackground} />
                         <Text style={styles.logoutText}>Tancar sessió</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -555,28 +713,47 @@ export default function BarDashboardScreen() {
                         disabled={isDeleting}
                         style={{ alignSelf: 'center', padding: 10, marginTop: 4, opacity: isDeleting ? 0.4 : 0.7 }}
                     >
-                        <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 12, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: '#66707D', fontWeight: '600', fontSize: 12, textDecorationLine: 'underline' }}>
                             {isDeleting ? 'Eliminant...' : 'Eliminar el compte'}
                         </Text>
                     </TouchableOpacity>
-                    <Text style={styles.versionText}>troBar v1.3.0 · @frolesti · 2026</Text>
-                    <IconCredits />
+                </View>
+                <View style={profileFooterStyles.footer} testID="bar-settings-footer">
+                    <View style={profileFooterStyles.footerLinks}>
+                        <TouchableOpacity accessibilityRole="link" style={profileFooterStyles.footerLink} onPress={() => requestLeave(() => navigation.navigate('TermsOfService'))}><Text style={[profileFooterStyles.footerText, styles.managerMuted]}>Termes del servei</Text></TouchableOpacity>
+                        <TouchableOpacity accessibilityRole="link" style={profileFooterStyles.footerLink} onPress={() => requestLeave(() => navigation.navigate('PrivacyPolicy'))}><Text style={[profileFooterStyles.footerText, styles.managerMuted]}>Privacitat</Text></TouchableOpacity>
+                        <TouchableOpacity accessibilityRole="link" style={profileFooterStyles.footerLink} onPress={() => requestLeave(() => navigation.navigate('Contact'))}><Text style={[profileFooterStyles.footerText, styles.managerMuted]}>Contacte i suport</Text></TouchableOpacity>
+                    </View>
+                    <Text style={[profileFooterStyles.versionText, styles.managerMuted]}>troBar {Constants.expoConfig?.version}</Text>
                 </View>
             </ScrollView>
         </View>
     );
 
     /* ═══════════════════════════════════════════════════════════════════════
-       CONTINGUT BOTTOM SHEET (edició)
+       CONTINGUT DE LES SECCIONS
     ═══════════════════════════════════════════════════════════════════════ */
-    const renderSheetContent = () => {
-        switch (activeSection) {
+    const renderSectionContent = (section: Section) => {
+        switch (section) {
+            case 'googleRating':
+                return (
+                    <View style={{ gap: 16 }}>
+                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, lineHeight: 20 }}>
+                            Deixa que qui encara no et coneix vegi com et valoren a Google. Mostrarem les estrelles i quantes persones t’han puntuat, no els seus comentaris.
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                            <Text style={{ color: EDITORIAL.ink, flex: 1 }}>Vull mostrar la meva puntuació</Text>
+                            <Switch disabled={saving} accessibilityLabel="Mostrar la puntuació de Google Maps" value={showGoogleRating} onValueChange={setShowGoogleRating} trackColor={{ true: EDITORIAL.grana }} />
+                        </View>
+                    </View>
+                );
             case 'description':
                 return (
                     <TextInput
+                        accessibilityLabel="Descripció del bar"
                         style={[styles.input, styles.textArea]}
-                        multiline value={description} onChangeText={setDescription}
-                        placeholder="Escriu una descripció del teu bar…"
+                        editable={!saving} multiline value={description} onChangeText={setDescription}
+                        placeholder="Com és viure un partit al teu bar? Explica’ns què el fa especial."
                         placeholderTextColor={EDITORIAL.inkMuted}
                         textAlignVertical="top"
                     />
@@ -584,13 +761,11 @@ export default function BarDashboardScreen() {
             case 'promotions':
                 return (
                     <View>
-                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, marginBottom: 10, lineHeight: 18 }}>
-                            Escriu una promoció que es mostrarà destacada al perfil del teu bar. Deixa-ho buit per treure-la.
-                        </Text>
                         <TextInput
+                            accessibilityLabel="Promoció del bar"
                             style={[styles.input, styles.textArea]}
-                            multiline value={promotionalText} onChangeText={setPromotionalText}
-                            placeholder="Ex: Happy Hour els dies de partit: 2x1 en cerveses fins al xiulet inicial!"
+                            editable={!saving} multiline value={promotionalText} onChangeText={setPromotionalText}
+                            placeholder="P. ex.: els dies de partit, entrepà i beguda per 8,50 €"
                             placeholderTextColor={EDITORIAL.inkMuted}
                             textAlignVertical="top"
                         />
@@ -609,7 +784,9 @@ export default function BarDashboardScreen() {
                                 <View style={styles.socialInputWrap}>
                                     <Text style={styles.socialLabel}>{net.label}</Text>
                                     <TextInput
+                                        accessibilityLabel={net.label}
                                         style={styles.socialInput}
+                                        editable={!saving}
                                         value={socials[net.key] || ''}
                                         onChangeText={v => setSocials(prev => ({ ...prev, [net.key]: v }))}
                                         placeholder={net.placeholder}
@@ -638,6 +815,8 @@ export default function BarDashboardScreen() {
                                 <TouchableOpacity
                                     key={opt.key}
                                     style={[styles.chip, isActive ? styles.chipActive : styles.chipInactive]}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: isActive }}
                                     onPress={() => {
                                         setSelectedAmenities(prev => {
                                             const next = new Set(prev);
@@ -647,7 +826,7 @@ export default function BarDashboardScreen() {
                                     }}
                                 >
                                     <IconComp name={opt.icon as any} size={14} color={isActive ? 'white' : 'rgba(255,255,255,0.4)'} />
-                                    <Text style={[styles.chipText, { color: isActive ? EDITORIAL.grana : EDITORIAL.inkMuted }]}>{opt.label}</Text>
+                                    <Text style={[styles.chipText, { color: isActive ? EDITORIAL.onBackground : EDITORIAL.inkMuted }]}>{opt.label}</Text>
                                 </TouchableOpacity>
                             );
                         })}
@@ -663,9 +842,9 @@ export default function BarDashboardScreen() {
 
                 const isFemenino = (m: Match) =>
                     m.category === 'FEMENI' || m.category === 'femenino'
-                    || (m.competition?.name || '').toLowerCase().match(/femen|women|uwcl|liga\s*f/);
+                    || /femen|women|uwcl|liga\s*f|reina|queen/i.test(m.competition?.name || '');
 
-                const filteredMatches = matchGenderFilter === 'all'
+                const filteredMatches = !matchGenderFilter
                     ? upcomingMatches
                     : matchGenderFilter === 'femenino'
                         ? upcomingMatches.filter(m => isFemenino(m))
@@ -675,6 +854,7 @@ export default function BarDashboardScreen() {
 
                 const resolveCompLogo = (m: Match) => {
                     const name = (m.competition?.name || '').toLowerCase();
+                    if (/supercopa|supercup|super cup/.test(name)) return null;
                     if (name.includes('women') && name.includes('champions')) return require('../../../../assets/app/img/competicions/champions-w.png');
                     if (name.includes('uwcl')) return require('../../../../assets/app/img/competicions/champions-w.png');
                     if (name.includes('champions')) return require('../../../../assets/app/img/competicions/champions.png');
@@ -689,14 +869,19 @@ export default function BarDashboardScreen() {
                     <View>
                         {/* Filtre gènere */}
                         <View style={styles.genderFilterRow}>
-                            {(['all', 'masculino', 'femenino'] as const).map(g => (
+                            {(['masculino', 'femenino'] as const).map(g => (
                                 <TouchableOpacity
                                     key={g}
-                                    style={[styles.genderFilterBtn, matchGenderFilter === g && styles.genderFilterBtnActive]}
-                                    onPress={() => setMatchGenderFilter(g)}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: matchGenderFilter === g }}
+                                    style={[styles.genderFilterBtn, {
+                                        backgroundColor: g === 'masculino' ? EDITORIAL.masculine : EDITORIAL.feminine,
+                                        borderColor: matchGenderFilter === g ? EDITORIAL.onBackground : EDITORIAL.borderOnBackground,
+                                    }]}
+                                    onPress={() => setMatchGenderFilter(matchGenderFilter === g ? null : g)}
                                 >
                                     <Text style={[styles.genderFilterText, matchGenderFilter === g && styles.genderFilterTextActive]}>
-                                        {g === 'all' ? 'Tots' : g === 'masculino' ? '♂ Masculí' : '♀ Femení'}
+                                        {g === 'masculino' ? 'Masculí' : 'Femení'}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -737,7 +922,14 @@ export default function BarDashboardScreen() {
                             return (
                                 <TouchableOpacity
                                     key={match.id}
-                                    style={[styles.matchRow, isSelected && styles.matchRowActive]}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${home.name} vs ${away.name}, ${isFem ? 'femení' : 'masculí'}`}
+                                    accessibilityState={{ selected: isSelected }}
+                                    style={[styles.matchRow, {
+                                        backgroundColor: isFem ? EDITORIAL.feminine : EDITORIAL.masculine,
+                                        borderColor: isSelected ? EDITORIAL.onBackground : EDITORIAL.borderOnBackground,
+                                        borderWidth: isSelected ? 2 : 1,
+                                    }]}
                                     onPress={() => {
                                         setBroadcastingIds(prev => {
                                             const next = new Set(prev);
@@ -773,11 +965,6 @@ export default function BarDashboardScreen() {
                                         </Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                             <Text style={styles.matchDate}>{dateStr}</Text>
-                                            {isFem && (
-                                                <View style={styles.matchGenderBadge}>
-                                                    <Text style={styles.matchGenderBadgeText}>♀ Fem</Text>
-                                                </View>
-                                            )}
                                         </View>
                                     </View>
                                 </TouchableOpacity>
@@ -785,7 +972,7 @@ export default function BarDashboardScreen() {
                         })}
                         {filteredMatches.length === 0 && (
                             <Text style={styles.emptySubtitle}>
-                                {matchGenderFilter === 'all' ? 'No hi ha partits programats.' : 'No hi ha partits d\'aquesta categoria.'}
+                                {!matchGenderFilter ? 'No hi ha partits programats.' : 'No hi ha partits d\'aquesta categoria.'}
                             </Text>
                         )}
                     </View>
@@ -795,26 +982,19 @@ export default function BarDashboardScreen() {
         }
     };
 
-    const SHEET_TITLES: Record<Section, string> = {
-        description: 'Descripció',
-        promotions: 'Promoció',
-        socials: 'Xarxes Socials',
-        amenities: 'Serveis',
-        matches: 'Partits que emets',
-    };
-
     /* ═══════════════════════════════════════════════════════════════════════
        RENDER PRINCIPAL
     ═══════════════════════════════════════════════════════════════════════ */
     return (
-        <SafeAreaView style={[styles.container, webScreenContainer]}>
-            {/* ── Capçalera ── (oculta si estem al mapa) ──── */}
-            {activeTab !== 'map' && (
+        <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, webScreenContainer, { paddingBottom: 64 + Math.max(insets.bottom, 12) }]}>
+            {/* ── Capçalera ── */}
                 <View style={styles.header}>
-                    <View style={{ width: 36 }} />
+                    {activeTab === 'profile' && profileMode === 'edit'
+                        ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tornar al meu bar" style={styles.headerBtn} onPress={() => setProfileMode('overview')}><AppIcon name="chevron-left" size={23} color="#FFFFFF" /></TouchableOpacity>
+                        : <View style={{ width: 44 }} />}
                     <View style={styles.headerCenter}>
                         <Text style={styles.headerTitle} numberOfLines={1}>
-                            {activeTab === 'settings' ? 'Configuració' : bar.name}
+                            {activeTab === 'settings' ? 'Configuració' : profileMode === 'edit' ? 'Editar el perfil' : 'El teu bar'}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -837,130 +1017,47 @@ export default function BarDashboardScreen() {
                         )}
                     </TouchableOpacity>
                 </View>
-            )}
 
             {/* ── Contingut de la pestanya activa ─────────────────── */}
-            <View style={[{ flex: 1 }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
-                {activeTab === 'map' && renderMapTab()}
-                {activeTab === 'profile' && renderProfileTab()}
+            <Animated.View style={[{ flex: 1, transform: [{ translateX: contentSlide }] }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
+                {activeTab === 'profile' && (profileMode === 'edit' ? renderProfileTab() : renderOverview())}
                 {activeTab === 'settings' && renderSettingsTab()}
-            </View>
-
-            {/* ── Toast ───────────────────────────────────────────── */}
-            {toast && (
-                <Animated.View style={[
-                    styles.toast,
-                    toast.type === 'error' ? styles.toastError : styles.toastSuccess,
-                    { opacity: toastOpacity },
-                ]}>
-                    <AppIcon
-                        name={toast.type === 'error' ? 'alert-circle' : 'check-circle'}
-                        size={16} color="white"
-                    />
-                    <Text style={styles.toastText}>{toast.message}</Text>
-                </Animated.View>
-            )}
-
-            {/* ── Bottom sheet d'edició ────────────────────────────── */}
-            {activeSection !== null && (
-                <View style={styles.sheetOverlay} pointerEvents="box-none">
-                    {/* Fons tàctil per tancar */}
-                    <TouchableOpacity
-                        activeOpacity={1}
-                        onPress={closeSheet}
-                        style={styles.sheetBackdrop}
-                    />
-                    <Animated.View style={[
-                        styles.sheetContainer,
-                        { transform: [{ translateY: sheetTranslateY }] },
-                    ]}>
-                        {/* Indicador drag */}
-                        <View style={styles.sheetDragBar} />
-
-                        {/* Capçalera */}
-                        <View style={styles.sheetHeader}>
-                            <Text style={styles.sheetTitle}>
-                                {activeSection ? SHEET_TITLES[activeSection] : ''}
-                            </Text>
-                            <TouchableOpacity onPress={closeSheet} style={styles.sheetCloseBtn}>
-                                <AppIcon name="x" size={20} color="white" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Cos */}
-                        <ScrollView
-                            contentContainerStyle={styles.sheetBody}
-                            showsVerticalScrollIndicator={false}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            {renderSheetContent()}
-                        </ScrollView>
-
-                        {/* Botó desar */}
-                        <View style={styles.sheetFooter}>
-                            <TouchableOpacity
-                                onPress={() => activeSection && handleSaveSection(activeSection)}
-                                style={styles.saveButton}
-                                disabled={saving} activeOpacity={0.8}
-                            >
-                                {saving ? (
-                                    <ActivityIndicator color="white" />
-                                ) : (
-                                    <Text style={styles.saveButtonText}>Desar canvis</Text>
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-                </View>
-            )}
+            </Animated.View>
 
             {/* ── Barra de navegació inferior ─────────────────────── */}
-            <View style={styles.bottomNav}>
-                {/* Mapa */}
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => { closeSheet(); setActiveTab('map'); }}
-                >
-                    <AppIcon
-                        name={activeTab === 'map' ? 'map' : 'map-outline'}
-                        size={24}
-                        color={activeTab === 'map' ? 'white' : SKETCH_THEME.colors.mutedInverse}
-                    />
-                    <Text style={[styles.navLabel, activeTab === 'map' && styles.navLabelActive]}>
-                        Mapa
-                    </Text>
-                </TouchableOpacity>
-
-                {/* Perfil */}
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => { closeSheet(); setActiveTab('profile'); }}
-                >
-                    <AppIcon
-                        name={activeTab === 'profile' ? 'home' : 'home-outline'}
-                        size={24}
-                        color={activeTab === 'profile' ? 'white' : SKETCH_THEME.colors.mutedInverse}
-                    />
-                    <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
-                        Perfil
-                    </Text>
-                </TouchableOpacity>
-
-                {/* Configuració */}
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => { closeSheet(); setActiveTab('settings'); }}
-                >
-                    <AppIcon
-                        name={activeTab === 'settings' ? 'settings' : 'settings-outline'}
-                        size={24}
-                        color={activeTab === 'settings' ? 'white' : SKETCH_THEME.colors.mutedInverse}
-                    />
-                    <Text style={[styles.navLabel, activeTab === 'settings' && styles.navLabelActive]}>
-                        Configuració
-                    </Text>
-                </TouchableOpacity>
-            </View>
+            <OwnerBottomNav active={activeTab} onMap={() => requestLeave(() => { setShowNotifications(false); navigation.popTo('Map'); })}
+                onProfile={() => setActiveTab('profile')} onSettings={() => setActiveTab('settings')} />
+            {showUnsavedChanges && (
+                <Modal transparent animationType="fade" onRequestClose={() => { if (!saving) { leaveAction.current = null; setShowUnsavedChanges(false); } }}>
+                <View style={styles.unsavedBackdrop} accessibilityViewIsModal>
+                    <View style={styles.unsavedCard}>
+                        <TouchableOpacity testID="bar-leave-cancel" accessibilityRole="button" accessibilityLabel="Tancar i continuar editant" disabled={saving} style={styles.unsavedClose}
+                            onPress={() => { leaveAction.current = null; setShowUnsavedChanges(false); }}>
+                            <AppIcon name="x" size={22} color="#202631" />
+                        </TouchableOpacity>
+                        <View style={styles.unsavedIcon}><AppIcon name="edit-3" size={26} color="#A50044" /></View>
+                        <Text accessibilityRole="header" style={styles.unsavedTitle}>Abans de marxar…</Text>
+                        <Text style={styles.unsavedBody}>Has fet canvis al perfil. Els desem perquè tothom els pugui veure?</Text>
+                        <TouchableOpacity testID="bar-leave-save" accessibilityRole="button" disabled={saving} style={styles.unsavedSave} onPress={async () => { if (await handleSaveProfile()) continueLeaving(); }}>
+                            <Text style={styles.saveButtonText}>{saving ? 'Desant…' : 'Desar i sortir'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity testID="bar-leave-discard" accessibilityRole="button" disabled={saving} style={styles.unsavedDiscard} onPress={() => {
+                            if (!bar) return;
+                            const persisted: ReturnType<typeof barProfileDraft> = JSON.parse(savedProfile.current);
+                            setDescription(persisted.description || '');
+                            setPromotionalText(persisted.promotionalText || '');
+                            setSocials({ ...persisted.socialMedia });
+                            setSelectedAmenities(new Set(persisted.amenities));
+                            setBroadcastingIds(new Set(persisted.broadcastingMatches));
+                            setShowGoogleRating(persisted.showGoogleRating === true);
+                            continueLeaving();
+                        }}>
+                            <Text style={{ color: '#66707D', fontSize: 15 }}>Sortir sense desar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+                </Modal>
+            )}
             {/* ── Panell de notificacions (dropdown) ─────────────── */}
             {showNotifications && (
                 <View style={{
@@ -1136,7 +1233,7 @@ export default function BarDashboardScreen() {
                     <TouchableOpacity
                         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
                         activeOpacity={1}
-                        onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }}
+                        onPress={dismissBillingConfirmation}
                     />
                     <View style={{
                         width: '90%', maxWidth: 420, borderRadius: 8,
@@ -1153,7 +1250,7 @@ export default function BarDashboardScreen() {
                                 <AppIcon name="credit-card" size={20} color="#FFFFFF" />
                                 <Text style={{ color: EDITORIAL.ink, fontSize: 18, fontWeight: '700' }}>Canviar pla</Text>
                             </View>
-                            <TouchableOpacity onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }} style={styles.headerBtn}>
+                            <TouchableOpacity onPress={dismissBillingConfirmation} disabled={isChangingPlan} style={styles.headerBtn}>
                                 <AppIcon name="x" size={18} color="rgba(255,255,255,0.7)" />
                             </TouchableOpacity>
                         </View>
@@ -1203,15 +1300,16 @@ export default function BarDashboardScreen() {
                                     {BILLING_PLANS[pendingBillingCycle].saveYear > 0
                                         ? `• Estalvies ${BILLING_PLANS[pendingBillingCycle].saveYear}€/any respecte al pla mensual\n`
                                         : ''}
-                                    {'• El canvi s\'aplicarà immediatament\n'}
-                                    {'• Es prorratejarà el que ja has pagat del cicle actual'}
+                                    {bar.isTestData ? '• Guardarem la teva selecció en aquesta sessió\n• Aquest canvi no implica cap càrrec'
+                                        : subscriptionActive ? '• El canvi s’aplicarà immediatament\n• Es prorratejarà el que ja has pagat del cicle actual'
+                                        : '• Completa l’alta al formulari segur de Stripe\n• La subscripció no s’activa fins que Stripe la confirma'}
                                 </Text>
                             </View>
 
                             {/* Icona de seguretat Stripe */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
                                 <AppIcon name="lock" size={12} color="rgba(255,255,255,0.35)" />
-                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12 }}>Pagament segur via Stripe</Text>
+                                <Text style={{ color: EDITORIAL.inkMuted, fontSize: 12 }}>{bar.isTestData ? 'Sense cap càrrec' : 'Pagament segur via Stripe'}</Text>
                             </View>
 
                             {/* Botons */}
@@ -1222,7 +1320,8 @@ export default function BarDashboardScreen() {
                                         borderWidth: 1, borderColor: EDITORIAL.hairline,
                                         alignItems: 'center',
                                     }}
-                                    onPress={() => { setShowBillingConfirm(false); setPendingBillingCycle(null); }}
+                                    onPress={dismissBillingConfirmation}
+                                    disabled={isChangingPlan}
                                     activeOpacity={0.7}
                                 >
                                     <Text style={{ color: EDITORIAL.inkMuted, fontWeight: '600', fontSize: 14 }}>Cancel·lar</Text>
@@ -1230,32 +1329,18 @@ export default function BarDashboardScreen() {
                                 <TouchableOpacity
                                     style={{
                                         flex: 2, paddingVertical: 14, borderRadius: 8,
-                                        backgroundColor: '#FFFFFF', alignItems: 'center',
+                                        backgroundColor: EDITORIAL.grana, alignItems: 'center',
+                                        borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
                                         opacity: isChangingPlan ? 0.6 : 1,
                                     }}
-                                    onPress={async () => {
-                                        if (!pendingBillingCycle || isChangingPlan) return;
-                                        setIsChangingPlan(true);
-                                        try {
-                                            await stripeChangeBillingCycle(pendingBillingCycle);
-                                            setBillingCycle(pendingBillingCycle);
-                                            showToast(`Pla canviat a ${BILLING_PLANS[pendingBillingCycle].label}`, 'success');
-                                            setShowBillingConfirm(false);
-                                            setPendingBillingCycle(null);
-                                        } catch (e: any) {
-                                            const msg = e?.message?.replace(/^.*?:\s*/, '') || 'Error canviant el pla';
-                                            showToast(msg, 'error');
-                                        } finally {
-                                            setIsChangingPlan(false);
-                                        }
-                                    }}
+                                    onPress={handleConfirmBillingChange}
                                     disabled={isChangingPlan}
                                     activeOpacity={0.7}
                                 >
                                     {isChangingPlan ? (
                                         <ActivityIndicator color="white" size="small" />
                                     ) : (
-                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>Confirmar canvi</Text>
+                                        <Text style={{ color: EDITORIAL.ink, fontWeight: '700', fontSize: 14 }}>{bar.isTestData || subscriptionActive ? 'Confirmar canvi' : 'Continuar a Stripe'}</Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -1410,7 +1495,7 @@ export default function BarDashboardScreen() {
                                                 // Si hem arribat aquí, el compte s'ha eliminat
                                                 // La navegació es fa automàticament via onAuthStateChanged
                                             } catch (e: any) {
-                                                showToast(e?.message || 'Error eliminant el compte', 'error');
+                                                showToast(getUserFriendlyError(e, "No s'ha pogut eliminar el compte. Torna-ho a provar."), 'error');
                                                 setIsDeleting(false);
                                             }
                                         }}

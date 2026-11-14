@@ -3,7 +3,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { httpsCallable } from 'firebase/functions';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import { openBrowserAsync } from 'expo-web-browser';
 import { functions } from '../config/firebase';
 
 export type BillingCycle = 'monthly' | 'quarterly' | 'annual';
@@ -24,8 +25,8 @@ export interface CheckoutResult {
 
 export interface ChangeCycleResult {
     ok: boolean;
-    newCycle: string;
-    currentPeriodEnd: number;
+    newCycle: BillingCycle;
+    currentPeriodEnd: number | null;
 }
 
 export const BILLING_PLANS = {
@@ -39,16 +40,12 @@ export const BILLING_PLANS = {
  */
 export async function createCheckoutSession(billingCycle: BillingCycle): Promise<CheckoutResult> {
     const fn = httpsCallable<
-        { billingCycle: string; successUrl: string; cancelUrl: string },
+        { billingCycle: string },
         CheckoutResult
     >(functions, 'createCheckoutSession');
 
-    const currentUrl = 'https://trobar-app.cat';
-
     const result = await fn({
         billingCycle,
-        successUrl: `${currentUrl}/bar-dashboard?checkout=success`,
-        cancelUrl: `${currentUrl}/bar-dashboard?checkout=cancelled`,
     });
 
     return result.data;
@@ -62,6 +59,9 @@ export async function changeBillingCycle(newCycle: BillingCycle): Promise<Change
         functions, 'changeBillingCycle'
     );
     const result = await fn({ newCycle });
+    if (!result.data.ok || result.data.newCycle !== newCycle) {
+        throw new Error('SUBSCRIPTION_CHANGE_NOT_CONFIRMED');
+    }
     return result.data;
 }
 
@@ -92,7 +92,37 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
  */
 export async function openCheckout(billingCycle: BillingCycle): Promise<void> {
     const { url } = await createCheckoutSession(billingCycle);
-    if (url) {
-        await Linking.openURL(url);
+    if (!url || !/^https:\/\/checkout\.stripe\.com\//.test(url)) {
+        throw new Error('SUBSCRIPTION_CHECKOUT_UNAVAILABLE');
+    }
+    await Linking.openURL(url);
+}
+
+export async function openBillingPortal(): Promise<void> {
+    const portalWindow = Platform.OS === 'web' ? window.open('about:blank', '_blank') : null;
+    if (Platform.OS === 'web' && !portalWindow) {
+        throw Object.assign(new Error('SUBSCRIPTION_PORTAL_POPUP_BLOCKED'), { code: 'billing/popup-blocked' });
+    }
+    if (portalWindow) portalWindow.opener = null;
+    try {
+        const create = httpsCallable<Record<string, never>, { url: string }>(
+            functions, 'createBillingPortalSession'
+        );
+        const result = await create({});
+        const url = result.data?.url;
+        // React Native's URL polyfill does not implement origin or credentials.
+        if (typeof url !== 'string' || url !== url.trim()
+            || !/^https:\/\/billing\.stripe\.com\/[^\s\\\u0000-\u001f\u007f-\u009f]*$/u.test(url)) {
+            throw new Error('SUBSCRIPTION_PORTAL_UNAVAILABLE');
+        }
+        if (portalWindow) {
+            if (portalWindow.closed) throw new Error('SUBSCRIPTION_PORTAL_WINDOW_CLOSED');
+            portalWindow.location.replace(url);
+        } else {
+            await openBrowserAsync(url);
+        }
+    } catch (error) {
+        if (portalWindow && !portalWindow.closed) portalWindow.close();
+        throw error;
     }
 }
