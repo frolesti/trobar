@@ -7,6 +7,7 @@ import { Match } from '../models/Match';
 import { EDITORIAL } from '../theme/editorialTheme';
 import { formatTeamNameForDisplay } from '../utils/teamName';
 import { getWomenTeamCrest } from '../data/womenTeamCrests';
+import { isWomenMatch } from '../utils/mapMatches';
 
 type MatchCardProps = {
     match: Match;
@@ -33,6 +34,7 @@ const LOGOS = {
 
 function competitionLogo(name: string): ImageSource | number | undefined {
     const normalized = name.toLowerCase();
+    if (/supercopa|supercup|super cup/.test(normalized)) return undefined;
     if (/uwcl|women.*champion/.test(normalized)) return LOGOS.championsWomen;
     if (normalized.includes('champion')) return LOGOS.champions;
     if (/copa.*reina|queen/.test(normalized)) return LOGOS.copaWomen;
@@ -51,6 +53,8 @@ function teamData(team: Match['homeTeam']) {
 function phaseLabel(match: Match): string | undefined {
     const labels: Record<string, string> = {
         GROUP_STAGE: 'Fase de grups', LEAGUE_STAGE: 'Fase de lliga', LEAGUE_PHASE: 'Fase de lliga',
+        FIRST_ROUND: '1a ronda', SECOND_ROUND: '2a ronda', THIRD_ROUND: '3a ronda', FOURTH_ROUND: '4a ronda',
+        LAST_64: 'Trenta-dosens de final', ROUND_OF_64: 'Trenta-dosens de final', PRELIMINARY_ROUND: 'Ronda preliminar',
         LAST_32: 'Setzens de final', ROUND_OF_32: 'Setzens de final',
         LAST_16: 'Vuitens de final', ROUND_OF_16: 'Vuitens de final',
         QUARTER_FINALS: 'Quarts de final', SEMI_FINALS: 'Semifinals', FINAL: 'Final',
@@ -62,17 +66,13 @@ function phaseLabel(match: Match): string | undefined {
 function TeamCrest({ name, uri, localSource, size }: { name: string; uri?: string; localSource?: number; size: number }) {
     const sourceKey = localSource ?? uri;
     const [failedSource, setFailedSource] = useState<string | number | undefined>();
-    const [loadedSource, setLoadedSource] = useState<string | number | undefined>();
     const hasImage = sourceKey !== undefined && failedSource !== sourceKey;
-    const initials = name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toLocaleUpperCase('ca-ES') || '?';
     return (
         <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-            {(!hasImage || loadedSource !== sourceKey) && (
-                <View accessibilityLabel={`Equip: ${name}`} style={{ width: size, height: size, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.65)', backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text numberOfLines={1} style={{ color: '#FFFFFF', fontFamily: EDITORIAL.fontBold, fontSize: Math.round(size * 0.35) }}>{initials}</Text>
-                </View>
-            )}
-            {hasImage && <Image source={localSource ?? { uri }} style={{ position: 'absolute', width: size, height: size, opacity: loadedSource === sourceKey ? 1 : 0 }} contentFit="contain" accessibilityLabel={`Escut de ${name}`} onLoad={() => setLoadedSource(sourceKey)} onError={() => setFailedSource(sourceKey)} />}
+            {hasImage && <Image draggable={false} source={localSource ?? { uri }} style={{ width: size, height: size }} contentFit="contain" cachePolicy="memory-disk" transition={0} accessibilityLabel={`Escut de ${name}`} onError={() => {
+                console.warn('[MatchCard] No s’ha pogut carregar l’escut', name);
+                setFailedSource(sourceKey);
+            }} />}
         </View>
     );
 }
@@ -84,7 +84,7 @@ function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcas
     const compName = match.competition?.name || String(match.league || 'Partit');
     const compLabel = /primera.*divisi/i.test(compName) ? 'La Liga' : /women.*champion/i.test(compName) ? 'UWCL' : compName;
     const compSource = competitionLogo(compName) || (match.competition?.logo ? { uri: match.competition.logo } : undefined);
-    const women = match.category === 'femenino' || /women|femen|liga f|uwcl|reina/i.test(compName);
+    const women = isWomenMatch(match);
     const categoryColor = women ? EDITORIAL.feminine : EDITORIAL.masculine;
     const textColor = '#FFFFFF';
     const mutedColor = '#F3D8E3';
@@ -94,7 +94,7 @@ function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcas
     const timeUnknown = match.timeConfirmed === false || (match.timeConfirmed !== true && date.getUTCHours() === 0 && date.getUTCMinutes() === 0);
     const time = date.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
     const phase = phaseLabel(match);
-    const status = match.status === 'postponed' ? 'Ajornat' : pending ? 'Resultat pendent' : live ? 'En directe' : match.status === 'finished' ? 'Final' : timeUnknown ? 'Horari per confirmar' : '';
+    const status = match.status === 'postponed' ? 'Ajornat' : pending ? 'Resultat pendent' : live ? 'En directe' : match.status === 'finished' ? '' : timeUnknown ? 'Horari per confirmar' : '';
     const canFind = hasBroadcast && match.status !== 'finished' && match.status !== 'postponed' && !pending && !!onPress;
     const teams = (
         <View style={[styles.teams, compact && styles.teamsCompact]}>
@@ -106,7 +106,7 @@ function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcas
                 <View style={styles.scoreRow}>
                     {hasScore && <Text style={[styles.score, compact && styles.scoreCompact, { color: textColor }]}>{match.homeScore}</Text>}
                     <View style={styles.logoBase}>
-                        {compSource ? <Image source={compSource} style={styles.compLogo} tintColor="#FFFFFF" contentFit="contain" accessibilityLabel={compLabel} /> : <Feather name="award" size={22} color="#FFFFFF" />}
+                        {compSource ? <Image draggable={false} source={compSource} style={styles.compLogo} tintColor="#FFFFFF" contentFit="contain" accessibilityLabel={compLabel} /> : <Feather name="award" size={22} color="#FFFFFF" />}
                     </View>
                     {hasScore && <Text style={[styles.score, compact && styles.scoreCompact, { color: textColor }]}>{match.awayScore}</Text>}
                 </View>
@@ -121,8 +121,9 @@ function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcas
     );
     const content = (
         <>
-            <TouchableOpacity disabled={!compact || !onToggleFilter} onLongPress={onLongPress} delayLongPress={450} onPress={onToggleFilter} activeOpacity={0.8} accessibilityRole={compact ? 'button' : undefined} accessibilityState={compact ? { selected: isFilter } : undefined} aria-pressed={compact ? isFilter : undefined} accessibilityLabel={compact ? `${isFilter ? 'Treure' : 'Aplicar'} filtre: ${home.name} - ${away.name}` : women ? 'Barça femení' : 'Barça masculí'} style={[styles.dateBand, { backgroundColor: categoryColor }]}>
+            <TouchableOpacity disabled={!compact || !onToggleFilter} onLongPress={onLongPress} delayLongPress={450} onPress={onToggleFilter} activeOpacity={0.8} accessibilityRole={compact ? 'button' : undefined} accessibilityState={compact ? { selected: isFilter } : undefined} aria-pressed={compact ? isFilter : undefined} accessibilityLabel={compact ? `${isFilter ? 'Treure' : 'Aplicar'} filtre: ${home.name} - ${away.name}` : `${home.name} - ${away.name}, ${women ? 'femení' : 'masculí'}`} style={[styles.dateBand, { backgroundColor: categoryColor }]}>
                 <Text style={[styles.date, { color: '#FFFFFF' }]}>{date.toLocaleDateString('ca-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                {!compSource && <Text style={{ fontFamily: EDITORIAL.fontRegular, fontSize: 11, lineHeight: 15, color: mutedColor, textAlign: 'center' }}>{compLabel}</Text>}
                 {phase && <Text style={{ fontFamily: EDITORIAL.fontRegular, fontSize: 11, lineHeight: 15, color: mutedColor, textAlign: 'center' }}>{phase}</Text>}
             </TouchableOpacity>
             {compact && showDismiss && onDismissFilter && <View style={styles.meta}>

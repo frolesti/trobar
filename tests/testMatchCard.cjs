@@ -7,7 +7,7 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
-function loadCard(component = 'MatchCard', react = React, clock = Date) {
+function loadCard(component = 'MatchCard', react = React, clock = Date, nativeOverrides = {}) {
     const source = fs.readFileSync(path.join(__dirname, `../app/src/components/${component}.tsx`), 'utf8');
     const moduleStub = { exports: {} };
     const container = ({ children, style, accessibilityLabel }) => {
@@ -19,7 +19,7 @@ function loadCard(component = 'MatchCard', react = React, clock = Date) {
         module: moduleStub, exports: moduleStub.exports, Date: clock,
         require: name => {
             if (name === 'react') return react;
-            if (name === 'react-native') return { View: container, TouchableOpacity: container, Platform: { OS: 'web' }, PanResponder: { create: handlers => ({ panHandlers: handlers }) }, StyleSheet: { create: value => value }, Animated: { View: container, Value: class { setValue() {} stopAnimation() {} interpolate() { return 0; } }, timing: () => ({ start: callback => callback?.({ finished: true }), stop() {} }) } };
+            if (name === 'react-native') return { View: container, TouchableOpacity: container, Platform: { OS: 'web' }, PanResponder: { create: handlers => ({ panHandlers: handlers }) }, StyleSheet: { create: value => value }, Animated: { View: container, Value: class { setValue() {} stopAnimation() {} interpolate() { return 0; } }, timing: () => ({ start: callback => callback?.({ finished: true }), stop() {} }) }, ...nativeOverrides };
             if (name === 'expo-image') return { Image: props => React.createElement('img', { alt: props.accessibilityLabel, 'data-tint': props.tintColor }) };
             if (name === '@expo/vector-icons') return { Feather: () => null };
             if (name === './AppText') return { default: text, __esModule: true };
@@ -27,12 +27,68 @@ function loadCard(component = 'MatchCard', react = React, clock = Date) {
             if (name.includes('editorialTheme')) return { EDITORIAL: { masculine: '#8C003B', feminine: '#AD2857' } };
             if (name.includes('teamName')) return { formatTeamNameForDisplay: value => value };
             if (name.includes('womenTeamCrests')) return { getWomenTeamCrest: () => undefined };
+            if (name.includes('mapMatches')) {
+                const module = { exports: {} };
+                vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../app/src/utils/mapMatches.ts'), 'utf8'), {
+                    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+                }).outputText, { module, exports: module.exports });
+                return module.exports;
+            }
             if (name.endsWith('.png')) return name;
             throw new Error(`Unexpected import: ${name}`);
         },
     });
+
     return moduleStub.exports.default;
 }
+
+test('deck reserves its reveal in a non-animated front frame, separate from the absolute back card', () => {
+        let refIndex = 0, stateIndex = 0;
+        const refs = [], states = [];
+        const hooks = {
+            ...React, useEffect() {}, useLayoutEffect() {}, useMemo: create => create(),
+            useRef(value) { const i = refIndex++; return refs[i] ||= { current: value }; },
+            useState(value) { const i = stateIndex++; if (!(i in states)) states[i] = value; return [states[i], next => { states[i] = next; }]; },
+        };
+        const Stack = loadCard('MatchCardStack', hooks);
+        const men = { id: 'men', category: 'masculino', date: new Date('2030-10-10') };
+        const women = { ...men, id: 'women', category: 'FEMENI' };
+        const render = (match, alternativeMatch) => { refIndex = 0; stateIndex = 0; return Stack({ match, alternativeMatch, onSwitchMatch() {}, onToggleFilter() {} }); };
+        for (const height of [0, 130, 180, 260, 140]) {
+            for (const [front, back] of [[men, women], [women, men]]) {
+                const tree = render(front, back);
+                assert.equal(tree.props.collapsable, false);
+                assert.equal(tree.props.style.paddingTop, undefined);
+                assert.equal(tree.props.style.flexShrink, 0);
+                const [rear, frame] = tree.props.children;
+                const foreground = frame.props.children;
+                assert.equal(frame.props.style[1].paddingTop, 48);
+                assert.equal(frame.props.style[0].zIndex, 2);
+                assert.equal(frame.props.collapsable, false);
+                assert.equal(rear.props.style[0].zIndex, 1);
+                assert.equal(rear.props.style[0].top, 0);
+                assert.equal(rear.props.style[0].position, 'absolute');
+                assert.equal(rear.props.collapsable, false);
+                assert.equal(foreground.props.style.marginTop, undefined);
+                foreground.props.onLayout({ nativeEvent: { layout: { height } } });
+            }
+        }
+        assert.equal(render(men, null).props.children[1].props.style[1].paddingTop, 0);
+        assert.equal(render(men, women).props.children.filter(Boolean).length, 2);
+});
+
+test('Supercopa keeps its own name and semifinal label instead of the Copa del Rey logo', () => {
+    const Card = loadCard();
+    const html = renderToStaticMarkup(React.createElement(Card, { match: {
+        id: 'supercopa', date: new Date('2027-02-02T19:00:00Z'),
+        homeTeam: 'FC Barcelona', awayTeam: 'Atlético de Madrid',
+        competition: { id: 'supercup', name: 'Supercopa de España' },
+        stage: 'SEMI_FINALS', timeConfirmed: true, category: 'masculino', status: 'scheduled',
+    } }));
+    assert.match(html, /Supercopa de España/);
+    assert.match(html, /Semifinals/);
+    assert(!html.includes('Copa del Rey'));
+});
 
 test('result has exactly one competition logo between the goals and no duplicate competition text', () => {
     const Card = loadCard();
@@ -44,7 +100,7 @@ test('result has exactly one competition logo between the goals and no duplicate
     assert.equal((html.match(/alt="La Liga"/g) || []).length, 1);
     assert(!html.includes('>La Liga<'));
     assert(!html.includes('>Primera Division<'));
-    assert(html.includes('Final'));
+    assert(!html.includes('>Final<'));
     assert(!html.includes('Trobar bars'));
     assert(!html.includes('>Masculí<'));
     assert(!html.includes('>Femení<'));
@@ -58,8 +114,22 @@ test('upcoming matches show no score dashes and include a full date above teams'
     } }));
     assert(!html.includes('–'));
     assert(html.includes('2030'));
-    assert(html.indexOf('2030') < html.indexOf('Barcelona'));
+    const visibleText = html.replace(/<[^>]+>/g, '');
+    assert(visibleText.indexOf('2030') < visibleText.indexOf('Barcelona'));
     assert.equal((html.match(/alt="La Liga"/g) || []).length, 1);
+});
+
+test('finished knockout fixtures keep the phase without the redundant final status', () => {
+    const Card = loadCard();
+    for (const stage of ['LAST_16', 'QUARTER_FINALS', 'FINAL']) {
+        const html = renderToStaticMarkup(React.createElement(Card, { match: {
+            id: 'cup', homeTeam: 'Barcelona', awayTeam: 'Opponent', date: new Date('2026-01-01'),
+            competition: { id: 'cup', name: 'Copa del Rey' }, status: 'finished',
+            homeScore: 3, awayScore: 0, stage,
+        } }));
+        assert.equal((html.match(/>Final</g) || []).length, stage === 'FINAL' ? 1 : 0);
+        assert(html.includes(stage === 'LAST_16' ? 'Vuitens de final' : stage === 'QUARTER_FINALS' ? 'Quarts de final' : 'Final'));
+    }
 });
 
 test('find bars only appears for eligible upcoming fixtures, not finished or postponed matches', () => {
@@ -81,7 +151,7 @@ test('match list uses grana cards and consistent category colors without visible
     assert(women.includes('data-background="#AD2857"'));
     assert(!men.includes('data-category='));
     assert(!women.includes('data-category='));
-    assert(women.includes('aria-label="Barça femení"'));
+    assert(women.includes('aria-label="Barcelona - Opponent, femení"'));
     assert(!men.includes('>Masculí<'));
     assert(!women.includes('>Femení<'));
 });
@@ -123,6 +193,18 @@ test('compact upcoming card does not repeat the next match label', () => {
     assert(!html.includes('Proper partit'));
 });
 
+test('early cup rounds and preliminary rounds always have visible phase labels', () => {
+    const Card = loadCard();
+    for (const [stage, label] of [['FIRST_ROUND', '1a ronda'], ['SECOND_ROUND', '2a ronda'], ['THIRD_ROUND', '3a ronda'],
+        ['FOURTH_ROUND', '4a ronda'], ['LAST_64', 'Trenta-dosens de final'], ['PRELIMINARY_ROUND', 'Ronda preliminar']]) {
+        const html = renderToStaticMarkup(React.createElement(Card, { match: {
+            id: 'cup', homeTeam: 'Barcelona', awayTeam: 'Opponent', date: new Date('2030-01-01'),
+            competition: { id: 'cup', name: 'Copa del Rey' }, status: 'scheduled', stage,
+        } }));
+        assert(html.includes(label), `missing ${stage}`);
+    }
+});
+
 test('compact card taps only toggle the match filter and have no separate action row', () => {
     const Card = loadCard();
     let switches = 0;
@@ -143,8 +225,8 @@ test('map stack reveals the full alternative with hold-to-drag and keeps filter 
     const match = { id: 'men', category: 'masculino', homeTeam: 'Barcelona', awayTeam: 'Getafe', date: new Date('2030-10-10'), status: 'scheduled' };
     const alternativeMatch = { ...match, id: 'women', category: 'femenino', awayTeam: 'Chelsea' };
     const html = renderToStaticMarkup(React.createElement(Stack, { match, alternativeMatch, onSwitchMatch: () => {}, onToggleFilter: () => {} }));
-    assert(html.includes('Al darrere: Barcelona - Chelsea, femení'));
-    assert(html.indexOf('Barcelona - Chelsea') < html.indexOf('>Getafe<'));
+    assert.equal((html.match(/>Chelsea</g) || []).length, 1, 'the alternative has one representation, not a preview plus a second card');
+    assert.equal((html.match(/>Getafe</g) || []).length, 1);
     assert(html.includes('data-background="#AD2857"'));
     assert(html.includes('data-background="#8C003B"'));
     assert(!html.includes('Trobar bars'));
@@ -152,17 +234,23 @@ test('map stack reveals the full alternative with hold-to-drag and keeps filter 
     assert(!single.includes('Mostrar Barcelona - Chelsea'));
     let now = 1000;
     class Clock extends Date { static now() { return now; } }
-    const hooks = { ...React, useMemo: factory => factory(), useRef: value => ({ current: value }), useState: value => [value, () => {}], useEffect() {} };
+    const hooks = { ...React, useMemo: factory => factory(), useRef: value => ({ current: value }), useState: value => [value, () => {}], useEffect() {}, useLayoutEffect() {} };
     const SwipeStack = loadCard('MatchCardStack', hooks, Clock);
     let switches = 0;
     let filters = 0;
-    const tree = SwipeStack({ match, alternativeMatch, onSwitchMatch: () => switches++, onToggleFilter: () => filters++ });
-    const backCard = tree.props.children[1];
+    const tree = SwipeStack({ match, alternativeMatch, isFilter: true, onSwitchMatch: () => switches++, onToggleFilter: () => filters++ });
+    const backCard = tree.props.children[0];
     assert.equal(backCard.props['aria-hidden'], true);
     assert.equal(backCard.props.children.props.match.id, 'women');
-    const frontCard = tree.props.children[2].props.children;
+    assert.equal(backCard.props.children.props.isFilter, false, 'the alternative is never highlighted as selected');
+    const frontLayer = tree.props.children[1].props.children;
+    const frontCard = frontLayer.props.children;
+    assert.equal(frontCard.props.isFilter, true, 'only the foreground match carries the active filter');
+    const transforms = frontLayer.props.style.transform;
+    assert('translateY' in transforms[0]);
+    assert(!transforms.some(transform => 'translateX' in transform));
     const gesture = tree.props;
-    const move = (dx, dy = 0, numberActiveTouches = 1) => ({ dx, dy, numberActiveTouches, vx: 0 });
+    const move = (dy, dx = 0, numberActiveTouches = 1) => ({ dx, dy, numberActiveTouches, vx: 0, vy: 0 });
     assert.equal(gesture.onStartShouldSetPanResponderCapture(), false);
     now += 249;
     assert.equal(gesture.onMoveShouldSetPanResponderCapture(null, move(65)), false);
@@ -179,6 +267,8 @@ test('map stack reveals the full alternative with hold-to-drag and keeps filter 
     assert.equal(switches, 2);
     gesture.onPanResponderRelease(null, move(10));
     assert.equal(switches, 2);
+    gesture.onPanResponderRelease(null, { ...move(20), vy: 0.8 });
+    assert.equal(switches, 3, 'a vertical flick completes the exchange');
     gesture.onStartShouldSetPanResponderCapture();
     frontCard.props.onLongPress();
     frontCard.props.onToggleFilter();
@@ -194,6 +284,139 @@ test('map stack reveals the full alternative with hold-to-drag and keeps filter 
     loneCard.props.onStartShouldSetPanResponderCapture();
     now += 300;
     assert.equal(loneCard.props.onMoveShouldSetPanResponderCapture(null, move(65)), false);
+});
+
+test('match images cannot hijack a card gesture with the browser image drag', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../app/src/components/MatchCard.tsx'), 'utf8');
+    const parsed = ts.createSourceFile('MatchCard.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let images = 0;
+    function visit(node) {
+        if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(parsed) === 'Image') {
+            images++;
+            const draggable = node.attributes.properties.find(prop => ts.isJsxAttribute(prop) && prop.name.text === 'draggable');
+            assert.equal(draggable?.initializer?.expression?.kind, ts.SyntaxKind.FalseKeyword);
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(parsed);
+    assert.equal(images, 2, 'both team crests and competition logos must yield to the card gesture');
+});
+
+test('animated exchanges keep exactly two distinct cards and reset before the next paint', () => {
+    let refIndex = 0;
+    const refs = [];
+    let layoutEffects = [];
+    let finish;
+    let switched = false;
+    const hooks = {
+        ...React, useEffect() {}, useState: initial => [typeof initial === 'boolean' ? false : initial, () => {}], useMemo: create => create(),
+        useRef(value) { const index = refIndex++; return refs[index] ||= { current: value }; },
+        useLayoutEffect(effect) { layoutEffects.push(effect); },
+    };
+    const animated = {
+        View: 'AnimatedView',
+        Value: class {
+            constructor(value) { this.value = value; }
+            setValue(value) { this.value = value; }
+            stopAnimation() {}
+            interpolate() { return 0; }
+        },
+        timing: (value, { toValue }) => ({ start: callback => { finish = () => { value.setValue(toValue); callback?.({ finished: true }); }; } }),
+    };
+    const Stack = loadCard('MatchCardStack', hooks, Date, { Animated: animated });
+    const men = { id: 'men', category: 'masculino', homeTeam: 'Barcelona', awayTeam: 'Getafe', date: new Date('2030-10-10') };
+    const women = { ...men, id: 'women', category: 'femenino', awayTeam: 'Chelsea' };
+    function render() {
+        refIndex = 0;
+        const tree = Stack({
+            match: switched ? women : men, alternativeMatch: switched ? men : women,
+            onSwitchMatch: () => { switched = !switched; }, onToggleFilter() {},
+        });
+        const cards = [tree.props.children[0], tree.props.children[1].props.children].filter(Boolean);
+        assert.equal(cards.length, 2, 'no independent preview can duplicate the back card');
+        assert.equal(new Set(cards.map(card => card.props.children.props.match.id)).size, 2);
+        layoutEffects.forEach(effect => effect());
+        layoutEffects = [];
+        return tree;
+    }
+    for (const direction of [-1, 1]) {
+        const tree = render();
+        const offset = tree.props.children[1].props.children.props.style.transform[0].translateY;
+        tree.props.onPanResponderGrant();
+        tree.props.onPanResponderMove(null, { dy: direction * 80 });
+        assert.equal(offset.value, direction * 80);
+        tree.props.onPanResponderRelease(null, { dy: direction * 80, vy: 0 });
+        assert.equal(offset.value, direction * 80, 'outgoing card stays in place until the animation finishes');
+        finish();
+        render();
+        assert.equal(offset.value, 0, 'incoming card must be settled in the layout phase, not a later passive effect');
+    }
+});
+
+test('iOS exchanges ignore late completions after data changes or unmount and never mix animation drivers', () => {
+    let refIndex = 0, pendingLayout, cleanup, dependencies;
+    const refs = [], completions = [], drivers = [];
+    const hooks = {
+        ...React, useEffect() {}, useMemo: create => create(),
+        useState: initial => [typeof initial === 'boolean' ? false : initial, () => {}],
+        useRef(value) { const i = refIndex++; return refs[i] ||= { current: value }; },
+        useLayoutEffect(effect, next) {
+            if (!dependencies || next.some((value, i) => value !== dependencies[i])) {
+                dependencies = next;
+                pendingLayout = () => { cleanup?.(); cleanup = effect(); };
+            }
+        },
+    };
+    const animated = {
+        View: 'AnimatedView',
+        Value: class {
+            constructor(value) { this.value = value; }
+            setValue(value) { this.value = value; }
+            stopAnimation() {}
+            interpolate() { return 0; }
+        },
+        timing: (_value, config) => {
+            drivers.push(config.useNativeDriver);
+            return { start: callback => { if (callback) completions.push(callback); } };
+        },
+    };
+    const Stack = loadCard('MatchCardStack', hooks, Date, { Platform: { OS: 'ios' }, Animated: animated });
+    const men = { id: 'men', category: 'masculino', date: new Date('2030-10-10') };
+    const women = { ...men, id: 'women', category: 'femenino' };
+    let switches = 0;
+    const render = (match = men, alternativeMatch = women) => {
+        refIndex = 0;
+        const tree = Stack({ match, alternativeMatch, onSwitchMatch: () => switches++, onToggleFilter() {} });
+        pendingLayout?.(); pendingLayout = null;
+        return tree;
+    };
+    const exchange = tree => tree.props.children[1].props.children.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } });
+    exchange(render());
+    exchange(render());
+    assert.equal(completions.length, 1, 'unrelated renders cannot unlock an in-flight exchange');
+    render(women, men);
+    completions[0]({ finished: true });
+    assert.equal(switches, 0, 'old data cannot switch the newly rendered pair');
+    let tree = render(women, men);
+    const offset = tree.props.children[1].props.children.props.style.transform[0].translateY;
+    exchange(tree);
+    completions[1]({ finished: true });
+    assert.equal(switches, 1);
+    assert.equal(offset.value, 0, 'completion settles the offset even if the parent does not change IDs');
+    exchange(tree);
+    completions[2]({ finished: false });
+    exchange(tree);
+    assert.equal(completions.length, 4, 'interrupted exchanges must not lock the deck');
+    render(women, null);
+    completions[3]({ finished: true });
+    assert.equal(switches, 1, 'removing the alternative cancels its pending exchange');
+    tree = render();
+    exchange(tree);
+    cleanup();
+    completions[4]({ finished: true });
+    assert.equal(switches, 1, 'unmount cancels callbacks before they update the map');
+    assert(drivers.length >= 5);
+    assert(drivers.every(driver => driver === false), 'gestures, animations and resets must use the same JS driver on iOS');
 });
 
 test('every catalogued female identity has a validated local crest, with distinct Levante clubs', () => {
@@ -229,11 +452,39 @@ test('every catalogued female identity has a validated local crest, with distinc
     assert.equal(lookup('Unknown FC'), undefined);
 });
 
-test('unknown and loading crests retain a visible named fallback rather than an empty slot', () => {
+test('unknown crests leave empty slots and known crests render directly without initials', () => {
     const Card = loadCard();
     const html = renderToStaticMarkup(React.createElement(Card, { match: { id: 'unknown', homeTeam: 'Queens Park', awayTeam: { name: 'Unknown Club', badge: 'https://example.test/broken.png' }, date: new Date('2030-10-10') } }));
-    assert(html.includes('>QP</span>'));
-    assert(html.includes('>UC</span>'));
-    assert(html.includes('Equip: Queens Park'));
-    assert(html.includes('Equip: Unknown Club'));
+    assert(!html.includes('>QP</span>'));
+    assert(!html.includes('>UC</span>'));
+    assert(!html.includes('Equip: Queens Park'));
+    assert(!html.includes('Equip: Unknown Club'));
+    assert(html.includes('alt="Escut de Unknown Club"'));
+    assert(!html.includes('alt="Escut de Queens Park"'));
+});
+
+test('crests are immediately visible, hide after failure and recover when their source changes', () => {
+    const source = fs.readFileSync(path.join(__dirname, '../app/src/components/MatchCard.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MatchCard.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const fn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name.text === 'TeamCrest');
+    let failedSource;
+    const warnings = [];
+    const crest = vm.runInNewContext(ts.transpileModule(`(${fn.getText(ast)})`, {
+        compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
+    }).outputText, {
+        React, View: 'div', Image: 'img', console: { warn: (...args) => warnings.push(args) },
+        useState: () => [failedSource, value => { failedSource = value; }],
+    });
+    const props = { name: 'Barcelona', uri: 'https://example.test/crest.png', size: 38 };
+    const image = crest(props).props.children;
+    assert.equal(image.type, 'img');
+    assert.notEqual(image.props.style.opacity, 0);
+    assert.equal(image.props.transition, 0);
+    assert.equal(image.props.cachePolicy, 'memory-disk');
+    image.props.onError();
+    assert.equal(warnings.length, 1);
+    assert.equal(crest(props).props.children, false);
+    assert.equal(crest({ ...props, uri: 'https://example.test/replacement.png' }).props.children.type, 'img');
+    assert.equal(crest({ name: 'Unknown', size: 38 }).props.children, false);
+    assert.equal(crest({ ...props, localSource: 42 }).props.children.props.source, 42);
 });

@@ -20,6 +20,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
 import { nextBroadcastMatchId } from '../../utils/matchBroadcast';
 import { previousMatchPage } from '../../utils/matchHistory';
+import { Image } from 'expo-image';
+import { competitionFamily, COMPETITION_FILTERS, CompetitionFamily } from '../../utils/competition';
 
 const MATCHES_COLORS = {
     page: EDITORIAL.granaDeep,
@@ -48,16 +50,6 @@ type Props = {
 
 type FilterType = 'ALL' | 'MASCULI' | 'FEMENI';
 
-/** Nom de competició amigable per a la UI */
-function displayCompName(name: string): string {
-    const l = name.toLowerCase();
-    if (l.includes('primera') && l.includes('divisi')) return 'La Liga';
-    if (l === 'primera division') return 'La Liga';
-    if (l.includes("women's champions") || l.includes('uwcl')) return 'UWCL';
-    if (l.includes('copa de la reina')) return 'Copa de la Reina';
-    return name;
-}
-
 const MatchesScreen = ({ navigation }: Props) => {
     const isFocused = useIsFocused();
     const { user } = useAuth();
@@ -80,7 +72,7 @@ const MatchesScreen = ({ navigation }: Props) => {
     }), [subscribedMatchIds]);
     const [visibleCount, setVisibleCount] = useState(20);
     const [filter, setFilter] = useState<FilterType>('ALL');
-    const [selectedComp, setSelectedComp] = useState<string | null>(null);
+    const [selectedComp, setSelectedComp] = useState<CompetitionFamily | null>(null);
     const categorySelection = useRef(0);
 
     // Carregar categoria per defecte des de les preferències d'usuari
@@ -97,25 +89,16 @@ const MatchesScreen = ({ navigation }: Props) => {
             if (!active || selection !== categorySelection.current) return;
             setFilter(prefs.display.defaultCategory === 'masculino' ? 'MASCULI' : prefs.display.defaultCategory === 'femenino' ? 'FEMENI' : 'ALL');
             setSelectedComp(null);
-        }).catch(console.error);
+        }).catch(error => console.info('[Matches] Preferences unavailable', error));
         return () => { active = false; };
     }, [user?.id, isFocused]);
-    
-    // Animació personalitzada: Quan naveguem al Mapa, estàndard. Quan apareix... per defecte llisca des de la dreta.
-    // Si volem 'Lliscar des de l'esquerra', hauríem d'ajustar opcions de navegació o assumir que aquesta pantalla és a l'esquerra.
-    // React Navigation Stack tracta les pantalles linealment. Per aconseguir 'lliscar esquerra', normalment fem pop().
-    // Però aquesta és la pantalla inicial.
-    // El problema de l'usuari: "Quan accedim al component de scroll, llisquem a l'esquerra PERÒ l'animació ve de la dreta".
-    // Sembla que naveguen *cap a* MatchesScreen i la veuen entrar des de la dreta.
-    // Volen que entri des de l'esquerra?
-    // Configurar gestureDirection: 'horizontal-inverted' a les opcions de pantalla podria ajudar.
     
     const [loading, setLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Splash global: mantenim grana mentre carreguem la llista inicial de partits.
-    useScreenLoading('MatchesScreen', loading);
+    // Keep the stack transition visible while match data loads inside the screen.
+    useScreenLoading('MatchesScreen', false);
     const isRefreshingRef = React.useRef(false);
     const [competitionMap, setCompetitionMap] = useState<Record<string, { logo: string, name: string }>>({});
     const [broadcastMatchIds, setBroadcastMatchIds] = useState<Set<string>>(new Set());
@@ -146,7 +129,7 @@ const MatchesScreen = ({ navigation }: Props) => {
         let active = true;
         setCompetitionMatches([]);
         setCompetitionLoading(true);
-        const ids = Object.entries(competitionMap).filter(([, competition]) => competition.name === selectedComp).map(([id]) => id);
+        const ids = Object.entries(competitionMap).filter(([, competition]) => competitionFamily(competition.name) === selectedComp).map(([id]) => id);
         fetchCompetitionMatches(ids).then(matches => {
             if (!active) return;
             setCompetitionMatches(matches);
@@ -216,7 +199,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 setBroadcastMatchIds(bcastIds);
 
             } catch (e) {
-                console.error('❌ Error loading data:', e);
+                console.info('Error loading data:', e);
             } finally {
                 setLoading(false);
             }
@@ -245,26 +228,6 @@ const MatchesScreen = ({ navigation }: Props) => {
     }, []);
 
     // --- Dades derivades ---
-    const uniqueCompetitions = useMemo(() => {
-         const comps = new Set<string>();
-         Object.values(competitionMap).forEach(competition => {
-             const women = /women|femen|liga f|reina|uwcl/i.test(competition.name);
-             if (filter === 'ALL' || (filter === 'FEMENI') === women) comps.add(competition.name);
-         });
-         const matches = [...pastMatches, ...allMatches];
-         matches.forEach(m => {
-             const isFem = isFemenino(m);
-             const matchCat = isFem ? 'FEMENI' : 'MASCULI';
-             
-             if (filter !== 'ALL' && matchCat !== filter) return;
-
-             if (m.competition && m.competition.name) comps.add(m.competition.name);
-             else if (m.league && competitionMap[m.league]) comps.add(competitionMap[m.league].name);
-             else if (m.league) comps.add(m.league);
-         });
-         return Array.from(comps).sort();
-    }, [pastMatches, allMatches, filter, isFemenino, competitionMap]);
-
     const filteredFutureMatches = useMemo(() => {
         return (selectedComp ? competitionMatches : allMatches).filter(m => {
             if (m.date.getTime() < Date.now() - 2 * 3600_000) return false;
@@ -279,7 +242,7 @@ const MatchesScreen = ({ navigation }: Props) => {
             if (selectedComp) {
                 const cName = m.competition?.name || (m.league && competitionMap[m.league]?.name) || m.league;
                 // Coincidència flexible
-                if (cName !== selectedComp && m.competition?.id !== selectedComp && m.league !== selectedComp) return false;
+                if (competitionFamily(cName || '') !== selectedComp) return false;
             }
             return true;
         });
@@ -295,7 +258,7 @@ const MatchesScreen = ({ navigation }: Props) => {
 
             if (selectedComp) {
                 const cName = m.competition?.name || (m.league && competitionMap[m.league]?.name) || m.league;
-                if (cName !== selectedComp && m.competition?.id !== selectedComp && m.league !== selectedComp) return false;
+                if (competitionFamily(cName || '') !== selectedComp) return false;
             }
             return true;
         });
@@ -444,20 +407,20 @@ const MatchesScreen = ({ navigation }: Props) => {
                             onPress={() => {
                                 categorySelection.current += 1;
                                 setFilter(current => current === tab ? 'ALL' : tab);
-                                setSelectedComp(null);
                                 setVisibleCount(PAGE_SIZE);
                                 // Scroll al començament per mostrar "proper partit"
                                 flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
                             }} 
                             style={{
-                                paddingVertical: 6,
+                                height: 40,
                                 paddingHorizontal: 14,
                                 borderRadius: 8,
                                 backgroundColor: tab === 'MASCULI' ? EDITORIAL.masculine : EDITORIAL.feminine,
                                 borderWidth: 1,
                                 borderColor: filter === tab ? MATCHES_COLORS.text : MATCHES_COLORS.line,
-                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                             }}
+                            hitSlop={{ top: 2, bottom: 2 }}
                         >
                             <Text style={{
                                 color: MATCHES_COLORS.text,
@@ -471,25 +434,27 @@ const MatchesScreen = ({ navigation }: Props) => {
                     ))}
 
                     {/* Pestanyes de competició */}
-                    {uniqueCompetitions.map(c => {
-                        const compDisplayName = displayCompName(c);
+                    {COMPETITION_FILTERS.map(c => {
                         return (
                             <TouchableOpacity
-                                key={c}
-                                onPress={() => setSelectedComp(selectedComp === c ? null : c)}
+                                key={c.id}
+                                accessibilityRole="button"
+                                accessibilityLabel={c.label}
+                                accessibilityState={{ selected: selectedComp === c.id }}
+                                aria-pressed={selectedComp === c.id}
+                                onPress={() => setSelectedComp(selectedComp === c.id ? null : c.id)}
                                 style={{
-                                    paddingVertical: 6,
-                                    paddingHorizontal: 14,
+                                    height: 40, width: 44, alignItems: 'center', justifyContent: 'center',
                                     borderRadius: 8,
-                                    backgroundColor: selectedComp === c ? MATCHES_COLORS.text : 'transparent',
+                                    backgroundColor: selectedComp === c.id ? MATCHES_COLORS.text : 'transparent',
                                     borderWidth: 1,
-                                    borderColor: selectedComp === c ? MATCHES_COLORS.text : MATCHES_COLORS.line,
+                                    borderColor: selectedComp === c.id ? MATCHES_COLORS.text : MATCHES_COLORS.line,
                                 }}
+                                hitSlop={{ top: 2, bottom: 2 }}
                             >
-                                <Text style={{
-                                    color: selectedComp === c ? EDITORIAL.granaDeep : MATCHES_COLORS.text,
-                                    fontSize: 12, fontFamily: EDITORIAL.fontRegular,
-                                }}>{compDisplayName}</Text>
+                                {c.id === 'supercup'
+                                    ? <AppIcon name="trophy" size={24} color={selectedComp === c.id ? EDITORIAL.granaDeep : MATCHES_COLORS.text} />
+                                    : <Image source={filter === 'FEMENI' ? c.womenLogo : c.logo} style={{ width: 28, height: 28 }} contentFit="contain" tintColor={selectedComp === c.id ? EDITORIAL.granaDeep : MATCHES_COLORS.text} />}
                             </TouchableOpacity>
                         );
                     })}
@@ -538,7 +503,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 onEndReached={loadMoreMatches}
                 onEndReachedThreshold={0.3}
                 ListEmptyComponent={
-                    loading ? undefined : competitionLoading ? <ActivityIndicator color={MATCHES_COLORS.text} style={{ marginTop: 32 }} /> : <EmptyState />
+                    loading || competitionLoading ? <ActivityIndicator accessibilityLabel="Carregant partits" color={MATCHES_COLORS.text} style={{ marginTop: 32 }} /> : <EmptyState />
                 }
                 ListHeaderComponentStyle={{ minHeight: 54, flexShrink: 0 }}
                 ListHeaderComponent={
@@ -620,7 +585,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                             match={m}
                             grana
                             hasBroadcast={broadcastMatchIds.has(m.id)}
-                            onPress={() => navigation.navigate('Map', { matchId: m.id })}
+                            onPress={() => navigation.popTo('Map', { matchId: m.id })}
                         />
                     );
                 }}

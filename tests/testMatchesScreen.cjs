@@ -51,21 +51,28 @@ test('competition switches reset rendered history and restore the load-previous 
     champions.push(fixture('cl-next', '2', new Date('2070-01-01')));
     const league = [fixture('league-old', '1', new Date('2025-02-01')), fixture('league-next', '1', new Date('2070-01-02')), fixture('league-next-month', '1', new Date('2070-02-02'))];
     const female = { ...fixture('female-next', '1', new Date('2070-03-01')), category: 'femenino' };
+    const womensChampions = { ...fixture('wcl-next', '4', new Date('2070-03-02')), category: 'femenino', competition: { id: '4', name: "UEFA Women's Champions League" } };
     const source = fs.readFileSync(require('node:path').join(__dirname, '../app/src/screens/Matches/MatchesScreen.tsx'), 'utf8');
     const moduleStub = { exports: {} };
+    const competitionModule = { exports: {} };
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/utils/competition.ts'), 'utf8'), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText, { module: competitionModule, exports: competitionModule.exports, require: name => name });
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, {
         module: moduleStub, exports: moduleStub.exports, Date, Map, Set, console,
         setTimeout: () => 0, requestAnimationFrame: callback => callback(),
         require: name => {
             if (name === 'react') return hooks;
+            if (name === 'expo-image') return { Image: 'Image' };
+            if (name.includes('utils/competition')) return competitionModule.exports;
             if (name === 'react-native') return Object.fromEntries(['View', 'FlatList', 'TouchableOpacity', 'ActivityIndicator', 'RefreshControl', 'ScrollView'].map(key => [key, key]));
             if (name === 'react-native-safe-area-context') return { SafeAreaView: 'SafeAreaView' };
             if (name === '@react-navigation/native') return { useIsFocused: () => focused };
             if (name === 'expo-status-bar') return { StatusBar: 'StatusBar' };
             if (name.includes('AuthContext')) return { useAuth: () => ({ user: currentUser }) };
             if (name.includes('SplashContext')) return { useScreenLoading: () => {} };
-            if (name === 'firebase/firestore') return { collection: () => 'competitions', getDocs: async () => ({ forEach: callback => ['1', '2', '3'].forEach(id => callback({ id, data: () => ({ name: id === '1' ? 'Primera Division' : id === '2' ? 'Champions League' : 'Copa del Rey' }) })) }) };
-            if (name.includes('matchService')) return { fetchAllMatches: async () => ({ matches: [champions.at(-1), ...league.slice(1), female] }), subscribeToMatchUpdates: () => () => {}, fetchCompetitionMatches: async ids => ids.includes('2') ? champions : ids.includes('3') ? [] : league, fetchPastMatches: async () => [] };
+            if (name === 'firebase/firestore') return { collection: () => 'competitions', getDocs: async () => ({ forEach: callback => ['1', '2', '3', '4'].forEach(id => callback({ id, data: () => ({ name: id === '1' ? 'Primera Division' : id === '2' ? 'Champions League' : id === '4' ? "UEFA Women's Champions League" : 'Copa del Rey' }) })) }) };
+            if (name.includes('matchService')) return { fetchAllMatches: async () => ({ matches: [champions.at(-1), ...league.slice(1), female] }), subscribeToMatchUpdates: () => () => {}, fetchCompetitionMatches: async ids => ids.includes('2') ? [...champions, ...(ids.includes('4') ? [womensChampions] : [])] : ids.includes('3') ? [] : league, fetchPastMatches: async () => [] };
             if (name.includes('barService')) return { fetchBroadcastMatchIds: async () => new Set() };
             if (name.includes('matchBroadcast')) return { nextBroadcastMatchId: () => 'cl-next' };
             if (name.includes('matchHistory')) return { previousMatchPage: (matches, before, count) => matches.filter(match => match.date < before).sort((first, second) => second.date - first.date).slice(0, count).reverse() };
@@ -77,7 +84,8 @@ test('competition switches reset rendered history and restore the load-previous 
         },
     });
     const Screen = moduleStub.exports.default;
-    const navigation = {};
+    const navigationCalls = [];
+    const navigation = { popTo: (...args) => navigationCalls.push(args) };
     let tree;
     const settle = async () => {
         for (let attempt = 0; attempt < 20; attempt++) {
@@ -97,7 +105,7 @@ test('competition switches reset rendered history and restore the load-previous 
     const elements = node => Array.isArray(node) ? node.flatMap(elements) : node?.props ? [node, ...elements(node.props.children)] : [];
     const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? text(node.props.children) : typeof node === 'string' ? node : '';
     const pressCompetition = async label => {
-        const button = elements(tree).find(node => node.type === 'TouchableOpacity' && text(node) === label);
+        const button = elements(tree).find(node => node.type === 'TouchableOpacity' && (text(node) === label || node.props.accessibilityLabel === label));
         assert(button, `Missing filter ${label}`);
         button.props.onPress();
         await settle();
@@ -105,13 +113,15 @@ test('competition switches reset rendered history and restore the load-previous 
     const list = () => elements(tree).find(node => node.type === 'FlatList');
     const ids = () => Array.from(list().props.data).filter(item => !item.type).map(item => item.id);
     await settle();
-    await pressCompetition('Champions League');
-    assert.deepEqual(ids(), ['cl-next']);
+    await pressCompetition('Champions');
+    assert.deepEqual(ids(), ['cl-next', 'wcl-next']);
     await list().props.ListHeaderComponent.props.onPress();
     await settle();
     assert.equal(ids().filter(id => id.startsWith('cl-') && id !== 'cl-next').length, 10);
-    await pressCompetition('La Liga');
+    await pressCompetition('Lliga');
     assert.deepEqual(ids(), ['league-next', 'league-next-month']);
+    list().props.renderItem({ item: list().props.data.find(item => item.id === 'league-next') }).props.onPress();
+    assert.deepEqual(JSON.parse(JSON.stringify(navigationCalls)), [['Map', { matchId: 'league-next' }]], 'returning with a filter must pop the existing Map rather than push a new screen');
     const months = Array.from(list().props.data).filter(item => item.type === 'month');
     assert.deepEqual(months.map(item => item.id), ['month-2070-1', 'month-2070-2']);
     assert.match(months[0].label, /gener.*2070/);
@@ -122,9 +132,9 @@ test('competition switches reset rendered history and restore the load-previous 
     const seasonHeader = list().props.renderItem({ item: { type: 'season', season: '2069/2070' } });
     assert.equal(elements(seasonHeader).some(node => node.props.style?.height === 1), false);
     assert.equal(list().props.ListHeaderComponent.props.accessibilityLabel, 'Carregar 10 partits anteriors');
-    await pressCompetition('Champions League');
-    assert.deepEqual(ids(), ['cl-next']);
-    await pressCompetition('Copa del Rey');
+    await pressCompetition('Champions');
+    assert.deepEqual(ids(), ['cl-next', 'wcl-next']);
+    await pressCompetition('Copa');
     assert.deepEqual(ids(), []);
     const historyControl = list().props.ListHeaderComponent;
     assert.equal(historyControl.props.style.height, 44);
@@ -136,6 +146,7 @@ test('competition switches reset rendered history and restore the load-previous 
     const empty = list().props.ListEmptyComponent.type();
     assert.equal(text(empty), 'Encara no hi ha partits programats');
     assert.equal(elements(empty).filter(node => node.type === 'AppIcon').length, 0);
+    await pressCompetition('Copa');
     for (const [label, color] of [['Masculí', '#8C003B'], ['Femení', '#AD2857']]) {
         const tab = elements(tree).find(node => node.type === 'TouchableOpacity' && text(node) === label);
         assert.equal(tab.props.style.backgroundColor, color);
@@ -182,4 +193,17 @@ test('competition switches reset rendered history and restore the load-previous 
     await settle();
     assert.equal(tab('Masculí').props.accessibilityState.selected, true);
     assert.equal(tab('Femení').props.accessibilityState.selected, false);
+    await pressCompetition('Champions');
+    assert.deepEqual(ids(), ['cl-next']);
+    await pressCompetition('Femení');
+    assert.deepEqual(ids(), ['wcl-next'], 'one Champions filter selects the female competition when gender changes');
+    const competitionButtons = elements(tree).filter(node => node.props.accessibilityLabel && ['Lliga', 'Champions', 'Copa'].includes(node.props.accessibilityLabel));
+    assert.equal(competitionButtons.length, 3);
+    const genderButtons = elements(tree).filter(node => node.props.accessibilityRole === 'button' && ['Masculí', 'Femení'].includes(text(node)));
+    assert(genderButtons.every(node => node.props.style.height === competitionButtons[0].props.style.height));
+    assert(competitionButtons.every(node => node.props.style.height === 40));
+    assert(competitionButtons.every(node => elements(node).some(child => child.type === 'Image')));
+    assert(competitionButtons.every(node => text(node) === ''), 'competition filters are logo-only with accessible names');
+    await pressCompetition('Femení');
+    assert.deepEqual(ids(), ['cl-next', 'wcl-next'], 'no gender means both competitions, not only the men');
 });
