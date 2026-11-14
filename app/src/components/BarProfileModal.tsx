@@ -398,7 +398,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                         {reviewStats.totalReviews > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 {[1,2,3,4,5].map(s => (
-                                    <AppIcon key={s} name="star" size={16} color={s <= Math.round(reviewStats.averageRating) ? EDITORIAL.matchday : P.separator} style={{ marginRight: 1 }} />
+                                    <AppIcon key={s} name="star-filled" size={16} color={s <= Math.round(reviewStats.averageRating) ? EDITORIAL.matchday : P.separator} style={{ marginRight: 1 }} />
                                 ))}
                                 <Text style={{ fontWeight: 'bold', fontSize: 16, color: P.text, fontFamily: EDITORIAL.fontRegular, marginLeft: 6 }}>
                                     {reviewStats.averageRating.toFixed(1)}
@@ -792,7 +792,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                     {[1, 2, 3, 4, 5].map(s => (
                                         <TouchableOpacity key={s} onPress={() => setNewRating(s)} accessibilityRole="radio" accessibilityLabel={`${s} ${s === 1 ? 'estrella' : 'estrelles'}`} accessibilityState={{ checked: newRating === s }} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                                             <AppIcon
-                                                name="star"
+                                                name="star-filled"
                                                 size={28}
                                                 color={s <= newRating ? EDITORIAL.matchday : P.separator}
                                             />
@@ -869,7 +869,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                                                 </Text>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                                                     {[1, 2, 3, 4, 5].map(s => (
-                                                        <AppIcon key={s} name="star" size={12} color={s <= review.rating ? EDITORIAL.matchday : P.separator} style={{ marginRight: 1 }} />
+                                                        <AppIcon key={s} name="star-filled" size={12} color={s <= review.rating ? EDITORIAL.matchday : P.separator} style={{ marginRight: 1 }} />
                                                     ))}
                                                     <Text style={{ fontSize: 12, color: P.textMuted, fontFamily: EDITORIAL.fontRegular, marginLeft: 6 }}>
                                                         {review.createdAt.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short', year: 'numeric' })}

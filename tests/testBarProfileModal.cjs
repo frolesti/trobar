@@ -210,6 +210,19 @@ test('broadcast cards stretch to the same carousel row height without clipping v
     }
 });
 
+test('profile summary, rating selector and individual reviews all use solid stars with rated and unrated colors', () => {
+    const all = nodes(render({ reviewForm: true }).tree);
+    const stars = all.filter(node => node.type === 'AppIcon' && /^star/.test(node.props.name));
+    assert.equal(stars.length, 15);
+    assert(stars.every(star => star.props.name === 'star-filled'));
+    for (const size of [12, 16, 28]) {
+        const group = stars.filter(star => star.props.size === size);
+        assert.equal(group.length, 5);
+        assert(group.some(star => star.props.color === theme.matchday));
+        assert(group.some(star => star.props.color === theme.borderOnBackground));
+    }
+});
+
 test('Google and troBar sources stay separate and authentication/review errors are explicit', () => {
     const guest = render({ authenticated: false });
     const signIn = nodes(guest.tree).find(node => node.type === 'TouchableOpacity' && text(node) === 'Inicia sessió per escriure una ressenya');

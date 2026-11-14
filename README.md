@@ -215,7 +215,9 @@ targetes decoratives. Referències de jerarquia:
 i [FANZO](https://www.fanzo.com/en/lokale/1644/pavilion-end).
 
 Les targetes del carrusel d'emissions comparteixen l'alçada de la més alta,
-sense retallar dates, fases o noms d'equip.
+sense retallar dates, fases o noms d'equip. Les estrelles del resum, les
+ressenyes i el selector de valoració són plenes; el color distingeix les
+estrelles puntuades de les restants.
 
 Amb `EXPO_PUBLIC_TROBAR_ENV=development`, només el Zurito registrat amb ID
 `8lyFejxdbgvn58YIZIYF` mostra tres ressenyes locals d'exemple, xarxes fictícies

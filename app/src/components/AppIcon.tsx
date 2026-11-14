@@ -11,6 +11,7 @@ const aliases: Record<string, string> = {
     'arrow-forward': 'arrow-right', 'arrow-back': 'arrow-left', 'alarm-outline': 'clock',
     'pricetag-outline': 'tag', 'home-outline': 'home', 'parking': 'parking',
     'football-outline': 'soccer', 'shirt-outline': 'tshirt-crew-outline',
+    'star-filled': 'star',
 };
 const imageIcons = new Set(['registered-pin', 'pending-pin', 'google', 'logo-apple', 'instagram', 'facebook', 'twitter', 'whatsapp']);
 
@@ -24,7 +25,7 @@ interface AppIconProps extends Omit<ImageProps, 'source' | keyof TextProps>, Omi
 export default function AppIcon({ name, size = 24, color = EDITORIAL.ink, style, ...props }: AppIconProps) {
     const iconName = aliases[name] || name;
     if (!imageIcons.has(name)) {
-        const Icon = iconName in Feather.glyphMap ? Feather : MaterialCommunityIcons;
+        const Icon = name !== 'star-filled' && iconName in Feather.glyphMap ? Feather : MaterialCommunityIcons;
         const resolved = iconName in Icon.glyphMap ? iconName : 'help-circle';
         return <Icon {...props} name={resolved as never} size={size} color={color} style={style as any} />;
     }

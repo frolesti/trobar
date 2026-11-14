@@ -27,8 +27,8 @@ test('native, React and static web splash share the application background', () 
 
 test('interface icons use vector glyphs and requested colors, while map pins retain their assets', () => {
     const moduleStub = { exports: {} };
-    const Feather = Object.assign(() => null, { glyphMap: { settings: 1, 'arrow-right': 2 } });
-    const MaterialCommunityIcons = Object.assign(() => null, { glyphMap: { 'help-circle': 1 } });
+    const Feather = Object.assign(() => null, { glyphMap: { settings: 1, 'arrow-right': 2, star: 3 } });
+    const MaterialCommunityIcons = Object.assign(() => null, { glyphMap: { 'help-circle': 1, star: 2 } });
     const Image = () => null;
     const source = fs.readFileSync(require('node:path').join(__dirname, '../app/src/components/AppIcon.tsx'), 'utf8');
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText, {
@@ -41,4 +41,10 @@ test('interface icons use vector glyphs and requested colors, while map pins ret
     assert.equal(settings.props.color, '#ffffff');
     assert.equal(Icon({ name: 'arrow-forward' }).props.name, 'arrow-right');
     assert.equal(Icon({ name: 'registered-pin' }).type, Image);
+    const star = Icon({ name: 'star-filled', color: '#F4D35E', size: 28 });
+    assert.equal(star.type, MaterialCommunityIcons, 'filled stars must not resolve to the outline-only Feather glyph');
+    assert.equal(star.props.name, 'star');
+    assert.equal(star.props.color, '#F4D35E');
+    assert.equal(star.props.size, 28);
+    assert.equal(Icon({ name: 'star' }).type, Feather, 'unrelated outline icon callers retain their existing glyph');
 });
