@@ -3,8 +3,9 @@
  * Col·lecció Firestore: bars/{barId}/reviews/{reviewId}
  */
 import {
-    collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
-    query, orderBy, limit, serverTimestamp, Timestamp, getDoc, setDoc,
+    collection, doc, getDocs, updateDoc, deleteDoc,
+    query, orderBy, limit, where, serverTimestamp, Timestamp, runTransaction,
+    getAggregateFromServer, average, count,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Review, BarReviewStats } from '../models/Review';
@@ -42,21 +43,23 @@ export async function addReview(
     rating: number,
     comment?: string,
 ): Promise<string> {
-    const colRef = collection(db, 'bars', barId, 'reviews');
+    validateReview(rating, comment);
+    if (await getUserReview(barId, userId)) {
+        throw new Error('Ja has publicat una ressenya en aquest bar.');
+    }
+    const ref = doc(db, 'bars', barId, 'reviews', userId);
     const trimmedComment = (comment || '').trim();
-    const docRef = await addDoc(colRef, {
-        userId,
-        userName,
-        userAvatar: userAvatar || null,
-        rating: Math.min(5, Math.max(1, Math.round(rating))),
-        ...(trimmedComment ? { comment: trimmedComment } : {}),
-        createdAt: serverTimestamp(),
+    await runTransaction(db, async transaction => {
+        if ((await transaction.get(ref)).exists()) {
+            throw new Error('Ja has publicat una ressenya en aquest bar.');
+        }
+        transaction.set(ref, {
+            userId, userName, userAvatar: userAvatar || null, rating,
+            ...(trimmedComment ? { comment: trimmedComment } : {}),
+            createdAt: serverTimestamp(),
+        });
     });
-
-    // Actualitzar estadístiques agregades del bar
-    await recalculateBarStats(barId);
-
-    return docRef.id;
+    return ref.id;
 }
 
 // ── Actualitzar ressenya ──────────────────────────────────
@@ -67,66 +70,45 @@ export async function updateReview(
     rating: number,
     comment: string,
 ): Promise<void> {
+    validateReview(rating, comment);
     const ref = doc(db, 'bars', barId, 'reviews', reviewId);
     await updateDoc(ref, {
-        rating: Math.min(5, Math.max(1, Math.round(rating))),
+        rating,
         comment: comment.trim(),
         updatedAt: serverTimestamp(),
     });
-
-    await recalculateBarStats(barId);
 }
 
 // ── Eliminar ressenya ────────────────────────────────────
 
 export async function deleteReview(barId: string, reviewId: string): Promise<void> {
     await deleteDoc(doc(db, 'bars', barId, 'reviews', reviewId));
-    await recalculateBarStats(barId);
 }
 
 // ── Obtenir estadístiques ────────────────────────────────
 
 export async function getBarReviewStats(barId: string): Promise<BarReviewStats> {
-    const statsRef = doc(db, 'bars', barId, 'reviewStats', 'aggregate');
-    const snap = await getDoc(statsRef);
-    if (snap.exists()) {
-        const data = snap.data();
-        return { averageRating: data.averageRating || 0, totalReviews: data.totalReviews || 0 };
-    }
-    return { averageRating: 0, totalReviews: 0 };
+    const snap = await getAggregateFromServer(collection(db, 'bars', barId, 'reviews'), {
+        averageRating: average('rating'), totalReviews: count(),
+    });
+    const data = snap.data();
+    return { averageRating: data.averageRating ?? 0, totalReviews: data.totalReviews };
 }
 
-// ── Recalcular estadístiques agregades ───────────────────
-
-async function recalculateBarStats(barId: string): Promise<void> {
-    const colRef = collection(db, 'bars', barId, 'reviews');
-    const snap = await getDocs(colRef);
-
-    let total = 0;
-    let sum = 0;
-    snap.forEach(d => {
-        const r = d.data().rating;
-        if (typeof r === 'number') {
-            sum += r;
-            total++;
-        }
-    });
-
-    const avg = total > 0 ? sum / total : 0;
-
-    const statsRef = doc(db, 'bars', barId, 'reviewStats', 'aggregate');
-    await setDoc(statsRef, {
-        averageRating: Math.round(avg * 10) / 10,
-        totalReviews: total,
-        updatedAt: serverTimestamp(),
-    }, { merge: true });
+export function validateReview(rating: number, comment = '') {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        throw new Error('La valoració ha de ser entre 1 i 5 estrelles.');
+    }
+    if (comment.trim().length > 2000) {
+        throw new Error('El comentari no pot superar els 2.000 caràcters.');
+    }
 }
 
 // ── Comprovar si l'usuari ja ha deixat ressenya ──────────
 
 export async function getUserReview(barId: string, userId: string): Promise<Review | null> {
     const colRef = collection(db, 'bars', barId, 'reviews');
-    const q = query(colRef, orderBy('createdAt', 'desc'));
+    const q = query(colRef, where('userId', '==', userId), limit(1));
     const snap = await getDocs(q);
 
     for (const d of snap.docs) {

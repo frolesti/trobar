@@ -9,7 +9,7 @@
  */
 
 import {
-    doc, getDoc, setDoc, collection, addDoc, query,
+    doc, getDoc, setDoc, updateDoc, collection, addDoc, query,
     where, orderBy, getDocs, serverTimestamp, Timestamp,
     limit as firestoreLimit, deleteDoc,
 } from 'firebase/firestore';
@@ -36,6 +36,7 @@ export interface BarPost {
 
 /** Dades editables pel propietari */
 export interface BarProfileUpdate {
+    showGoogleRating?: boolean;
     description?: string;
     promotionalText?: string;
     socialMedia?: BarSocialMedia;
@@ -107,10 +108,10 @@ export async function updateBarProfile(barId: string, update: BarProfileUpdate):
         const barRef = doc(db, 'bars', barId);
         // Netejar undefined/null per evitar errors de Firestore
         const clean = JSON.parse(JSON.stringify(update));
-        await setDoc(barRef, {
+        await updateDoc(barRef, {
             ...clean,
             updatedAt: serverTimestamp(),
-        }, { merge: true });
+        });
     }, `updateBarProfile:${barId}`);
 }
 
@@ -189,13 +190,12 @@ export async function unsubscribeFromBar(userId: string, barId: string): Promise
 
 /** Comprovar si un usuari està subscrit a un bar */
 export async function isSubscribedToBar(userId: string, barId: string): Promise<boolean> {
-    const result = await executeRequest(async () => {
+    return executeOrThrow(async () => {
         const subRef = doc(db, 'users', userId, 'barSubscriptions', barId);
         const snap = await getDoc(subRef);
         return snap.exists();
     }, `isSubscribedToBar:${userId}/${barId}`);
 
-    return result.data ?? false;
 }
 
 /** Obtenir tots els bars als quals un usuari està subscrit */

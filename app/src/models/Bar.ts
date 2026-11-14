@@ -54,6 +54,8 @@ export interface Bar {
     usuallyShowsBarca?: boolean;
     /** Identificador del bar a Google Maps o similar */
     googlePlaceId?: string;
+    /** Public Google rating is opt-in; written only by the owner or admin. */
+    showGoogleRating?: boolean;
     /** Tier del bar: 'premium' = perfil de pagament amb pin destacat, 'free' = per defecte */
     tier?: 'free' | 'premium';
     isTestData?: boolean;
