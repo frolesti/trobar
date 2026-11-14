@@ -1,28 +1,14 @@
 const { execSync } = require('node:child_process');
 const path = require('node:path');
-
-const PHASES = {
-    'round-of-32': 'LAST_32', 'round-of-16': 'LAST_16',
-    quarterfinals: 'QUARTER_FINALS', semifinals: 'SEMI_FINALS', final: 'FINAL',
-    'group-stage': 'GROUP_STAGE', 'league-phase': 'LEAGUE_STAGE',
-    'knockout-round-playoffs': 'PLAYOFFS',
-};
+const { normalizeStage, stageSource, stageTeamKey, stageRecords, fetchStageRecords } = require('../functions/lib/stageData');
 
 function competitionSource(match) {
-    const name = match.competition?.name || '';
-    if (/women.*champion|uwcl/i.test(name)) return 'uefa.wchampions';
-    if (/champion/i.test(name)) return 'uefa.champions';
-    if (/copa.*reina/i.test(name)) return 'esp.copa_de_la_reina';
-    if (/copa.*rey/i.test(name)) return 'esp.copa_del_rey';
-    return null;
+    return stageSource(match.competition?.name || '', match.category) || null;
 }
 
 function teamKey(team) {
     const name = typeof team === 'string' ? team : team?.name || '';
-    const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        .replace(/\b(fc|cf|afc|women|femenino|femenina|femeni|wfc)\b/g, '').replace(/[^a-z0-9]/g, '');
-    const aliases = { clubatleticodemadrid: 'atleticomadrid', athleticclub: 'athleticbilbao', athleticclubbilbao: 'athleticbilbao', manchestercitywomen: 'manchestercity' };
-    return aliases[normalized] || normalized;
+    return stageTeamKey(name);
 }
 
 function fixtureKey(source, date, home, away) {
@@ -31,29 +17,50 @@ function fixtureKey(source, date, home, away) {
 
 function sourceStages(source, events) {
     const stages = new Map();
-    for (const event of events) {
-        const stage = PHASES[event.season?.slug];
-        const competition = event.competitions?.[0];
-        const home = competition?.competitors?.find(team => team.homeAway === 'home');
-        const away = competition?.competitors?.find(team => team.homeAway === 'away');
-        if (!stage || !home || !away || !event.date || !event.id) continue;
-        const key = fixtureKey(source, event.date, home.team?.displayName, away.team?.displayName);
-        const candidate = { stage, source: 'espn', eventId: String(event.id) };
+    for (const record of stageRecords(events)) {
+        const key = fixtureKey(source, record.date, record.home, record.away);
+        const candidate = { ...record, source: 'espn' };
         const existing = stages.get(key);
-        stages.set(key, existing && existing.stage !== stage ? { ambiguous: true } : existing?.ambiguous ? existing : candidate);
+        stages.set(key, existing && (existing.stage !== record.stage || existing.eventId !== record.eventId) ? { ambiguous: true } : existing?.ambiguous ? existing : candidate);
     }
     return stages;
 }
 
-function planRecovery(matches, stages, now = Date.now()) {
+function planRecovery(matches, stages) {
     return matches.flatMap(match => {
-        if (match.duplicateOf || match.stage || match.round || Date.parse(match.timestamp) > now || !match.timestamp) return [];
+        if (match.duplicateOf || !Number.isFinite(Date.parse(match.timestamp))) return [];
         const source = competitionSource(match);
         if (!source || !teamKey(match.homeTeam) || !teamKey(match.awayTeam)) return [];
         const candidate = stages.get(fixtureKey(source, match.timestamp, match.homeTeam, match.awayTeam));
-        if (!candidate || candidate.ambiguous) return [];
-        return [{ ...candidate, id: match.id, name: match.name, updateTime: match.updateTime, date: match.timestamp, home: match.homeTeam.name, away: match.awayTeam.name, competition: match.competition.name }];
+        if (!candidate?.stage || candidate.ambiguous || match.stage === candidate.stage) return [];
+        return [{ ...candidate, previousStage: match.stage || null, previousRound: match.round || null,
+            id: match.id, name: match.name, updateTime: match.updateTime, date: match.timestamp, home: match.homeTeam.name, away: match.awayTeam.name, competition: match.competition.name }];
     });
+}
+
+function auditRecovery(matches, stages) {
+    const scoped = matches.filter(match => !match.duplicateOf && competitionSource(match));
+    const unresolved = [];
+    const verifiedMatches = [];
+    let verified = 0;
+    for (const match of scoped) {
+        const candidate = match.timestamp && stages.get(fixtureKey(competitionSource(match), match.timestamp, match.homeTeam, match.awayTeam));
+        if (candidate?.stage && !candidate.ambiguous) {
+            verified++;
+            verifiedMatches.push({ id: match.id, apiId: match.apiId, date: match.timestamp, home: match.homeTeam.name, away: match.awayTeam.name,
+                competition: competitionSource(match), stage: candidate.stage, rawStage: candidate.rawStage,
+                source: candidate.source, eventId: candidate.eventId,
+                sourceUrl: candidate.source === 'uefa' ? `https://match.uefa.com/v5/matches/${candidate.eventId}`
+                    : `https://www.espn.com/soccer/match/_/gameId/${candidate.eventId}` });
+            continue;
+        }
+        unresolved.push({ id: match.id, date: match.timestamp, home: match.homeTeam?.name, away: match.awayTeam?.name,
+            competition: match.competition?.name, stage: match.stage || null, round: match.round || null,
+            source: competitionSource(match), reason: candidate?.ambiguous ? 'ambiguous-provider-events' : candidate ? 'unknown-provider-phase' : 'no-matching-provider-event',
+            ...(candidate?.eventId ? { eventId: candidate.eventId, rawStage: candidate.rawStage } : {}) });
+    }
+    return { totalScoped: scoped.length, missingStages: scoped.filter(match => !normalizeStage(match.stage) && !normalizeStage(match.round)).length,
+        verified, verifiedMatches, competitions: scoped.reduce((counts, match) => { const key = competitionSource(match); counts[key] = (counts[key] || 0) + 1; return counts; }, {}), unresolved };
 }
 
 function decode(value) {
@@ -76,20 +83,29 @@ async function main() {
         matches.push(...(page.documents || []).map(document => ({ ...Object.fromEntries(Object.entries(document.fields).map(([key, field]) => [key, decode(field)])), id: document.name.split('/').pop(), name: document.name, updateTime: document.updateTime })));
         next = page.nextPageToken || '';
     } while (next);
-    const requests = new Set(matches.filter(match => !match.duplicateOf && !match.stage && !match.round && match.timestamp && Date.parse(match.timestamp) <= Date.now() && competitionSource(match))
+    const requests = new Set(matches.filter(match => !match.duplicateOf && Number.isFinite(Date.parse(match.timestamp)) && competitionSource(match))
         .map(match => `${competitionSource(match)}|${match.timestamp.slice(0, 4)}`));
     const stages = new Map();
     for (const request of requests) {
         const [source, year] = request.split('|');
-        const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${source}/scoreboard?dates=${year}&limit=1000`, { signal: AbortSignal.timeout(20000) });
-        if (!response.ok) throw new Error(`Stage provider HTTP ${response.status}`);
-        const page = await response.json();
-        if (!Array.isArray(page.events)) throw new Error('Invalid stage provider response');
-        if (page.events.length >= 1000) throw new Error('Stage provider response may be truncated');
-        for (const [key, value] of sourceStages(source, page.events)) stages.set(key, value);
+        const records = await fetchStageRecords(source, year);
+        for (const record of records) {
+            const key = fixtureKey(source, record.date, record.home, record.away);
+            const existing = stages.get(key);
+            stages.set(key, existing && (existing.eventId !== record.eventId || existing.stage !== record.stage)
+                ? { ambiguous: true } : existing?.ambiguous ? existing : { ...record, source: record.provider || 'espn' });
+        }
     }
     const planned = planRecovery(matches, stages);
-    console.log(JSON.stringify({ mode: apply ? 'apply' : 'preview', providerRequests: requests.size, planned: planned.length, matches: planned.map(({ name, updateTime, ...summary }) => summary) }, null, 2));
+    const report = { mode: apply ? 'apply' : 'preview', ...auditRecovery(matches, stages), providerRequests: requests.size, planned: planned.length,
+        matches: planned.map(({ name, updateTime, ...summary }) => summary) };
+    const reportIndex = process.argv.indexOf('--report');
+    if (reportIndex >= 0) {
+        const filename = process.argv[reportIndex + 1];
+        if (!filename || filename.startsWith('--')) throw new Error('--report requires a filename');
+        require('node:fs').writeFileSync(filename, JSON.stringify(report, null, 2) + '\n');
+        console.log(JSON.stringify({ ...report, matches: undefined, verifiedMatches: undefined, unresolved: undefined, unresolvedCount: report.unresolved.length, report: filename }, null, 2));
+    } else console.log(JSON.stringify(report, null, 2));
     let updated = 0;
     let changedSinceRead = 0;
     if (apply) for (const match of planned) {
@@ -106,5 +122,5 @@ async function main() {
     console.log(JSON.stringify({ updated, changedSinceRead }));
 }
 
-module.exports = { teamKey, competitionSource, fixtureKey, sourceStages, planRecovery };
+module.exports = { teamKey, competitionSource, fixtureKey, sourceStages, planRecovery, auditRecovery };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

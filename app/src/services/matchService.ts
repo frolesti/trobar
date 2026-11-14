@@ -1,6 +1,7 @@
 import { collection, getDocs, query, where, Timestamp, orderBy, limit as firestoreLimit, documentId, onSnapshot, startAfter, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Match } from '../models/Match';
+import { isBarcelonaMatch } from '../utils/barcelona';
 
 export type { Match };
 
@@ -12,11 +13,11 @@ export function subscribeToMatchUpdates(ids: string[], onUpdate: (matches: Match
     for (let offset = 0; offset < unique.length; offset += 30) {
         const request = query(collection(db, 'matches'), where(documentId(), 'in', unique.slice(offset, offset + 30)));
         subscriptions.push(onSnapshot(request, snapshot => {
-            onUpdate(snapshot.docs.filter(snapshotDoc => !snapshotDoc.data().duplicateOf).map(snapshotDoc => {
+            onUpdate(snapshot.docs.filter(snapshotDoc => !snapshotDoc.data().duplicateOf && isBarcelonaMatch(snapshotDoc.data())).map(snapshotDoc => {
                 const data = snapshotDoc.data();
                 return { ...data, id: snapshotDoc.id, date: data.timestamp.toDate() } as Match;
             }));
-        }, error => console.warn('Match subscription unavailable', error.code)));
+        }, error => console.info('Match subscription unavailable', error.code)));
     }
     return () => subscriptions.forEach(unsubscribe => unsubscribe());
 }
@@ -40,7 +41,7 @@ export async function fetchPastMatches(
         const snapshot = await getDocs(request);
         for (const document of snapshot.docs) {
             const data = document.data();
-            if (data.duplicateOf || !data.homeTeam || !data.awayTeam || !data.timestamp?.toDate) continue;
+            if (data.duplicateOf || !data.homeTeam || !data.awayTeam || !data.timestamp?.toDate || !isBarcelonaMatch(data)) continue;
             const women = data.category === 'femenino' || /women|femen|liga f|uwcl|reina/i.test(data.competition?.name || '');
             if (category && women !== (category === 'femenino')) continue;
             matches.push({ ...data, id: document.id, date: data.timestamp.toDate() } as Match);
@@ -80,7 +81,7 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
         snapshot.forEach(doc => {
             const data = doc.data();
             // Validació de dades
-            if (data.duplicateOf || !data.homeTeam || !data.awayTeam) return;
+            if (data.duplicateOf || !data.homeTeam || !data.awayTeam || !isBarcelonaMatch(data)) return;
 
             // Gestionar possible camp de format data/timestamp
             let dateObj = new Date();
@@ -118,9 +119,9 @@ async function fetchMatchesFromFirestore(): Promise<Match[]> {
         return matches;
     } catch (error: any) {
         if (error.code === 'permission-denied') {
-            console.warn('⚠️ [DB PERMISSION] Could not read from Firestore. Rules are likely blocking access.');
+            console.info('[DB PERMISSION] Could not read from Firestore. Rules are likely blocking access.');
         } else {
-            console.error('❌ [DB ERROR]', error);
+            console.info('[DB ERROR]', error);
         }
         return [];
     }
@@ -139,10 +140,9 @@ export async function fetchCompetitionMatches(competitionIds: string[]): Promise
         const snapshot = await getDocs(request);
         snapshot.forEach(snapshotDoc => {
             const data = snapshotDoc.data();
-            if (data.duplicateOf || !data.homeTeam || !data.awayTeam || !data.timestamp?.toDate) return;
+            if (data.duplicateOf || !data.homeTeam || !data.awayTeam || !data.timestamp?.toDate || !isBarcelonaMatch(data)) return;
             matches.push({ ...data, id: snapshotDoc.id, date: data.timestamp.toDate() } as Match);
         });
     }
     return matches.sort((first, second) => first.date.getTime() - second.date.getTime());
 }
-

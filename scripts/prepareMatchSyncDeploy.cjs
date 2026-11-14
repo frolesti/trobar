@@ -4,7 +4,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const destination = path.join(root, '.expo', 'match-sync-functions');
 fs.mkdirSync(path.join(destination, 'lib'), { recursive: true });
-for (const filename of ['matchSync.js', 'scheduledMatchSync.js']) {
+for (const filename of ['matchSync.js', 'scheduledMatchSync.js', 'liveMatchSync.js', 'cupData.js', 'stageData.js', 'supercopa.js']) {
     fs.copyFileSync(path.join(root, 'functions', 'lib', filename), path.join(destination, 'lib', filename));
 }
 const dependencies = require('../functions/package.json').dependencies;

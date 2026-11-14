@@ -1,6 +1,10 @@
 import * as admin from 'firebase-admin';
 import * as ical from 'node-ical';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { applyCupRecord, cupSource, cupTeamKey, fetchCupRecords, matchingCupRecord } from './cupData';
+import { fetchStageRecords, matchingStageRecord, normalizeStage, stageSource } from './stageData';
+import { supercopaFixtures } from './supercopa';
 
 export interface SyncConfig {
     footballDataApiKey: string;
@@ -21,9 +25,29 @@ export interface Fixture {
     score?: { fullTime?: { home: number | null; away: number | null } };
     category: Category;
     stage?: string;
+    stageSource?: string;
+    stageSourceEventId?: string;
     group?: string | null;
     round?: string;
     timeConfirmed?: boolean;
+    scoreSource?: 'espn-cup';
+    sourceUrl?: string;
+}
+
+export function isBarcelonaFixture(fixture: Pick<Fixture, 'homeTeam' | 'awayTeam'>): boolean {
+    return [fixture.homeTeam, fixture.awayTeam].some(team => ['barcelona', 'barca'].includes(cupTeamKey(team.name)));
+}
+
+function mergeChanges(previous: admin.firestore.DocumentData, patch: admin.firestore.DocumentData): boolean {
+    return Object.entries(patch).some(([key, value]) => {
+        if (value instanceof admin.firestore.Timestamp) {
+            return !(previous[key] instanceof admin.firestore.Timestamp) || !value.isEqual(previous[key]);
+        }
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            return mergeChanges(previous[key] ?? {}, value);
+        }
+        return !isDeepStrictEqual(previous[key], value);
+    });
 }
 
 export function calendarStage(text: string): string | undefined {
@@ -85,8 +109,12 @@ export function resultUpdate(fixture: Fixture, previous: admin.firestore.Documen
     const status = ['FINISHED', 'AWARDED'].includes(fixture.status) ? 'finished'
         : ['IN_PLAY', 'PAUSED', 'LIVE', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'].includes(fixture.status) ? 'live'
         : ['POSTPONED', 'SUSPENDED', 'CANCELLED'].includes(fixture.status) ? 'postponed' : 'scheduled';
-    if (!hasScore && previous.status === 'finished' && Number.isInteger(previous.homeScore) && Number.isInteger(previous.awayScore)) {
+    if ((!hasScore || status !== 'finished' || fixture.scoreSource === 'espn-cup') && previous.status === 'finished'
+        && Number.isInteger(previous.homeScore) && Number.isInteger(previous.awayScore)) {
         return { status: previous.status, homeScore: previous.homeScore, awayScore: previous.awayScore, scorePending: false };
+    }
+    if (status === 'scheduled' && previous.status === 'live' && Date.parse(fixture.utcDate) <= Date.now()) {
+        return { status: 'live', homeScore: previous.homeScore ?? null, awayScore: previous.awayScore ?? null, scorePending: false };
     }
     return {
         status,
@@ -128,6 +156,70 @@ async function supplementScores(fixtures: Fixture[], key: string): Promise<void>
     }
 }
 
+async function supplementCups(db: admin.firestore.Firestore, fixtures: Fixture[], category: Category): Promise<void> {
+    const cacheRef = db.doc(`system/${category === 'masculino' ? 'men' : 'women'}_team_crests`);
+    const cache = (await cacheRef.get()).data() || {};
+    const previousCache = { ...cache };
+    const byName = new Map<string, string>();
+    for (const [name, url] of Object.entries(cache)) {
+        if (typeof url === 'string' && url.startsWith('https://')) byName.set(cupTeamKey(name), url);
+    }
+    for (const fixture of fixtures) {
+        for (const team of [fixture.homeTeam, fixture.awayTeam]) team.crest ||= byName.get(cupTeamKey(team.name));
+    }
+    const requests = new Map<string, Fixture[]>();
+    for (const fixture of fixtures) {
+        const source = cupSource(fixture.competition.name);
+        const missingScore = category === 'femenino' && Date.parse(fixture.utcDate) < Date.now() - 3 * 3600_000
+            && (!Number.isInteger(fixture.score?.fullTime?.home) || !Number.isInteger(fixture.score?.fullTime?.away));
+        if (!source || (!missingScore && fixture.homeTeam.crest && fixture.awayTeam.crest)) continue;
+        const key = `${source}|${fixture.utcDate.slice(0, 4)}`;
+        requests.set(key, [...(requests.get(key) || []), fixture]);
+    }
+    const failures: string[] = [];
+    for (const [key, pending] of requests) {
+        const [source, year] = key.split('|');
+        try {
+            const records = await fetchCupRecords(source as NonNullable<ReturnType<typeof cupSource>>, year);
+            for (const fixture of pending) {
+                const record = matchingCupRecord(fixture.utcDate, fixture.homeTeam.name, fixture.awayTeam.name, records);
+                if (!record) continue;
+                applyCupRecord(fixture, record);
+                for (const team of [fixture.homeTeam, fixture.awayTeam]) if (team.crest) cache[team.name] = team.crest;
+            }
+        } catch { failures.push(key); }
+    }
+    if (mergeChanges(previousCache, cache)) await cacheRef.set(cache, { merge: true });
+    if (failures.length) throw new Error(`Cup enrichment failed: ${failures.join(', ')}`);
+}
+
+export async function supplementStages(fixtures: Fixture[]): Promise<void> {
+    const requests = new Map<string, Fixture[]>();
+    for (const fixture of fixtures) {
+        const normalized = normalizeStage(fixture.stage) || normalizeStage(fixture.round);
+        if (normalized) { fixture.stage = normalized; continue; }
+        const source = stageSource(fixture.competition.name, fixture.category);
+        if (!source) continue;
+        const key = `${source}|${fixture.utcDate.slice(0, 4)}`;
+        requests.set(key, [...(requests.get(key) || []), fixture]);
+    }
+    const failures: string[] = [];
+    for (const [key, pending] of requests) {
+        const [source, year] = key.split('|');
+        try {
+            const records = await fetchStageRecords(source as NonNullable<ReturnType<typeof stageSource>>, year);
+            for (const fixture of pending) {
+                const record = matchingStageRecord(fixture.utcDate, fixture.homeTeam.name, fixture.awayTeam.name, records);
+                if (!record?.stage) continue;
+                fixture.stage = record.stage;
+                fixture.stageSource = record.provider || 'espn';
+                fixture.stageSourceEventId = record.eventId;
+            }
+        } catch { failures.push(key); }
+    }
+    if (failures.length) throw new Error(`Stage enrichment failed: ${failures.join(', ')}`);
+}
+
 export function copaFixtureIdentity(date: string, home: string, away: string): string {
     const normalize = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
     return `copa_fixture_${createHash('sha256').update([date.slice(0, 10), normalize(home), normalize(away)].join('|')).digest('hex').slice(0, 24)}`;
@@ -158,6 +250,7 @@ export async function reconcileCopaDuplicates(db: admin.firestore.Firestore): Pr
             const mappingRef = db.doc('system/id_mappings');
             const mapping = (await transaction.get(mappingRef)).data();
             if (!mapping) throw new Error('Missing existing match ID mappings');
+            const previousMapping = structuredClone(mapping);
             for (const [key, documents] of entries.slice(offset, offset + 50)) {
                 documents.sort((first, second) => Number(first.id) - Number(second.id) || first.id.localeCompare(second.id));
                 const canonical = documents[0];
@@ -177,7 +270,7 @@ export async function reconcileCopaDuplicates(db: admin.firestore.Firestore): Pr
                     }
                 }
             }
-            transaction.set(mappingRef, mapping);
+            if (!isDeepStrictEqual(previousMapping, mapping)) transaction.set(mappingRef, mapping);
         });
     }
 }
@@ -207,17 +300,26 @@ export async function syncMatches(db: admin.firestore.Firestore, config: SyncCon
             }],
             ['women-calendar', async () => parseCalendar(await (await download(config.womenCalendarUrl)).text(), 'femenino')],
             ['men-calendar', async () => parseCalendar(await (await download(config.menCalendarUrl)).text(), 'masculino')],
+            ['rfef-supercopa-2027', async () => supercopaFixtures()],
         ];
         for (const [source, load] of sources) {
             try {
-                const fixtures = await load();
-                if (!fixtures.length && source !== 'men-calendar') throw new Error('No fixtures returned');
+                const loaded = await load();
+                if (!loaded.length && source !== 'men-calendar') throw new Error('No fixtures returned');
+                const fixtures = loaded.filter(isBarcelonaFixture);
+                if (fixtures.length !== loaded.length) console.warn('Excluded non-Barcelona fixtures', { source, count: loaded.length - fixtures.length });
+                if (source.endsWith('-calendar')) {
+                    try { await supplementCups(db, fixtures, source === 'men-calendar' ? 'masculino' : 'femenino'); }
+                    catch (error) { errors.push(`${source}-cups`); console.error('Cup provider failed', error); }
+                }
+                try { await supplementStages(fixtures); }
+                catch (error) { errors.push(`${source}-stages`); console.error('Stage provider failed', error); }
                 if (source === 'women-calendar' && config.apiFootballKey) {
                     try { await supplementScores(fixtures, config.apiFootballKey); }
                     catch (error) { errors.push('women-scores'); console.error('Women score provider failed', error); }
                 }
                 for (let offset = 0; offset < fixtures.length; offset += 50) {
-                    await persistFixtures(db, fixtures.slice(offset, offset + 50));
+                    await persistFixtures(db, fixtures.slice(offset, offset + 50), source === 'rfef-supercopa-2027');
                 }
                 count += fixtures.length;
             } catch (error) {
@@ -246,11 +348,17 @@ export async function syncMatches(db: admin.firestore.Firestore, config: SyncCon
     }
 }
 
-async function persistFixtures(db: admin.firestore.Firestore, fixtures: Fixture[]): Promise<void> {
+export async function importSupercopa(db: admin.firestore.Firestore): Promise<void> {
+    await persistFixtures(db, supercopaFixtures(), true);
+}
+
+async function persistFixtures(db: admin.firestore.Firestore, fixtures: Fixture[], createOnly = false): Promise<void> {
+    if (fixtures.some(fixture => !isBarcelonaFixture(fixture))) throw new Error('Only FC Barcelona fixtures may enter the catalogue');
     const mapRef = db.doc('system/id_mappings');
     await db.runTransaction(async transaction => {
         const mapSnap = await transaction.get(mapRef);
         const mappings = mapSnap.data() || { competitions: {}, teams: {}, matches: {}, nextCompId: 1, nextTeamId: 1, nextMatchId: 1 };
+        const previousMappings = structuredClone(mappings);
         const allocate = (kind: 'competitions' | 'teams' | 'matches', counter: string, apiId: string | number): string => {
             const key = String(apiId);
             if (!mappings[kind][key]) mappings[kind][key] = mappings[counter]++;
@@ -270,32 +378,46 @@ async function persistFixtures(db: admin.firestore.Firestore, fixtures: Fixture[
         }; });
         const refs = records.map(record => db.doc(`matches/${record.id}`));
         const oldDocs = refs.length ? await transaction.getAll(...refs) : [];
+        const metadataPaths = [...new Set(records.flatMap((record, index) =>
+            createOnly && oldDocs[index]?.data() ? [] : [`competitions/${record.comp}`, `teams/${record.home}`, `teams/${record.away}`]))];
+        const metadataRefs = metadataPaths.map(path => db.doc(path));
+        const metadataDocs = metadataRefs.length ? await transaction.getAll(...metadataRefs) : [];
+        const previousMetadata = new Map(metadataPaths.map((path, index) => [path, metadataDocs[index]?.data() || {}]));
+        const metadata = new Map<string, admin.firestore.DocumentData>();
         records.forEach((record, index) => {
             const { fixture, comp, home, away } = record;
             if (!Number.isFinite(Date.parse(fixture.utcDate))) throw new Error('Invalid fixture date');
             const old = oldDocs[index]?.data() || {};
+            if (createOnly && oldDocs[index]?.data()) return;
             const team = (input: Team, id: string, previous: any) => ({
                 id, name: input.name, shortName: input.shortName || input.name, badge: input.crest || previous?.badge || null,
             });
             const homeTeam = team(fixture.homeTeam, home, old.homeTeam);
             const awayTeam = team(fixture.awayTeam, away, old.awayTeam);
             const competition = { id: comp, name: fixture.competition.name, logo: fixture.competition.emblem || old.competition?.logo || null };
-            transaction.set(refs[index], {
+            const matchData = {
                 homeTeam, awayTeam, competition, league: comp,
                 timestamp: admin.firestore.Timestamp.fromDate(new Date(fixture.utcDate)),
                 ...resultUpdate(fixture, old),
                 category: fixture.category,
-                ...(fixture.stage ? { stage: fixture.stage } : {}),
+                ...(normalizeStage(fixture.stage) ? { stage: normalizeStage(fixture.stage) } : {}),
+                ...(fixture.stageSource ? { stageSource: fixture.stageSource, stageSourceEventId: fixture.stageSourceEventId } : {}),
                 ...(fixture.group ? { group: fixture.group } : {}),
                 ...(fixture.round ? { round: fixture.round } : {}),
                 ...(fixture.timeConfirmed !== undefined ? { timeConfirmed: fixture.timeConfirmed } : {}),
+                ...(fixture.sourceUrl ? { sourceUrl: fixture.sourceUrl } : {}),
                 apiId: fixture.id,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            transaction.set(db.doc(`competitions/${comp}`), { name: competition.name, apiId: fixture.competition.id }, { merge: true });
-            transaction.set(db.doc(`teams/${home}`), homeTeam, { merge: true });
-            transaction.set(db.doc(`teams/${away}`), awayTeam, { merge: true });
+            };
+            if (mergeChanges(old, matchData)) {
+                transaction.set(refs[index], { ...matchData, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            }
+            metadata.set(`competitions/${comp}`, { name: competition.name, apiId: fixture.competition.id });
+            metadata.set(`teams/${home}`, homeTeam);
+            metadata.set(`teams/${away}`, awayTeam);
         });
-        transaction.set(mapRef, mappings);
+        for (const [path, data] of metadata) {
+            if (mergeChanges(previousMetadata.get(path) || {}, data)) transaction.set(db.doc(path), data, { merge: true });
+        }
+        if (!isDeepStrictEqual(previousMappings, mappings)) transaction.set(mapRef, mappings);
     });
 }

@@ -34,6 +34,14 @@ test('new confirmed scores correct previous scores', () => {
     assert.equal(resultUpdate(fixture, { status: 'finished', homeScore: 1, awayScore: 0 }).homeScore, 2);
 });
 
+test('supplemental cup scores never overwrite an already confirmed stored result', () => {
+    const [fixture] = parseCalendar(calendar('FC Barcelona - Real Madrid [Copa] (2-0)'), 'femenino');
+    fixture.scoreSource = 'espn-cup';
+    assert.deepEqual(resultUpdate(fixture, { status: 'finished', homeScore: 3, awayScore: 1 }), {
+        status: 'finished', homeScore: 3, awayScore: 1, scorePending: false,
+    });
+});
+
 test('men calendar only imports Copa and preserves IDs', () => {
     assert.equal(parseCalendar(calendar('FC Barcelona - Getafe [Liga]'), 'masculino').length, 0);
     const [fixture] = parseCalendar(calendar('FC Barcelona - Getafe [Copa] (3-1)'), 'masculino');
@@ -52,12 +60,14 @@ test('invalid calendar is a provider error rather than empty success', () => {
 
 test('scheduled sync is idempotent and preserves ordinal IDs and confirmed results', async () => {
     const originalFetch = global.fetch;
+    const writtenPaths = [];
     const records = new Map([
         ['system/id_mappings', { competitions: { 2014: 1 }, teams: { 81: 1, 82: 2 }, matches: { 564700: 464 }, nextCompId: 2, nextTeamId: 3, nextMatchId: 465 }],
         ['matches/464', { status: 'scheduled', homeScore: null, awayScore: null }],
     ]);
     const snapshot = path => ({ id: path.split('/').pop(), data: () => path === 'system/id_mappings' ? structuredClone(records.get(path)) : records.get(path) });
     const write = (path, data, options) => {
+        writtenPaths.push(path);
         const merged = options?.merge ? { ...records.get(path), ...data } : { ...data };
         for (const [key, value] of Object.entries(merged)) {
             if (value?.isEqual?.(admin.firestore.FieldValue.delete())) delete merged[key];
@@ -65,7 +75,7 @@ test('scheduled sync is idempotent and preserves ordinal IDs and confirmed resul
         records.set(path, merged);
     };
     const fakeDb = {
-        doc: path => ({ path, set: async (data, options) => write(path, data, options) }),
+        doc: path => ({ path, get: async () => snapshot(path), set: async (data, options) => write(path, data, options) }),
         collection: () => ({ get: async () => ({ docs: [] }), where: () => ({ get: async () => ({ docs: [] }) }) }),
         runTransaction: async operation => {
             const writes = [];
@@ -81,8 +91,22 @@ test('scheduled sync is idempotent and preserves ordinal IDs and confirmed resul
     };
     const fixture = { id: 564700, utcDate: '2026-10-10T16:30:00Z', status: 'FINISHED', competition: { id: 2014, name: 'Primera Division' }, homeTeam: { id: 81, name: 'FC Barcelona' }, awayTeam: { id: 82, name: 'Getafe' }, score: { fullTime: { home: 3, away: 0 } } };
     let calendarUid = 'first-import';
-    global.fetch = async url => new Response(url.includes('football-data') ? JSON.stringify({ matches: [fixture] })
-        : calendar(url.includes('women') ? 'FC Barcelona - Real Madrid (7-0)' : 'FC Barcelona - Getafe [Copa] (3-1)').replace('fixture-123@example.com', url.includes('women') ? 'fixture-123@example.com' : `${calendarUid}@example.com`), { status: 200 });
+    let cupRequests = 0;
+    const cupEvent = { id: 'verified-cup', date: fixture.utcDate, season: { slug: 'final' }, status: { type: { completed: true } }, competitions: [{ competitors: [
+        { homeAway: 'home', team: { displayName: 'Barcelona', logo: 'https://example.com/barca.png' }, score: '3' },
+        { homeAway: 'away', team: { displayName: 'Getafe', logo: 'https://example.com/getafe.png' }, score: '1' },
+    ] }] };
+    const womenEvent = { ...cupEvent, id: 'verified-women-cup', competitions: [{ competitors: [
+        { homeAway: 'home', team: { displayName: 'Barcelona', logo: 'https://example.com/barca-women.png' }, score: '0' },
+        { homeAway: 'away', team: { displayName: 'Real Madrid', logo: 'https://example.com/madrid-women.png' }, score: '4' },
+    ] }] };
+    global.fetch = async url => {
+        if (url.includes('esp.copa_del_rey')) cupRequests++;
+        return new Response(url.includes('site.api.espn.com') ? JSON.stringify({ events: [url.includes('reina') ? womenEvent : cupEvent] }) : url.includes('football-data') ? JSON.stringify({ matches: [fixture,
+            { ...fixture, id: 999999, homeTeam: { id: 92, name: 'Real Sociedad' }, awayTeam: { id: 86, name: 'Real Madrid' } },
+        ] })
+        : calendar(url.includes('women') ? 'FC Barcelona - Real Madrid [Copa]' : 'FC Barcelona - Getafe [Copa] (3-1)').replace('fixture-123@example.com', url.includes('women') ? 'fixture-123@example.com' : `${calendarUid}@example.com`), { status: 200 });
+    };
     const config = { footballDataApiKey: 'test', womenCalendarUrl: 'https://example.com/women.ics', menCalendarUrl: 'https://example.com/men.ics' };
     try {
         await syncMatches(fakeDb, config);
@@ -92,6 +116,12 @@ test('scheduled sync is idempotent and preserves ordinal IDs and confirmed resul
         assert.equal(first.awayScore, 0);
         assert.equal(first.status, 'finished');
         assert.equal(first.homeTeam.id, '1');
+        assert.equal(records.get('system/id_mappings').matches['999999'], undefined, 'unrelated provider games never enter the catalogue');
+        const women = [...records.values()].find(record => record.competition?.name === 'Copa de la Reina');
+        assert.equal(women.homeScore, 0, 'public cup source recovers scores without an API-Sports key');
+        assert.equal(women.awayScore, 4);
+        assert.equal(women.status, 'finished');
+        womenEvent.competitions[0].competitors[0].score = '9';
         fixture.score.fullTime = { home: null, away: null };
         fixture.status = 'SCHEDULED';
         calendarUid = 'second-import';
@@ -102,6 +132,27 @@ test('scheduled sync is idempotent and preserves ordinal IDs and confirmed resul
         assert.equal(records.get('system/id_mappings').matches['564700'], 464);
         assert.equal(records.get('system/sync_status').failedSources.length, 0);
         assert.equal([...records.values()].filter(record => record.competition?.name === 'Copa del Rey').length, 1);
+        const cup = [...records.values()].find(record => record.competition?.name === 'Copa del Rey');
+        assert.equal(cup.awayTeam.badge, 'https://example.com/getafe.png');
+        assert.equal(cupRequests, 2, 'cached crests must not bypass phase enrichment on subsequent runs');
+        assert.equal([...records.values()].find(record => record.competition?.name === 'Copa de la Reina').homeScore, 0);
+        records.get('matches/464').homeTeam.customField = 'preserve';
+        writtenPaths.length = 0;
+        await syncMatches(fakeDb, config);
+        assert.deepEqual(writtenPaths, ['system/sync_status', 'system/sync_status', 'system/sync_status'],
+            'an unchanged sync only writes lease and health metadata; no matches, teams, competitions, mappings or crest cache');
+        records.delete('teams/1');
+        writtenPaths.length = 0;
+        await syncMatches(fakeDb, config);
+        assert.deepEqual(writtenPaths.filter(path => path !== 'system/sync_status'), ['teams/1'],
+            'missing metadata is repaired even when the match itself is unchanged');
+        fixture.score.fullTime = { home: 4, away: 1 };
+        fixture.status = 'FINISHED';
+        writtenPaths.length = 0;
+        await syncMatches(fakeDb, config);
+        assert.deepEqual(writtenPaths.filter(path => path !== 'system/sync_status'), ['matches/464'],
+            'a real score correction writes only the changed match');
+        assert.equal(records.get('matches/464').homeScore, 4);
     } finally { global.fetch = originalFetch; }
 });
 
@@ -161,15 +212,21 @@ test('women Champions reconciliation merges Barcelona aliases and preserves a co
         ['matches/20', { ...base, apiId: 'new', homeTeam: { name: 'Barcelona' }, homeScore: 3, awayScore: 1, status: 'finished' }],
     ]);
     const documents = [...records.keys()].filter(key => key.startsWith('matches/')).map(key => ({ id: key.split('/')[1], ref: { path: key }, data: () => records.get(key) }));
+    const writtenPaths = [];
     const database = {
         collection: () => ({ get: async () => ({ docs: documents }) }), doc: path => ({ path }),
         runTransaction: async operation => operation({
             get: async ref => ({ data: () => structuredClone(records.get(ref.path)) }),
-            set: (ref, data, options) => records.set(ref.path, options?.merge ? { ...records.get(ref.path), ...data } : data),
+            set: (ref, data, options) => {
+                writtenPaths.push(ref.path);
+                records.set(ref.path, options?.merge ? { ...records.get(ref.path), ...data } : data);
+            },
         }),
     };
     await reconcileCopaDuplicates(database);
+    writtenPaths.length = 0;
     await reconcileCopaDuplicates(database);
+    assert.deepEqual(writtenPaths, [], 'unchanged reconciliation does not rewrite the mapping or duplicate records');
     assert.equal(records.get('matches/20').duplicateOf, '10');
     assert.equal(records.get('matches/10').homeScore, 3);
     assert.equal(records.get('matches/10').awayScore, 1);
