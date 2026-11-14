@@ -13,6 +13,8 @@ function harness(options = {}) {
   const snapshot = key => ({ exists: documents.has(key), data: () => documents.get(key) });
   const ref = key => ({
     id: key.split('/').at(-1), key, get: async () => snapshot(key),
+    collection: name => ({ doc: id => ref(`${key}/${name}/${id}`) }),
+    delete: async () => { documents.delete(key); },
     set: async data => { documents.set(key, data); updates.push({ key, data }); },
     update: async data => { documents.set(key, { ...documents.get(key), ...data }); updates.push({ key, data }); },
   });
@@ -20,15 +22,23 @@ function harness(options = {}) {
     collection: collection => ({
       doc: id => ref(`${collection}/${id || `bar${++counter}`}`),
       where: (field, operator, value) => ({
+        select: () => ({ get: async () => ({ docs: [...documents.entries()]
+          .filter(([key, data]) => key.startsWith(`${collection}/`) && data[field] === value)
+          .map(([key]) => ({ ref: ref(key) })) }) }),
         limit: () => ({
           get: async () => {
-            const docs = [...documents.entries()].filter(([key, data]) => key.startsWith(`${collection}/`) && data[field] === value)
-              .map(([key]) => ({ ...snapshot(key), ...ref(key) }));
+            const docs = [...documents.entries()].filter(([key, data]) => key.startsWith(`${collection}/`)
+              && (operator === "<=" ? typeof data[field] === 'number' && data[field] <= value : data[field] === value))
+              .map(([key]) => ({ ...snapshot(key), ...ref(key), ref: ref(key) }));
             return { empty: !docs.length, docs };
           },
         }),
       }),
     }),
+    batch: () => {
+      const removals = [];
+      return { delete: reference => removals.push(reference.key), commit: async () => { for (const key of removals) documents.delete(key); } };
+    },
     runTransaction: operation => {
       const execute = async () => {
         const writes = [];
@@ -50,7 +60,10 @@ function harness(options = {}) {
     },
   };
   const auth = {
-    getUser: async () => ({ customClaims: options.customClaims || {} }),
+    getUser: async uid => {
+      if (options.authErrors?.[uid]) throw Object.assign(new Error(options.authErrors[uid]), { code: options.authErrors[uid] });
+      return { customClaims: options.customClaims || {}, ...options.authUser, ...options.authUsers?.[uid] };
+    },
     setCustomUserClaims: async (uid, data) => {
       if (options.failClaims) { options.failClaims = false; throw new Error('auth/unavailable'); }
       claims.push({ uid, data });
@@ -78,6 +91,13 @@ function harness(options = {}) {
     customers = {
       create: async (data, settings) => { calls.push({ action: 'customer', data, settings }); return { id: 'customer' }; },
       del: async () => { if (options.failCancel) throw new Error('stripe/unavailable'); },
+    };
+    billingPortal = { sessions: { create: async data => {
+      calls.push({ action: 'portal', data }); return { url: 'https://billing.stripe.com/p/session/test-only' };
+    } } };
+    invoices = {
+      createPreview: async () => options.invoicePreview || { amount_due: 9900, currency: 'eur' },
+      retrieve: async () => options.invoice,
     };
     checkout = { sessions: { create: async (data, settings) => {
       calls.push({ action: 'checkout', data, settings });
@@ -116,11 +136,16 @@ function harness(options = {}) {
       require: name => {
         if (name.startsWith('node:') || name === 'stdnum') return require(name);
         if (name === 'firebase-admin') return { initializeApp() {}, firestore, auth: () => auth };
-        if (name === 'firebase-admin/firestore') return { FieldValue: firestore.FieldValue };
+        if (name === 'firebase-admin/app') return { getApps: () => [{ name: '[DEFAULT]' }], initializeApp: () => ({ name: '[DEFAULT]' }) };
+        if (name === 'firebase-admin/firestore') return { FieldValue: firestore.FieldValue, getFirestore: () => database };
+        if (name === 'firebase-functions/v1') return { region: () => ({ runWith: () => ({ auth: { user: () => ({ onDelete: callback => callback }) } }) }) };
         if (name === 'stripe') return Stripe;
+        if (name === 'resend') return require('../node_modules/resend');
         if (name.endsWith('/https')) return { onCall: (...args) => args.at(-1), onRequest: (...args) => args.at(-1), HttpsError };
         if (name.endsWith('/firestore')) return { onDocumentCreated: (...args) => args.at(-1) };
+        if (name.endsWith('/scheduler')) return { onSchedule: (...args) => args.at(-1) };
         if (name.endsWith('/params')) return { defineSecret: () => ({ value: () => 'sk_test_mock' }) };
+        if (name.startsWith('./emails/')) return require(path.resolve(__dirname, '..', '..', 'emails', path.basename(name)));
         if (name.startsWith('./')) return load(path.resolve(path.dirname(filename), `${name}.ts`));
         throw new Error(`Unexpected import: ${name}`);
       },
@@ -128,7 +153,9 @@ function harness(options = {}) {
     modules.set(filename, module.exports);
     return module.exports;
   }
-  return { api: load(path.resolve(__dirname, '..', 'src', 'index.ts')), documents, updates, calls, claims };
+  return { api: load(path.resolve(__dirname, '..', 'src', 'index.ts')),
+    email: load(path.resolve(__dirname, '..', 'src', 'emailDelivery.ts')),
+    database, ref, documents, updates, calls, claims };
 }
 
 const request = data => ({ auth: { uid: 'owner', token: { email: 'owner@example.test', email_verified: true } }, data });

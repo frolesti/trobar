@@ -35,8 +35,12 @@ function loadSource(filename) {
   });
   const module = { exports: {} };
   vm.runInNewContext(outputText, {
-    module, exports: module.exports,
-    require: name => name.startsWith('.') ? loadSource(path.resolve(path.dirname(filename), `${name}.tsx`)) : webRequire(name),
+    module, exports: module.exports, process: { env: {} },
+    require: name => {
+      if (!name.startsWith('.')) return webRequire(name);
+      const resolved = path.resolve(path.dirname(filename), name);
+      return name.endsWith('.json') ? JSON.parse(fs.readFileSync(resolved, 'utf8')) : loadSource(`${resolved}.tsx`);
+    },
     console,
   });
 

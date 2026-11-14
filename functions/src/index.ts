@@ -5,7 +5,13 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import Stripe from "stripe";
 import { persistBarRegistration } from "./barRegistration";
+import { planSubscriptionEmails, planRefundEmail } from "./emailDelivery";
+export { recordFirstLogin, processEmailQueue } from "./emailDelivery";
 export { searchRegistrationLocations, getRegistrationLocationDetails } from "./registrationLocations";
+export {
+  onContactEmail, replyToContact, onSupportReplyEmail, onAccountDeletedEmail,
+  recordAccountSecurity, onAccountSecurityEmail, getBarEmailTips, setBarEmailTips,
+} from "./accountEmailEvents";
 
 /* ── Stripe configuration ────────────────────────────────────────────────── */
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
@@ -643,6 +649,7 @@ export const stripeWebhook = onRequest(
           // Obtenir la subscripció per saber el cicle
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           await syncSubscriptionState(sub, event.created, event.id);
+          await planSubscriptionEmails(db, stripe, event, sub);
 
           console.log(`✅ Checkout completat per ${uid}, sub: ${subscriptionId}`);
         }
@@ -654,16 +661,19 @@ export const stripeWebhook = onRequest(
         const subscription = event.data.object as Stripe.Subscription;
         const latest = await stripe.subscriptions.retrieve(subscription.id);
         await syncSubscriptionState(latest, event.created, event.id);
+        await planSubscriptionEmails(db, stripe, event, latest);
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
         await syncSubscriptionState(subscription, event.created, event.id);
+        await planSubscriptionEmails(db, stripe, event, subscription);
         break;
       }
 
       case "invoice.paid":
+      case "invoice.payment_action_required":
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = typeof invoice.customer === "string"
@@ -682,14 +692,20 @@ export const stripeWebhook = onRequest(
             if (subscriptionId) {
               const latest = await stripe.subscriptions.retrieve(subscriptionId);
               await syncSubscriptionState(latest, event.created, event.id);
+              await planSubscriptionEmails(db, stripe, event, latest);
             } else {
               console.info("[Billing] Failed invoice has no linked subscription", ownerDoc.id);
             }
-            console.log(`⚠️ Pagament fallat per customer ${customerId}`);
+            console.info("[Billing] Invoice event processed", event.type, invoice.id);
           }
         }
         break;
       }
+
+      case "refund.created":
+      case "refund.updated":
+        await planRefundEmail(db, stripe, event);
+        break;
 
       default:
         console.log(`ℹ️ Webhook event no gestionat: ${event.type}`);

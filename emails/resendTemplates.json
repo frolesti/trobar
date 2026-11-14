@@ -1,0 +1,213 @@
+{
+  "email-verification": {
+    "id": "72f544d8-0b77-494e-aef7-23fa2f1d3a1d",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "VERIFICATION_URL"
+    ],
+    "published": true
+  },
+  "password-reset": {
+    "id": "252402f5-4640-4575-b1aa-4890d3edc560",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "RESET_URL"
+    ],
+    "published": true
+  },
+  "welcome": {
+    "id": "7ce265ce-43d6-47da-8278-c9e9bec91550",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "APP_URL"
+    ],
+    "published": true
+  },
+  "bar-activated": {
+    "id": "ff986dde-7f44-4b04-a362-a7eac1afeccb",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "BILLING_CYCLE",
+      "TRIAL_END",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "trial-reminder-7": {
+    "id": "dbf9a071-c862-4591-825e-f3bf0b1f7695",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "BILLING_CYCLE",
+      "TRIAL_END",
+      "SUBJECT_TRIAL_END",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "trial-reminder-1": {
+    "id": "60963a59-0ffb-437c-bfd4-af59a672568c",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "BILLING_CYCLE",
+      "TRIAL_END",
+      "SUBJECT_TRIAL_END",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "payment-received": {
+    "id": "2d542b89-6c8b-4bea-ad1f-2905eb63d2fb",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "SUBJECT_AMOUNT",
+      "PERIOD_START",
+      "PERIOD_END",
+      "INVOICE_NUMBER",
+      "MANAGE_URL",
+      "INVOICE_URL"
+    ],
+    "published": true
+  },
+  "payment-failed": {
+    "id": "a3a1ec1e-56b8-485d-b2d9-a93caf46615a",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "payment-action-required": {
+    "id": "4cdc62e6-9977-4234-9a42-dea517ce094a",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "subscription-cancelled": {
+    "id": "f2e87bd9-4571-4b12-9232-baf98f3a5f68",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "PERIOD_END",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "subscription-ended": {
+    "id": "5e751bcb-91af-470a-b828-4d4991b99cc1",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "subscription-updated": {
+    "id": "ccf538ea-5341-43f6-8500-5f6a11b71120",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "AMOUNT",
+      "BILLING_CYCLE",
+      "PERIOD_END",
+      "MANAGE_URL"
+    ],
+    "published": true
+  },
+  "refund-confirmed": {
+    "id": "63b20dbe-10b0-472b-98f1-0fe8ded76444",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "AMOUNT",
+      "SUBJECT_AMOUNT",
+      "INVOICE_URL"
+    ],
+    "published": true
+  },
+  "support-received": {
+    "id": "1ae6d2f4-e85b-4e2d-a21e-18356136b40a",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "REFERENCE",
+      "SUPPORT_SUBJECT"
+    ],
+    "published": true
+  },
+  "support-reply": {
+    "id": "01944d9d-5791-4f65-bbbc-1400eaf77016",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "REFERENCE",
+      "SUPPORT_SUBJECT",
+      "REPLY_TEXT"
+    ],
+    "published": true
+  },
+  "account-deleted": {
+    "id": "98a62f49-fbb7-420d-a0b9-438d7d97f870",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING"
+    ],
+    "published": true
+  },
+  "security-alert": {
+    "id": "bdb633bf-3f27-447e-a3ce-ce866e65548f",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "SECURITY_CHANGE"
+    ],
+    "published": true
+  },
+  "bar-onboarding": {
+    "id": "4faaf8a4-185a-4efa-a866-02f995f3ae71",
+    "variables": [
+      "SUBJECT_PREFIX",
+      "GREETING",
+      "BAR_NAME",
+      "SUBJECT_BAR_NAME",
+      "PROFILE_URL",
+      "PREFERENCES_URL"
+    ],
+    "published": true
+  }
+}
