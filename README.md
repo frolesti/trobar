@@ -72,18 +72,248 @@ amb `Content-Type: text/html` pot ser una pàgina d'error, no un asset vàlid.
 
 ## 🚀 Funcionalitats
 
+### Filtres i controls del mapa
+
+El panell inclou «Oberts ara» i les 16 amenitats d'[amenities.ts](app/src/data/amenities.ts),
+agrupades en esports, serveis, ambient i accessibilitat. Les opcions es combinen
+amb criteri AND i s'apliquen igual als locals registrats i als descoberts.
+Una amenitat només coincideix si consta explícitament a les dades; «Oberts ara»
+exclou els locals sense horari conegut. Totes les opcions són accessibles amb
+scroll, amb selecció visible, «Netejar tot» i «Veure resultats».
+
+Els avisos apareixen a baix, al costat dels controls originals de cerca i
+ubicació, sense envair-ne la columna. Els escuts es carreguen directament:
+si no hi ha imatge o falla, l'espai queda buit, sense inicials ni placeholders.
+
+El panell de filtres conserva el fons grana: la selecció és groga, amb un
+signe menys per desactivar-la. El botó de resultats no porta fletxa.
+Els avisos transitoris utilitzen `react-native-toast-message`, amb el mateix
+component visual que els missatges del mapa. El missatge és centrat i la
+bombolla s'ajusta al contingut; durant la cerca només gira la icona del mapa.
+L'host del mapa reserva espai per als controls i alinea també els avisos
+transitoris a baix. Mentre n'hi ha un de visible, s'oculten temporalment els
+missatges de cerca o de partit per evitar que les bombolles se superposin.
+
+La pila de partits reserva 48 px en un marc frontal no animat, separat de la
+targeta posterior absoluta. Les capes són explícites i els gestos, animacions
+i reinicis comparteixen el driver JS també a iOS. Un canvi de partits o el
+desmuntatge invalida les finalitzacions pendents perquè no intercanviïn dades
+noves amb callbacks antics. La mida mesurada actualitza el recorregut del gest.
+La detecció de categoria és compartida entre càrrega, intercanvi i renderitzat,
+incloent-hi les categories antigues `FEMENI`/`MASCULI` i els partits en directe.
+
+Validació: `node --test tests\testMapFilters.cjs tests\testMapOverlayLayout.cjs tests\testMatchCard.cjs tests\testMapMatchFilter.cjs tests\testUserMessaging.cjs`.
+
+### Acceptació legal del compte
+
+Només en crear el compte amb Google, Apple o correu cal completar la lectura
+dels dos documents i marcar explícitament cadascuna de les acceptacions.
+Els inicis de sessió i la restauració de comptes existents no exigeixen
+acceptar-los, encara que no tinguin registre o les versions siguin antigues.
+Un registre interromput es reprèn al mateix dispositiu gràcies a una marca
+local associada al UID, que s'elimina després de confirmar el desament.
+Google i Apple distingeixen un compte nou amb `getAdditionalUserInfo().isNewUser`.
+Es pot rebutjar
+tancant la sessió. Arribar al final és un requisit d'interfície, no una prova
+que la persona hagi comprès el text.
+
+Es desa `users/{uid}.legalAcceptance` amb les dues versions, les confirmacions
+de lectura, la plataforma i `acceptedAt` amb timestamp del servidor. No es
+desbloqueja la interfície fins que Firestore confirma la persistència. Un
+error de xarxa manté el formulari i permet reintentar sense repetir la lectura.
+Això no substitueix ni activa permisos de localització o màrqueting.
+
+Les versions es defineixen a [legalContent.ts](app/src/data/legalContent.ts)
+i es validen a [firestore.rules](firebase/firestore/firestore.rules).
+**Cal desplegar aquestes regles abans de distribuir l'app nova**; les regles
+anteriors no permeten el camp nou. En canviar els documents, actualitza les
+versions i les regles conjuntament. Tant els documents de l'app com els del
+web acaben amb «fet per frolesti» i un enllaç a https://frolesti.cat.
+
+```powershell
+node --test tests\testLegalConsent.cjs
+firebase emulators:exec --only firestore --project demo-trobar-legal "node --test tests\firestoreLegalConsent.emulator.cjs"
+```
+
 - **Mapa Interactiu**: Visualitza bars propers amb un estil personalitzat (tipus esbós/llegible).
 - **Filtres**: Cerca per esport o equip.
 - **Detalls del Bar**: Informació sobre partits, horaris i rutes a peu.
 - **Autenticació**: Registre d'usuaris amb Firebase.
 
 Al mapa, mantén premuda la targeta del partit un quart de segon i arrossega-la
-horitzontalment per passar-la al darrere i mostrar l'altra categoria. Un toc curt
+verticalment (amunt o avall) per passar-la al darrere i mostrar l'altra categoria. Un toc curt
 continua activant o desactivant el filtre; un arrossegament curt torna al lloc.
-Els pins dels bars es redueixen en allunyar el mapa. Les fitxes dels bars tenen
-fons grana i les premium conserven la vora daurada.
+Només la targeta del davant mostra el filtre actiu; en seleccionar un partit,
+un avís de 2,4 segons confirma que es mostren els locals que l'han confirmat.
+Els avisos del mapa queden a baix, al costat dels controls i sense tapar-los.
+La bombolla sencera queda centrada a la pantalla, amb la mateixa reserva
+d'espai a esquerra i dreta. Els avisos de cerca i resultats desapareixen al
+cap de 3,5 segons; l'estat de càrrega continua indicat a la icona.
+La lupa i el posicionament conserven les icones 3D; en mostrar resultats,
+la lupa es converteix en un símbol de prohibició 3D per amagar-los.
+Els pins registrats utilitzen la imatge 3D grana. El pin premium incorpora
+l'escut a dalt a la dreta, en un únic PNG compost, sense transformacions de perspectiva natives.
+Els locals descoberts fan servir el mateix pin 3D que els registrats, en blanc
+amb contorn negre gruixut. El traç interior delimita també tota la vora del
+forat i la separació entre la cara frontal i el lateral; aquests traços es
+conserven a `pin-white-inner-strokes.svg` i formen part del PNG precarregat.
+Els premium conserven l'escut a dalt a la dreta i utilitzen un grana vi més
+fosc i fred que el vermell dels registrats. Les dues variants PNG deriven
+del pin registrat original i conserven el relleu, la punta i la transparència.
+Cap dels tres pins de locals no porta anells a la base: el pin original es
+conserva com a font i `pin-body-mask.svg` n'aïlla el cos per als PNG del mapa.
+La comparativa ampliada i a 52 px és a [map-pins-no-rings.png](docs/previews/map-pins-no-rings.png).
+La X del perfil premium conserva una àrea tàctil de 44 px, amb 8 px de marge
+interior superior i lateral, sense trepitjar la galeria.
+Abans de muntar la navegació es descodifiquen les sis icones crítiques amb
+`expo-image`, es retenen les imatges en memòria i es precarreguen les fonts
+d'icones. Els pins i controls utilitzen aquestes mateixes imatges descodificades.
+Si falla la càrrega, la pantalla inicial bloqueja l'accés i ofereix reintentar;
+no s'obre el mapa amb icones absents.
+El mapa manté el seguiment de la imatge fins que es carrega, abans de congelar
+la captura nativa del marcador. Tots dos pins es redueixen en allunyar el mapa.
+A Apple Maps, `centerOffset` complementa l'ancoratge inferior de Google Maps;
+la separació de la bafarada es calcula amb l'alçada real del marcador.
+Les fitxes de locals registrats i descoberts comparteixen plantilla i contenidor,
+amb alçada intrínseca, sense desplaçament vertical del resum. Seleccionar un local
+el situa prop del peu del mapa, sempre per sobre de la navegació, utilitzant la
+projecció real. Es conserva la càmera completa (zoom/altitud, rumb i inclinació);
+els gestos manuals de rotació i inclinació continuen habilitats. Seleccionar
+un local no modifica l'orientació que l'usuari havia escollit.
+Tancar la fitxa recupera la vista anterior a la
+primera selecció, encara que s'hagi canviat de local entremig.
+Les fitxes dels bars tenen
+fons grana, la mateixa capçalera, estat, foto i adreça. Les premium afegeixen
+l'etiqueta daurada i la promoció; les descobertes mostren la pregunta de confirmació
+amb l'acció positiva destacada i la cancel·lació secundària al costat.
+Una línia discreta als perfils premium, sense text ni icones, permet
+desplegar la mateixa targeta: segueix el dit mentre s'arrossega i s'assenta
+oberta o plegada en deixar-la anar. També es pot plegar arrossegant avall.
+Cada resum té una mesura associada a la identitat i origen del local,
+per no heretar una alçada retallada. No té scroll vertical: resumeix
+la valoració, l'estat, l'adreça, la distància i la promoció. Les fotos pròpies
+i públiques es dedupliquen en una galeria horitzontal de tota l'amplada,
+també als locals descoberts i gratuïts. Les dades extenses són a la fitxa
+premium desplegada. Al mòbil,
+la pila de partits es plega mentre hi ha qualsevol local seleccionat per
+deixar espai a tota la targeta. A la pila de partits
+només es renderitza una targeta per partit, també durant l'intercanvi.
+La targeta respecta el peu de navegació. Amb un local obert al mòbil, els controls
+de cerca i ubicació s'alineen en una fila sota la fitxa, sense tapar-la ni tapar el pin.
+Aplicar o canviar el
+filtre de partit esborra la ruta i la selecció anteriors.
+
+La galeria, l'estat i l'adreça del resum reserven la mida des del primer render,
+abans de rebre Google Places o descarregar cap foto. La fitxa es fa visible
+després de la primera mesura completa; carregar imatges no en canvia la posició.
+Una foto fallida es registra i mostra un estat explícit dins del mateix espai.
+El perfil premium desplegat té una capçalera sense un segon marc interior,
+seguiment secundari, emissions a prop de la capçalera i «Com arribar-hi» fix
+fora del scroll, respectant l'àrea segura. Les seccions buides no ocupen grans
+targetes decoratives. Referències de jerarquia:
+[Apple Maps Place Cards](https://www.apple.com/ae/business/enterprise/connect/)
+i [FANZO](https://www.fanzo.com/en/lokale/1644/pavilion-end).
+
+Amb `EXPO_PUBLIC_TROBAR_ENV=development`, només el Zurito registrat amb ID
+`8lyFejxdbgvn58YIZIYF` mostra tres ressenyes locals d'exemple, xarxes fictícies
+i fins a tres partits de la programació com a exemples d'emissió. El resum
+mostra «DEMO» i el perfil identifica les dades d'exemple. No es modifica el
+document del bar ni es publiquen emissions o ressenyes a Firestore; les
+accions externes de demostració continuen protegides. En producció no
+s'aplica aquesta previsualització, ni tan sols amb `isTestData=true`.
+La cerca manual combina OSM amb tres consultes de Google amb límits separats:
+bars/pubs, cafeteries i restauració/oci nocturn (fins a 20 per grup).
+Inclou bars esportius, de vins i còctels, cerveseries, cafeteries i restaurants;
+OSM també inclou jardins de cervesa, menjar ràpid i zones de restauració.
+Es mantenen la deduplicació, la memòria cau i el pressupost de 60 peticions
+Google per hora i sessió. Les categories fallides o saturades indiquen cobertura
+parcial, sense descartar els resultats de la resta.
+
+La descoberta conserva Google Places i OpenStreetMap, sense migrar ni fusionar
+documents remots. Els resultats d'una sessió s'unifiquen per identificador o,
+si no hi ha IDs de Google contradictoris, per nom normalitzat i proximitat
+(50 m). Variants com «Avril's» i «Avril's Café» també coincideixen a menys
+de 35 m si el nom distintiu és igual; números de portal coneguts diferents
+impedeixen la fusió. Es conserva l'ID del primer pin i es prefereixen el nom,
+el Place ID i l'adreça de Google, sense perdre etiquetes i serveis d'OSM.
+La consulta de detalls reutilitza el mateix criteri; només els noms exactes
+mantenen el radi anterior de 250 m.
+
+Els crèdits dels resultats es mostren en un únic peu grana amb enllaços a les
+fonts presents i als proveïdors que ho requereixin. Les fitxes del mapa no
+repeteixen aquesta línia. La posició automàtica del pin seleccionat reserva
+espai per al peu, sense canviar el zoom ni l'orientació. L'atribució nativa del mapa es conserva i, quan ja
+identifica Google Maps, no es duplica. No es traslladen tots els crèdits als
+textos legals: cal respectar les
+[condicions de Google Places](https://developers.google.com/maps/documentation/places/web-service/policies)
+i les [directrius d'OSM](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines).
+
 El perfil agrupa els enllaços legals en un peu compacte; els crèdits d'icones
 es poden consultar a l'apartat «Crèdits» dels termes del servei.
+
+La interfície utilitza Barlow per a textos, títols i botons; Barlow Condensed
+queda per als partits i Oi per a la marca. Les antigues referències Lora són
+àlies de Barlow, no una quarta família visible.
+
+A l'accés, la mascota queda centrada a dalt, sense cercle, i el títol és
+només «troBar». La imatge amb la campana oberta prové del fotograma 14
+(índex des de zero) del GIF local de la mascota.
+
+Les puntuacions i ressenyes mantenen orígens independents:
+- **Google Maps**: només puntuació mitjana i recompte, identificats com a font
+  externa. No es consulten ni es mostren ressenyes escrites de Google.
+  El propietari pot activar «Puntuació de Google Maps» al panell del bar;
+  per defecte és oculta (`showGoogleRating: false`). La puntuació reutilitza
+  els detalls de Places, sense cap petició addicional ni còpia a Firestore.
+- **troBar**: els usuaris identificats poden publicar una ressenya per bar
+  premium i eliminar la seva. El propietari no pot ressenyar el seu local.
+  Es conserven les ressenyes anteriors, inclosos els IDs antics; les mitjanes
+  es calculen al servidor sense sobreescriure els documents agregats antics.
+- **Demo**: les ressenyes noves es desen només en aquest dispositiu, amb una
+  indicació explícita. Mai es presenten com a opinions reals de Google.
+
+Les regles de ressenyes i seguiment són a `firebase/firestore/firestore.rules`.
+Cal desplegar-les per habilitar les operacions contra el backend real.
+`npm run test:firestore` les comprova amb l'emulador local (Firebase CLI i Java
+necessaris); no toca el projecte de producció.
+Les regles preserven les lectures públiques de partits, competicions, equips
+i bars, els reports OSM i les operacions del propietari. Només el propietari
+o un administrador pot desar l'enriquiment de Google al document del bar;
+la resta de visitants poden consultar-lo sense escriure la memòria cau.
+Els rols, les vinculacions de propietat i les dades de facturació es gestionen
+des del backend, no des del perfil editable de l'usuari.
+
+A Partits hi ha només tres filtres de competició, amb logotips: Lliga,
+Champions i Copa. Cada filtre agrupa les competicions masculina i femenina;
+la selecció de gènere en determina els partits i el logotip. Sense gènere
+seleccionat es mostren totes dues categories. Els resultats no porten
+l'etiqueta redundant «Final»; es conserva la fase de l'eliminatòria.
+La navegació lateral de Partits i Perfil també està activada explícitament
+al web, amb la transició inversa en tornar al mapa.
+La càrrega de Partits es mostra dins de la pantalla amb un indicador local:
+no activa el splash global que amagava l'animació lateral. Els controls de
+gènere i competició tenen tots 40 px d'alçada, amb àrea tàctil ampliada.
+
+### Contacte durant la beta
+
+«Contacte i suport» del perfil i del panell de propietari obre `/contacte`,
+no el client de correu. Els usuaris identificats poden enviar incidències,
+millores o altres consultes amb assumpte, missatge i consentiment explícit.
+El formulari conserva el text si falla l'enviament i només confirma l'èxit
+quan rep una referència de la funció `submitContact`.
+
+La bústia privada és la col·lecció `contactMessages` de Firestore: només
+l'equip administrador la pot consultar. Els clients no poden llegir-la ni
+escriure-hi directament; la funció valida les dades, vincula l'UID i el correu
+del compte, limita els enviaments a un per minut i evita duplicats en reintents.
+`contactRateLimits` és també privada. No s'envien correus automàtics.
+
+Desplegament aïllat, sense tocar Stripe ni la sincronització de partits:
+`npm --prefix functions run build`, `node scripts/prepareContactDeploy.cjs`,
+i `firebase deploy --config .expo/contact.firebase.json --only functions:contact:submitContact --project trobar-1123f`.
+Les dependències d'aquest paquet generat s'han d'instal·lar abans del primer
+desplegament. Les regles existents ja reserven aquestes col·leccions als
+administradors; `npm run test:firestore` comprova que no hi ha accés directe.
 
 ## 🛠️ Requisits Previs
 
@@ -119,13 +349,33 @@ es poden consultar a l'apartat «Crèdits» dels termes del servei.
 
 ## ▶️ Execució
 
+### Entorn de dades: dev o prod
+
+Hi ha dos entorns de dades, independents del tipus de build d'Expo:
+
+- `npm run env:dev`: selecciona `.env.development`, l'entorn habitual de treball.
+- `npm run env:prod`: selecciona `.env.production`, només quan estigui configurat.
+
+El selector valida Firebase i les etiquetes d'entorn abans de canviar res.
+Genera `.env` per als scripts existents i `.env.local` per a Expo; no són
+entorns addicionals. `.env.local` evita que el mode de Metro
+(`development`) o d'exportació (`production`) substitueixi l'entorn escollit.
+No afegeixis overrides `.env.development.local` o `.env.production.local`.
+Reinicia Metro després de canviar d'entorn. Un fitxer prod amb placeholders
+es rebutja sense substituir el dev actiu; això no configura ni valida producció.
+L'emulador Android també selecciona dev per defecte; prod requereix `-Env prod`.
+
+El missatge **Using development build** apareix perquè hi ha `expo-dev-client`
+instal·lat: indica el runtime natiu que obre el QR, no una base de dades nova.
+`--clear` només neteja la memòria cau; no canvia Firebase ni recompila iOS.
+
 Per iniciar el projecte en mode desenvolupament:
 
 ```bash
-npx expo start --clear
+npx expo start --dev-client
 ```
 
-El port `8081` queda reservat a Expo: `npx expo start --clear` atura el procés que l'ocupi,
+El port `8081` queda reservat a Expo: `npx expo start --dev-client` atura el procés que l'ocupi,
 comprova que s'hagi alliberat i inicia Expo al mateix terminal, sense passar al
 8082. No el facis servir per a altres serveis. Si el sistema denega l'aturada,
 l'ordre falla explícitament i mostra el PID, en lloc d'arrencar en un altre port.
@@ -146,18 +396,58 @@ La neteja s'integra a la configuració local i s'executa una sola vegada per
 procés, només amb `expo start`, abans de seleccionar el port. No modifica Expo
 ni afecta les ordres de build, exportació o consulta de configuració.
 `--clear` continua netejant la memòria cau de Metro, com sempre.
+No cal afegir-lo a cada arrencada: provoca expressament l'avís de memòria cau
+buida i una reconstrucció del bundle. Reserva'l per a problemes de memòria cau.
+Els avisos d'actualització de paquets són una comprovació diferent; es revisen
+amb `npx expo install --check`, no netejant Metro.
 
-### Provar a l'iPhone amb Expo Go (Windows)
+Abans d'arrencar amb `npx expo start` (també amb `--clear`) o `npm start`,
+es revisen les versions compatibles mitjançant `expo install --check --json`.
+La consulta conserva els valors de l'entorn actiu, però neutralitza només en
+el procés fill el marcador de logging heretat d'Expo. El lector accepta els
+missatges inicials `env: load`/`env: export` i els codis de color abans del JSON;
+una resposta malformada o text inesperat continua mostrant un error explícit.
+Si hi ha canvis, es mostren els paquets i les versions i es demana confirmació
+(`s` per acceptar; Enter per ajornar). Només després d'acceptar s'executa
+`expo install --fix --npm`, que actualitza el manifest i el lockfile segons el SDK
+actual, sense saltar a un SDK major nou ni fer un `npm update` general.
+Després d'instal·lar, l'arrencada s'atura: torna a executar la mateixa ordre per
+evitar continuar amb mòduls de la CLI antiga carregats en memòria.
+Si canvien dependències natives, cal recompilar i reinstal·lar la development build.
 
-El projecte utilitza Expo SDK 58, React Native 0.88 i React 19.3. Cal una versió
-d'Expo Go compatible amb SDK 58. Després d'actualitzar dependències, comprova-les
-amb `npx expo install --check` i arrenca Metro amb `--clear`.
+La revisió s'executa una vegada per procés, no durant builds, exports ni consultes
+de configuració. S'omet amb `--offline`, `EXPO_OFFLINE=1`, en CI, sense terminal
+interactiu o amb `TROBAR_EXPO_UPDATE_CHECK=0`. Per això l'ordre d'iPhone, que
+utilitza `--offline`, no consulta versions. Un error de consulta es mostra i no
+impedeix iniciar Metro; una instal·lació fallida sí que atura l'arrencada.
+Per consultar explícitament sense instal·lar ni iniciar Metro:
 
-Les builds natives pròpies de SDK 57 s'han de regenerar i recompilar per a SDK 58;
-actualitzar Metro no les actualitza. Conserva les personalitzacions natives en
-regenerar-les. No publiquis una OTA de SDK 58 amb el mateix `runtimeVersion` de
-les builds de SDK 57: la política actual `appVersion` requereix una versió d'app
-diferent abans de publicar aquesta OTA.
+```powershell
+node scripts/expoUpdates.js --check-only
+```
+
+### Provar a l'iPhone amb la build de desenvolupament (Windows)
+
+El projecte utilitza Expo SDK 58, React Native 0.88 i React 19.3. El flux
+principal és una **development build pròpia**, no Expo Go. Després de canviar
+SDK, plugins o dependències natives, cal recompilar i instal·lar aquesta build:
+actualitzar Metro no actualitza el binari de l'iPhone.
+
+Per crear-la explícitament amb EAS (requereix compte, permisos i pot tenir cost):
+
+```powershell
+npx eas-cli@latest build --platform ios --profile development-device
+```
+
+`development-device` és per a l'iPhone físic; `development` és per al simulador.
+Instal·la la build des de l'enllaç d'EAS abans d'obrir Metro. La configuració
+nativa inclou Google Maps, però el mapa actual només selecciona aquest proveïdor
+a Android; a iOS encara utilitza Apple Maps. Disposar del mòdul natiu no equival
+a activar-lo: abans de publicar cal alinear el proveïdor d'iOS amb les condicions
+d'ús de Google Places quan es representen les seves dades sobre un mapa.
+Cal habilitar **Maps SDK for iOS** i **Places API (New)** al projecte de la clau.
+La política `runtimeVersion: fingerprint` separa les futures OTA segons les
+dependències natives; no repara ni actualitza les builds antigues instal·lades.
 
 Fes servir una finestra PowerShell normal, situada a l'arrel del repositori:
 
@@ -166,23 +456,59 @@ cd C:\Users\USER\Repos\trobar
 .\scripts\startIphone.ps1
 ```
 
-Aquest script allibera els ports d’Expo, utilitza una caché de Metro dins del projecte i anuncia automàticament la IP LAN activa del PC. Deixa el terminal obert i escaneja el QR que hi apareix amb Expo Go o amb la càmera de l’iPhone.
+Aquest script utilitza una memòria cau de Metro dins del projecte, anuncia
+la IP LAN activa i executa `expo start --dev-client --lan --offline`,
+conservant la memòria cau. Si necessites reconstruir-la expressament, executa
+`.\scripts\startIphone.ps1 -Clear`.
+Deixa el terminal obert i obre el QR amb la càmera o amb la development build
+troBar instal·lada. La configuració de desenvolupament pot recuperar el port
+8081: no arrenquis una segona sessió si n'hi ha una que vols conservar.
 
-La URL esperada té aquest format:
+L'enllaç de desenvolupament conté aquest servidor Metro:
 
 ```text
-exp://<IP-LAN-DEL-PC>:8081
+http://<IP-LAN-DEL-PC>:8081
 ```
 
-Per iniciar explícitament Expo Go a l'iPhone (el repo també té `expo-dev-client`, que altrament fa que Expo seleccioni el development build):
+Si necessites provar expressament Expo Go, només amb una versió compatible
+amb SDK 58 i amb les seves limitacions natives:
 
 ```powershell
-npx expo start --go --clear
+.\scripts\startIphone.ps1 -Runtime go
 ```
 
 Amb Expo Go, email/password i Sign in with Apple fan servir els mòduls inclosos a Expo Go. Google fa servir `expo-auth-session` amb el redirect proxy d'Expo, ja que `@react-native-google-signin/google-signin` necessita codi natiu i no és present a Expo Go. El proxy d'Expo és deprecated i pot fallar en navegadors que bloquegen cookies. El client OAuth web existent ha d'autoritzar `https://auth.expo.io/@frolesti/trobar-ios` com a redirect URI. El login Google natiu continua disponible en builds que inclouen `RNGoogleSignin`. EAS no és necessari per iniciar Expo Go; `npx expo start --clear` només neteja Metro. El login amb Google al web continua fent servir Firebase Popup.
 
-L'iPhone i el PC han d'estar a la mateixa Wi-Fi. Si Expo Go mostra “There was a problem running the requested project”, comprova primer la connectivitat des del PC:
+`Cannot find native module 'ExpoAsset'` i l'avís d'`ExponentConstants` indiquen
+que el runtime executat no exposa aquests mòduls. Les dependències JavaScript
+estan instal·lades i l'autolinking Apple les inclou. Reconstrueix i instal·la
+el binari correcte; no afegeixis mocks ni confiïs només en `--clear`.
+`main has not been registered` pot ser conseqüència de l'error anterior.
+Comprova primer `npx expo install --check` i l'autolinking local:
+
+```powershell
+node node_modules\expo-modules-autolinking\bin\expo-modules-autolinking resolve --platform apple
+```
+
+Si apareixen `ExpoAsset` i `expo-constants` però l'iPhone no els troba, revisar
+el JavaScript no repara el binari instal·lat. Cal una build compatible amb
+l'SDK i els mòduls actuals. A Windows no es pot compilar iOS localment;
+utilitza una build compatible existent o compila en un Mac amb Xcode.
+No s'ha d'iniciar automàticament una build remota ni publicar una OTA com a
+substitut: una OTA tampoc no afegeix mòduls natius.
+
+En un inici normal, conserva la memòria cau: `npx expo start --dev-client --lan`
+o `npm run start:iphone`. Reserva `--clear` per a problemes de memòria cau:
+obliga a reconstruir el bundle i pot allargar molt la primera connexió.
+Si iOS mostra «Could not connect to development server» durant aquesta
+compilació, espera que acabi i torna a carregar. Si persisteix, comprova
+l'accés des del telèfon; que Metro hagi compilat no prova que la descàrrega
+hagi arribat al dispositiu.
+
+L'iPhone i el PC han d'estar a la mateixa Wi-Fi. Si no troba Metro,
+obre `http://<IP-LAN-DEL-PC>:8081/status` a Safari **de l'iPhone**:
+ha de mostrar `packager-status:running`. Una prova des del mateix PC no
+demostra que l'iPhone pugui connectar-hi. Comprova també des del PC:
 
 ```powershell
 Test-NetConnection <IP-LAN-DEL-PC> -Port 8081
@@ -202,7 +528,7 @@ Per aturar Expo, prem `Ctrl+C` al mateix terminal.
 
 Això obrirà el Metro Bundler. Des del terminal pots introduir les opcions:
 - **`w`** : Per obrir la versió **Web** al navegador.
-- **Escanejar QR** : Utilitza l'app **Expo Go** al teu mòbil (Android/iOS).
+- **Escanejar QR** : Obre la development build de **troBar** instal·lada.
 - **`a`** : Per obrir en un emulador Android (requereix Android Studio).
 - **`i`** : Per obrir en un simulador iOS (només macOS, requereix Xcode).
 
