@@ -53,16 +53,17 @@ export async function fetchWithTimeout(
 
     try {
         const response = await fetch(input, { ...init, signal: controller.signal });
-        console.log(`[HTTP] ${context} ${response.status} ${Date.now() - startedAt}ms ${getSafeUrl(input)}`);
+        if (!response.ok) console.info(`[HTTP] ${context} ${response.status} ${Date.now() - startedAt}ms ${getSafeUrl(input)}`);
         return response;
     } catch (error: any) {
         const elapsedMs = Date.now() - startedAt;
         if (error?.name === 'AbortError' && !callerSignal?.aborted) {
             const timeoutError = new ApiTimeoutError(context, timeoutMs);
-            console[failureLevel](`[HTTP TIMEOUT] ${timeoutError.message} (${elapsedMs}ms) ${getSafeUrl(input)}`);
+            console.info(`[HTTP TIMEOUT] ${timeoutError.message} (${elapsedMs}ms) ${getSafeUrl(input)}`, { severity: failureLevel });
             throw timeoutError;
         }
-        console[failureLevel](`[HTTP ERROR] ${context} after ${elapsedMs}ms ${getSafeUrl(input)}`, {
+        console.info(`[HTTP ERROR] ${context} after ${elapsedMs}ms ${getSafeUrl(input)}`, {
+            severity: failureLevel,
             name: error?.name,
             message: error?.message,
         });
@@ -84,9 +85,7 @@ export async function executeRequest<T>(
     context: string
 ): Promise<ApiResponse<T>> {
     try {
-        const startedAt = Date.now();
         const result = await operation();
-        console.log(`[API OK] ${context} ${Date.now() - startedAt}ms`);
         return {
             data: result,
             error: null,
@@ -94,7 +93,7 @@ export async function executeRequest<T>(
         };
     } catch (e: any) {
         // Logging centralitzat
-        console.error(`[API ERROR] ${context}:`, {
+        console.info(`[API ERROR] ${context}:`, {
             name: e?.name,
             message: e?.message,
             code: e?.code,
@@ -114,24 +113,22 @@ export async function executeRequest<T>(
 
 /**
  * Versió alternativa que llança l'error (throw) en lloc de retornar un objecte.
- * Útil per quan volem gestionar al component el catch, però volem el missatge netejat.
+ * Conserva el codi original; el component ha de traduir-lo amb getUserFriendlyError.
  */
 export async function executeOrThrow<T>(
     operation: () => Promise<T>,
     context: string
 ): Promise<T> {
     try {
-        const startedAt = Date.now();
         const result = await operation();
-        console.log(`[API OK] ${context} ${Date.now() - startedAt}ms`);
         return result;
     } catch (e: any) {
-        console.error(`[API FAIL] ${context}:`, {
+        console.info(`[API FAIL] ${context}:`, {
             name: e?.name,
             message: e?.message,
             code: e?.code,
             status: e?.status,
         });
-        throw new Error(getUserFriendlyError(e));
+        throw e;
     }
 }

@@ -3,6 +3,7 @@ import React, { Component, ErrorInfo } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import Text from './AppText';
 import AppIcon from './AppIcon';
+import UserNotice from './UserNotice';
 import { SKETCH_THEME, sketchShadow } from '../theme/sketchTheme';
 
 interface Props {
@@ -33,8 +34,8 @@ class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         // Registrar a la consola (es podria enviar a Sentry/Crashlytics en producció)
-        console.error('[ErrorBoundary] Uncaught error:', error);
-        console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+        console.info('[ErrorBoundary] Uncaught error:', error);
+        console.info('[ErrorBoundary] Component stack:', errorInfo.componentStack);
     }
 
     handleReload = () => {
@@ -74,15 +75,9 @@ class ErrorBoundary extends Component<Props, State> {
                     Alguna cosa ha anat malament
                 </Text>
 
-                {/* Subtítol */}
-                <Text style={{
-                    fontSize: 16, color: SKETCH_THEME.colors.textMuted,
-                    fontFamily: EDITORIAL.fontRegular, textAlign: 'center',
-                    marginBottom: 32, lineHeight: 22,
-                }}>
-                    L'aplicació ha trobat un error inesperat.{'\n'}
-                    Disculpa les molèsties!
-                </Text>
+                <View style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}>
+                    <UserNotice tone="error" message="No hem pogut carregar aquesta pantalla. Torna-ho a provar." />
+                </View>
 
                 {/* Botó de recàrrega */}
                 <TouchableOpacity
@@ -99,25 +94,10 @@ class ErrorBoundary extends Component<Props, State> {
                         color: 'white', fontWeight: 'bold',
                         fontSize: 16, fontFamily: EDITORIAL.fontRegular,
                     }}>
-                        Tornar a l'inici
+                        Tornar-ho a provar
                     </Text>
                 </TouchableOpacity>
 
-                {/* Detall de l'error (només dev, subtil) */}
-                {__DEV__ && this.state.error && (
-                    <View style={{
-                        marginTop: 32, padding: 12,
-                        backgroundColor: 'rgba(0,0,0,0.04)',
-                        borderRadius: 8, maxWidth: 400, width: '100%',
-                    }}>
-                        <Text style={{
-                            fontSize: 12, color: SKETCH_THEME.colors.textMuted,
-                            fontFamily: EDITORIAL.fontRegular,
-                        }}>
-                            {this.state.error.toString()}
-                        </Text>
-                    </View>
-                )}
             </View>
         );
     }

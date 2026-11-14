@@ -1,187 +1,83 @@
-/**
- * AlertBanner — editorial transient notice/toast component.
- *
- * Use as a single global host:
- *   <AlertBannerHost />  (mount once near the root, after Map / Modal layers)
- * And anywhere in the tree:
- *   import { showAlert } from './AlertBanner';
- *   showAlert({ message: 'Hola', tone: 'info' });
- *
- * Tones: info (paper + ink), success (grana eyebrow), error (danger text).
- * Auto-dismiss after `duration` ms (default 5000). Manually closable via X.
- */
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Animated, Platform, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { EDITORIAL } from '../theme/editorialTheme';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import Toast, { ToastConfigParams } from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import UserNotice, { NoticeAction } from './UserNotice';
+import { sanitizeUserMessage } from '../utils/errorHandler';
 
 export type AlertTone = 'info' | 'success' | 'error';
 
 export interface AlertPayload {
     message: string;
     tone?: AlertTone;
-    /** ms; 0 = sticky until manual close. Default 5000. */
     duration?: number;
-    /** Optional short eyebrow above the message (e.g. "Avís", "Error"). */
     eyebrow?: string;
-    /** Visual position of the banner. Defaults to host defaultPosition. */
     position?: 'top' | 'bottom';
-    /** Overrides the host's default top/bottom offset for this alert only. */
     offset?: number;
+    action?: NoticeAction;
 }
 
-type Listener = (a: AlertPayload | null) => void;
-const listeners = new Set<Listener>();
-
 export function showAlert(payload: AlertPayload) {
-    listeners.forEach((l) => l(payload));
+    const duration = payload.duration ?? (payload.tone === 'error' ? 8000 : 5000);
+    Toast.show({
+        type: 'trobar',
+        position: payload.position,
+        autoHide: duration > 0,
+        visibilityTime: Math.min(duration, 15000),
+        ...(payload.offset === undefined ? {} : { topOffset: payload.offset, bottomOffset: payload.offset }),
+        props: {
+            ...payload,
+            message: sanitizeUserMessage(payload.message),
+            eyebrow: payload.eyebrow ? sanitizeUserMessage(payload.eyebrow, 'Avís') : undefined,
+        },
+    });
 }
 
 export function dismissAlert() {
-    listeners.forEach((l) => l(null));
+    Toast.hide();
 }
 
-const TONE_EYEBROW: Record<AlertTone, string> = {
-    info: EDITORIAL.grana,
-    success: EDITORIAL.grana,
-    error: '#B00020',
-};
+const createConfig = (horizontalInsets?: { left: number; right: number }) => ({
+    trobar: ({ props, hide }: ToastConfigParams<AlertPayload>) => (
+        <View style={[styles.content, horizontalInsets && { paddingLeft: horizontalInsets.left, paddingRight: horizontalInsets.right }]}>
+            <UserNotice
+                compact
+                message={props.message}
+                title={props.eyebrow}
+                tone={props.tone}
+                onDismiss={hide}
+                action={props.action ? { ...props.action, onPress: () => { hide(); props.action?.onPress(); } } : undefined}
+            />
+        </View>
+    ),
+});
 
-export const AlertBannerHost: React.FC<{ topOffset?: number; bottomOffset?: number; defaultPosition?: 'top' | 'bottom' }> = ({
-    topOffset = 16,
-    bottomOffset = 90,
-    defaultPosition = 'top',
-}) => {
-    const [alert, setAlert] = useState<AlertPayload | null>(null);
-    const opacity = useRef(new Animated.Value(0)).current;
-    const translateY = useRef(new Animated.Value(-12)).current;
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const MAX_DURATION_MS = 5000;
-
-    const close = useCallback(() => {
-        const isBottom = (alert?.position ?? defaultPosition) === 'bottom';
-        Animated.parallel([
-            Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-            Animated.timing(translateY, { toValue: isBottom ? 12 : -12, duration: 200, useNativeDriver: true }),
-        ]).start(() => setAlert(null));
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    }, [alert?.position, defaultPosition, opacity, translateY]);
-
-    // `close` és inestable (depèn de `alert`). Fem servir un ref perquè el
-    // listener no s'hagi de tornar a subscriure a cada canvi d'alerta —
-    // si no, el `cleanup` cancel·lava el `setTimeout` just després de crear-lo
-    // i l'avís mai es tancava sol.
-    const closeRef = useRef(close);
-    useEffect(() => { closeRef.current = close; }, [close]);
-
-    useEffect(() => {
-        const listener: Listener = (payload) => {
-            if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-            if (!payload) { closeRef.current(); return; }
-            setAlert(payload);
-            const isBottom = (payload.position ?? defaultPosition) === 'bottom';
-            opacity.setValue(0);
-            translateY.setValue(isBottom ? 12 : -12);
-            Animated.parallel([
-                Animated.timing(opacity, { toValue: 1, duration: 240, useNativeDriver: true }),
-                Animated.timing(translateY, { toValue: 0, duration: 240, useNativeDriver: true }),
-            ]).start();
-            // Sempre auto-tanca; mai queda plantat esperant un tancament manual.
-            const dur = Math.min(payload.duration ?? MAX_DURATION_MS, MAX_DURATION_MS);
-            timerRef.current = setTimeout(() => closeRef.current(), dur);
-        };
-        listeners.add(listener);
-        return () => {
-            listeners.delete(listener);
-            if (timerRef.current) clearTimeout(timerRef.current);
-        };
-        // Subscripció única: si depenguéssim de `close` (que canvia amb `alert`),
-        // el cleanup cancel·laria el temporitzador just després de crear-lo.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    if (!alert) return null;
-
-    const eyebrowColor = TONE_EYEBROW[alert.tone ?? 'info'];
-    const isBottom = (alert.position ?? defaultPosition) === 'bottom';
-
-    const resolvedOffset = alert.offset ?? (isBottom ? bottomOffset : topOffset);
-
-    return (
-        <Animated.View
-            pointerEvents="box-none"
-            style={[
-                styles.host,
-                isBottom ? { bottom: resolvedOffset, opacity, transform: [{ translateY }] } : { top: resolvedOffset, opacity, transform: [{ translateY }] },
-            ]}
-        >
-            <View style={styles.card}>
-                {(alert.eyebrow || alert.tone === 'error') && (
-                    <Text style={[styles.eyebrow, { color: eyebrowColor }]}>
-                        {alert.eyebrow || (alert.tone === 'error' ? 'Error' : 'Avís')}
-                    </Text>
-                )}
-                <Text style={styles.message}>{alert.message}</Text>
-                <TouchableOpacity
-                    onPress={close}
-                    style={styles.closeBtn}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityLabel="Tancar avís"
-                >
-                    <Feather name="x" size={14} color={EDITORIAL.ink} />
-                </TouchableOpacity>
-            </View>
-        </Animated.View>
-    );
+// The library targets the last mounted host, including one inside a native modal.
+export const AlertBannerHost: React.FC<{
+    active?: boolean;
+    priority?: number;
+    topOffset?: number;
+    bottomOffset?: number;
+    defaultPosition?: 'top' | 'bottom';
+    horizontalInsets?: { left: number; right: number };
+    onVisibilityChange?: (visible: boolean) => void;
+}> = ({ active = true, topOffset = 16, bottomOffset = 90, defaultPosition = 'bottom', horizontalInsets, onVisibilityChange }) => {
+    const insets = useSafeAreaInsets();
+    React.useEffect(() => { if (!active) onVisibilityChange?.(false); }, [active, onVisibilityChange]);
+    return active ? <View pointerEvents="box-none" style={styles.host}><Toast
+        config={createConfig(horizontalInsets)}
+        position={defaultPosition}
+        topOffset={Math.max(topOffset, insets.top + 12)}
+        bottomOffset={Math.max(bottomOffset, insets.bottom + 12)}
+        animationConfig={{ type: 'timing', duration: 180 }}
+        onShow={() => onVisibilityChange?.(true)}
+        onHide={() => onVisibilityChange?.(false)}
+    /></View> : null;
 };
 
 const styles = StyleSheet.create({
-    host: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        alignItems: 'center',
-        zIndex: 99999,
-    },
-    card: {
-        maxWidth: 480,
-        minWidth: 240,
-        marginHorizontal: 16,
-        backgroundColor: EDITORIAL.paper,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: EDITORIAL.hairlineStrong,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        paddingRight: 36,
-        ...Platform.select({
-            web: { boxShadow: '0 6px 20px rgba(15,27,45,0.12)' } as any,
-            default: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10, elevation: 8 },
-        }),
-    },
-    eyebrow: {
-        fontFamily: 'Lora_700Bold',
-        fontSize: 10,
-        letterSpacing: 2,
-        textTransform: 'uppercase',
-        marginBottom: 4,
-    },
-    message: {
-        fontFamily: 'Lora_400Regular',
-        fontSize: 13,
-        lineHeight: 18,
-        color: EDITORIAL.ink,
-    },
-    closeBtn: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 22,
-        height: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 11,
-    },
+    host: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, overflow: 'hidden', zIndex: 10000 },
+    content: { maxWidth: 480, width: '100%', paddingHorizontal: 16, alignItems: 'center' },
 });
 
 export default AlertBannerHost;

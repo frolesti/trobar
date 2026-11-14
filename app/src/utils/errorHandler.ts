@@ -1,73 +1,73 @@
-// Utilitat centralitzada per gestionar errors de l'aplicació
-// Això permet mantenir els missatges consistents i separar la lògica UI de la lògica d'errors.
-
 export type AppError = {
     code: string;
     message: string;
-    originalError?: any;
+    originalError?: unknown;
 };
 
-// Mapa de traducció d'errors de Firebase Auth
-const AUTH_ERROR_MAP: Record<string, string> = {
-    'auth/invalid-credential': 'El correu o la contrasenya són incorrectes.',
-    'auth/invalid-login-credentials': 'El correu o la contrasenya són incorrectes.',
-    'auth/user-not-found': 'No hem trobat cap usuari amb aquest correu.',
-    'auth/wrong-password': 'La contrasenya és incorrecta.',
-    'auth/email-already-in-use': 'Aquest correu ja està registrat. Prova d\'iniciar sessió.',
-    'auth/invalid-email': 'El format del correu no és vàlid.',
-    'auth/too-many-requests': 'Massa intents fallits. Per seguretat, espera uns minuts.',
-    'auth/operation-not-allowed': "L'inici de sessió amb email i contrasenya no està habilitat a Authentication > Sign-in method del projecte Firebase.",
-    'auth/admin-restricted-operation': "Firebase té restringida la creació de comptes. Revisa Authentication > Settings > User actions i habilita Create (sign-up).",
+export const STANDARD_MESSAGES = {
+    unexpected: "No hem pogut completar l'acció. Torna-ho a provar.",
+    connection: 'No hem pogut connectar. Comprova la connexió i torna-ho a provar.',
+    unavailable: 'El servei no està disponible ara mateix. Torna-ho a provar més tard.',
+    session: 'La sessió ha caducat. Torna a iniciar sessió.',
+    credentials: 'El correu o la contrasenya no són correctes.',
+    resetSent: 'Si aquest correu té un compte, rebràs les instruccions per restablir la contrasenya. Revisa també el correu brossa.',
+} as const;
+
+const ERROR_MESSAGES: Record<string, string> = {
+    'billing/popup-blocked': 'El navegador ha bloquejat la finestra de gestió. Permet les finestres emergents i torna-ho a provar.',
+    'auth/invalid-credential': STANDARD_MESSAGES.credentials,
+    'auth/invalid-login-credentials': STANDARD_MESSAGES.credentials,
+    'auth/user-not-found': STANDARD_MESSAGES.credentials,
+    'auth/wrong-password': STANDARD_MESSAGES.credentials,
+    'auth/email-already-in-use': "Aquest correu ja té un compte. Inicia sessió o recupera la contrasenya.",
+    'auth/invalid-email': 'Revisa el format del correu electrònic.',
+    'auth/too-many-requests': 'Has fet massa intents. Espera uns minuts i torna-ho a provar.',
+    'auth/operation-not-allowed': STANDARD_MESSAGES.unavailable,
+    'auth/admin-restricted-operation': STANDARD_MESSAGES.unavailable,
     'auth/weak-password': 'La contrasenya ha de tenir almenys 6 caràcters.',
-    'auth/network-request-failed': 'Error de connexió. Comprova la teva internet.',
+    'auth/network-request-failed': STANDARD_MESSAGES.connection,
+    'auth/popup-blocked': "El navegador ha bloquejat la finestra d'accés. Permet les finestres emergents i torna-ho a provar.",
     'auth/popup-closed-by-user': "S'ha cancel·lat l'inici de sessió.",
-    'auth/cancelled-popup-request': "S'ha obert una altra finestra d'autenticació.",
+    'auth/cancelled-popup-request': "S'ha cancel·lat l'inici de sessió.",
+    'auth/requires-recent-login': "Per seguretat, torna a iniciar sessió abans de continuar.",
+    'auth/user-disabled': 'No pots accedir a aquest compte. Contacta amb suport.',
+    'auth/invalid-action-code': "Aquest enllaç ja no és vàlid. Demana'n un de nou.",
+    'auth/expired-action-code': "Aquest enllaç ha caducat. Demana'n un de nou.",
+    'functions/unauthenticated': STANDARD_MESSAGES.session,
+    'functions/resource-exhausted': 'Espera un minut abans d’enviar una altra consulta.',
+    'functions/unavailable': STANDARD_MESSAGES.unavailable,
+    'functions/deadline-exceeded': 'No hem pogut confirmar l’enviament. Torna-ho a provar: no duplicarem la consulta.',
+    'functions/invalid-argument': 'Revisa els camps del formulari i torna-ho a provar.',
+    'functions/permission-denied': 'No pots fer aquesta acció amb el compte actual.',
+    'unavailable': STANDARD_MESSAGES.unavailable,
+    'deadline-exceeded': STANDARD_MESSAGES.connection,
+    'permission-denied': 'No pots fer aquesta acció amb el compte actual.',
+    'unauthenticated': STANDARD_MESSAGES.session,
+    'storage/unauthorized': "No hem pogut desar la foto. Torna-ho a provar més tard.",
+    'storage/unauthenticated': STANDARD_MESSAGES.session,
+    'storage/bucket-not-found': STANDARD_MESSAGES.unavailable,
+    'storage/no-default-bucket': STANDARD_MESSAGES.unavailable,
+    'storage/quota-exceeded': STANDARD_MESSAGES.unavailable,
+    'storage/retry-limit-exceeded': STANDARD_MESSAGES.connection,
 };
 
-// Mapa d'errors genèrics o d'altres serveis
-const GENERIC_ERROR_MAP: Record<string, string> = {
-    'unavailable': 'El servei no està disponible momentàniament.',
-    'permission-denied': 'No tens permisos per fer aquesta acció.',
-    'storage/unauthorized': 'Firebase Storage ha rebutjat la foto. Cal revisar els permisos de la carpeta avatars del perfil.',
-    'storage/unauthenticated': 'La sessió ha caducat. Torna a iniciar sessió abans de pujar la foto.',
-    'storage/bucket-not-found': 'El bucket de fotos configurat no existeix. Cal revisar Firebase Storage.',
-    'storage/no-default-bucket': 'No hi ha cap bucket de fotos configurat a Firebase Storage.',
-    'storage/quota-exceeded': 'Firebase Storage ha superat la quota disponible. Cal revisar el pla del projecte.',
-    'storage/retry-limit-exceeded': 'La pujada ha trigat massa. Comprova la connexió i torna-ho a provar.',
-};
+const TECHNICAL_MESSAGE = /(?:\[(?:API|HTTP|DB)[^\]]*\]|firebase|firestore|stripe|stack\s*trace|https?:\/\/|(?:auth|functions|storage)\/[\w-]+|\b(?:api[_ -]?key|oobCode|id[_ -]?token|access[_ -]?token|Bearer|TypeError|ReferenceError|SyntaxError|SQL|ECONN\w*|HTTP\s*\d{3}|status(?:\s+code)?\s*[:=]?\s*[45]\d\d)\b|^\s*[{[]|(?:^|\n)\s*at\s+\S+\s*\()/i;
 
-/**
- * Transforma qualsevol error (Firebase, JS, Custom) en un missatge entenedor per l'usuari.
- * @param error L'objecte error rebut del catch
- * @param defaultMessage Missatge per defecte si no es troba traducció
- */
-export const getUserFriendlyError = (error: any, defaultMessage: string = "S'ha produït un error inesperat."): string => {
-    if (!error) return defaultMessage;
-
-    // Si és un error de Firebase Auth amb codi
-    if (error.code) {
-        // Mirem primer al diccionari d'Auth
-        if (AUTH_ERROR_MAP[error.code]) {
-            return AUTH_ERROR_MAP[error.code];
-        }
-        // Mirem al diccionari genèric
-        if (GENERIC_ERROR_MAP[error.code]) {
-            return GENERIC_ERROR_MAP[error.code];
-        }
-        // Si no està mapejat i estem en desenvolupament, pot ser útil veure el codi original
-        // En producció, potser voldríem un missatge genèric
-        return `Error (${error.code}): ${error.message || defaultMessage}`;
+/** Defence in depth for notices composed outside the error mapper. */
+export function sanitizeUserMessage(message: unknown, fallback: string = STANDARD_MESSAGES.unexpected): string {
+    if (typeof message !== 'string' || !message.trim() || message.length > 1500 || TECHNICAL_MESSAGE.test(message)) {
+        return fallback;
     }
+    return message.trim();
+}
 
-    // Si és un error simple de JS amb missatge
-    if (error.message) {
-        return error.message;
+/** Unknown backend text is never trusted as user-facing copy, including in development. */
+export function getUserFriendlyError(error: unknown, defaultMessage: string = STANDARD_MESSAGES.unexpected): string {
+    if (error && typeof error === 'object') {
+        const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+        if (code && Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, code)) return ERROR_MESSAGES[code];
+        const name = 'name' in error ? error.name : undefined;
+        if (name === 'ApiTimeoutError' || name === 'AbortError') return STANDARD_MESSAGES.connection;
     }
-
-    // Si és només una string
-    if (typeof error === 'string') {
-        return error;
-    }
-
-    return defaultMessage;
-};
+    return sanitizeUserMessage(defaultMessage);
+}
