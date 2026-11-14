@@ -195,6 +195,21 @@ test('following stays secondary, readable and distinguishes the subscribed state
     }
 });
 
+test('broadcast cards stretch to the same carousel row height without clipping variable match metadata', () => {
+    for (const width of [320, 390, 430]) {
+        const all = nodes(render({ width }).tree);
+        const broadcasts = all.find(node => node.props.testID === 'premium-broadcasts');
+        const carousel = nodes(broadcasts).find(node => node.type === 'ScrollView');
+        assert.equal(carousel.props.contentContainerStyle.alignItems, 'stretch');
+        const cards = nodes(carousel).filter(node => node.type === 'MatchCard');
+        assert(cards.length > 0);
+        for (const card of cards) {
+            assert.equal(card.props.style.flex, 1, 'the colored card itself must fill its stretched wrapper');
+            assert.equal(card.props.style.height, undefined, 'allow the tallest date, phase or team name to determine the row height');
+        }
+    }
+});
+
 test('Google and troBar sources stay separate and authentication/review errors are explicit', () => {
     const guest = render({ authenticated: false });
     const signIn = nodes(guest.tree).find(node => node.type === 'TouchableOpacity' && text(node) === 'Inicia sessió per escriure una ressenya');

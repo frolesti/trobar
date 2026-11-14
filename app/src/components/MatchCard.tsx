@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Image, ImageSource } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import Text from './AppText';
@@ -21,6 +21,7 @@ type MatchCardProps = {
     onDismissFilter?: () => void;
     onToggleFilter?: () => void;
     onLongPress?: () => void;
+    style?: StyleProp<ViewStyle>;
 };
 
 const LOGOS = {
@@ -77,7 +78,7 @@ function TeamCrest({ name, uri, localSource, size }: { name: string; uri?: strin
     );
 }
 
-function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcast = false, isFilter = false, showDismiss = false, onDismissFilter, onToggleFilter, onLongPress }: MatchCardProps) {
+function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcast = false, isFilter = false, showDismiss = false, onDismissFilter, onToggleFilter, onLongPress, style }: MatchCardProps) {
     const home = teamData(match.homeTeam);
     const away = teamData(match.awayTeam);
     const date = match.date instanceof Date ? match.date : new Date(match.date);
@@ -147,10 +148,10 @@ function MatchCard({ match, onPress, compact = false, grana = false, hasBroadcas
         </>
     );
     return compact ? (
-        <View style={[styles.card, styles.compact, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }, isFilter && styles.selected]}>
+        <View style={[styles.card, styles.compact, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }, isFilter && styles.selected, style]}>
             {content}
         </View>
-    ) : <View style={[styles.card, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }]}>{content}</View>;
+    ) : <View style={[styles.card, { backgroundColor: categoryColor, borderColor: 'rgba(255,255,255,0.24)' }, style]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({

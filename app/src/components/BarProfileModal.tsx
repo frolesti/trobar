@@ -293,10 +293,10 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
             <Text style={sectionTitleStyle}>Partits que emet</Text>
             {isZuritoDevelopmentPreview(bar) && <Text style={{ color: P.textMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 12, marginBottom: 8 }}>Exemples d’emissió · no confirmats pel local</Text>}
             {broadcastMatches.length ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, alignItems: 'stretch' }}>
                     {broadcastMatches.map((match, index) => (
                         <View key={match.id} style={{ width: Math.min(340, screenWidth - 44) }}>
-                            <MatchCard match={match} compact isNextMatch={index === 0} />
+                            <MatchCard match={match} compact isNextMatch={index === 0} style={{ flex: 1 }} />
                         </View>
                     ))}
                 </ScrollView>

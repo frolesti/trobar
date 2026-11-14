@@ -214,6 +214,9 @@ targetes decoratives. Referències de jerarquia:
 [Apple Maps Place Cards](https://www.apple.com/ae/business/enterprise/connect/)
 i [FANZO](https://www.fanzo.com/en/lokale/1644/pavilion-end).
 
+Les targetes del carrusel d'emissions comparteixen l'alçada de la més alta,
+sense retallar dates, fases o noms d'equip.
+
 Amb `EXPO_PUBLIC_TROBAR_ENV=development`, només el Zurito registrat amb ID
 `8lyFejxdbgvn58YIZIYF` mostra tres ressenyes locals d'exemple, xarxes fictícies
 i fins a tres partits de la programació com a exemples d'emissió. El resum

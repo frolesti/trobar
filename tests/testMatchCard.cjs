@@ -90,6 +90,21 @@ test('Supercopa keeps its own name and semifinal label instead of the Copa del R
     assert(!html.includes('Copa del Rey'));
 });
 
+test('carousel sizing reaches the actual compact card surface without changing default card sizing', () => {
+    const Card = loadCard('MatchCard', { ...React, memo: component => component });
+    const match = {
+        id: 'fixture', homeTeam: 'Barcelona', awayTeam: 'Opponent',
+        date: new Date('2030-10-10T18:30:00Z'),
+        competition: { id: 'cup', name: 'Champions League' }, stage: 'LEAGUE_STAGE',
+    };
+    const style = { flex: 1 };
+    for (const compact of [false, true]) {
+        const card = Card({ match, compact, style });
+        assert.equal(card.props.style.at(-1), style);
+        const normal = Card({ match, compact });
+        assert.equal(normal.props.style.at(-1), undefined);
+    }
+});
 test('result has exactly one competition logo between the goals and no duplicate competition text', () => {
     const Card = loadCard();
     const html = renderToStaticMarkup(React.createElement(Card, { match: {
