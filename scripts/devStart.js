@@ -323,7 +323,26 @@ function runSyncScript() {
   console.log('-------------------------------------------------------');
 }
 
+function prepareExpoUpdates() {
+  if (process.env.TROBAR_EXPO_UPDATE_READY_PID === String(process.pid)) return;
+  const args = [path.join(__dirname, 'expoUpdates.js')];
+  if (argv.has('--offline') || process.argv.includes('--offline')) args.push('--offline');
+  const result = spawnSync(process.execPath, args, {
+    stdio: 'inherit',
+    cwd: projectRoot,
+    env: process.env,
+    shell: false,
+  });
+  if (result.status === 10) {
+    throw new Error('Dependencies actualitzades. Torna a executar la mateixa ordre d\'arrencada d\'Expo.');
+  }
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error('La revisio/instal·lacio de dependencies ha fallat. Expo no s\'ha iniciat.');
+  process.env.TROBAR_EXPO_UPDATE_READY_PID = String(process.pid);
+}
+
 function runStartRaw() {
+  prepareExpoUpdates();
   const expoCli = require.resolve('expo/bin/cli');
   const expoArgs = [expoCli, 'start', '--port', '8081'];
   if (!argv.has('--tunnel')) expoArgs.push('--offline');
@@ -339,6 +358,7 @@ function runStartRaw() {
 function prepareDirectExpoStart() {
   const entry = process.argv[1] || '';
   if (!/[\\/]expo[\\/]bin[\\/]cli(?:\.js)?$/i.test(entry) || process.argv[2] !== 'start') return;
+  prepareExpoUpdates();
   if (process.env.TROBAR_DEV_PORT_READY_PID === String(process.pid)) return;
   const portIndex = process.argv.findIndex(argument => argument === '--port' || argument === '-p');
   if (portIndex !== -1 && process.argv[portIndex + 1] !== '8081') return;

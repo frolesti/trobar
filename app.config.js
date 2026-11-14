@@ -11,6 +11,7 @@ module.exports = ({ config }) => {
       'expo-image',
       ['expo-notifications', { defaultChannel: 'trobar', color: '#A50044' }],
       'expo-web-browser',
+      ['react-native-maps', { iosGoogleMapsApiKey: googleMapsApiKey, androidGoogleMapsApiKey: googleMapsApiKey }],
       './plugins/withMapQueries',
     ],
     ios: {

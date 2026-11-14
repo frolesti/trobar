@@ -3,7 +3,7 @@
 
     Arrenca un emulador d'Android i hi instal-la la build escollida de l'app
     (debug o release). Configura automaticament JAVA_HOME (JDK d'Android Studio)
-    i ANDROID_HOME, selecciona l'entorn (.env.production per defecte) i espera
+    i ANDROID_HOME, selecciona l'entorn (.env.development per defecte) i espera
     que l'emulador acabi d'arrencar abans de compilar.
 
   Us:
@@ -13,7 +13,7 @@
 
     Parametres:
         -Avd              Nom de l'emulador (AVD). Per veure'ls: emulator -list-avds
-        -Env              Entorn: prod (per defecte) | dev
+        -Env              Entorn: dev (per defecte) | prod
         -Variant          Build: debug (per defecte) | release
         -RestartEmulator  Tanca i reinicia l'emulador per forcar estat net
         -CleanInstall     Desinstal-la l'app abans d'instal-lar la build
@@ -27,7 +27,7 @@
 param(
     [string]$Avd = "trobar_lite",
     [ValidateSet("prod", "dev")]
-    [string]$Env = "prod",
+    [string]$Env = "dev",
     [ValidateSet("debug", "release")]
     [string]$Variant = "debug",
     [switch]$RestartEmulator,
@@ -67,9 +67,12 @@ $adb = Join-Path $sdk "platform-tools\adb.exe"
 $emulator = Join-Path $sdk "emulator\emulator.exe"
 & $adb start-server | Out-Null
 
-# 3) Selecciona l'entorn (.env.$Env -> .env)
+# 3) Selecciona l'entorn abans de compilar
 Write-Host "==> Activant entorn: $Env" -ForegroundColor Cyan
 npm run "env:$Env"
+if ($LASTEXITCODE -ne 0) {
+    throw "No s'ha pogut activar l'entorn $Env. No s'arrencara ni es compilara l'app."
+}
 
 # 4) Arrenca l'emulador si no n'hi ha cap engegat
 # adb pot escriure errors transitoris ("error: closed") mentre arrenca; els ignorem.

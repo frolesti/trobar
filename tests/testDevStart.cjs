@@ -5,7 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 
-function harness({ listing = '', blocked = false, args = [], env = {}, projectProcesses = [], state, staleNetstat = false } = {}) {
+test('iPhone startup preserves cache by default and clearing is an explicit switch', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/startIphone.ps1'), 'utf8');
+  assert.match(source, /\[switch\]\$Clear/);
+  assert.match(source, /\$expoArgs = @\('start', '--offline', \$runtimeFlag, '--lan'\)/);
+  assert.match(source, /if \(\$Clear\) \{ \$expoArgs \+= '--clear' \}/);
+  assert.match(source, /npx expo @expoArgs/);
+  assert(!source.includes('npx expo start --offline $runtimeFlag --lan --clear'));
+});
+
+function harness({ listing = '', blocked = false, args = [], env = {}, projectProcesses = [], state, staleNetstat = false, updateStatus = 0 } = {}) {
   const calls = [];
   const parent = new EventEmitter();
   Object.assign(parent, { platform: 'win32', pid: 100, execPath: 'node.exe', argv: ['node', 'devStart.js', ...args], env, exit: code => calls.push(['exit', code]) });
@@ -18,6 +27,7 @@ function harness({ listing = '', blocked = false, args = [], env = {}, projectPr
       execSync: command => command.startsWith('netstat') ? staleNetstat ? listing : currentListing : '"other.exe","123","Console","1","1 KB"',
       spawnSync: (command, parameters) => {
         calls.push([command, parameters]);
+        if (parameters[0]?.endsWith('expoUpdates.js')) return { status: updateStatus };
         if (command === 'taskkill' && !blocked) currentListing = '';
         return { status: command === 'taskkill' && blocked ? 1 : 0, stdout: command === 'powershell.exe' && parameters.some(value => value.includes('ConvertTo-Json')) ? JSON.stringify([...projectProcesses, { ProcessId: 100, CreationDate: 'test-current-process' }]) : '' };
       },
@@ -119,9 +129,32 @@ test('npx expo start reclaims the port exactly once and protects its own process
   runner.prepareDirectExpoStart();
   runner.prepareDirectExpoStart();
   const helpers = runner.calls.filter(call => call[0] === 'node.exe');
-  assert.equal(helpers.length, 1);
-  assert.equal(helpers[0][1].at(-1), '--free-only');
+  assert.equal(helpers.length, 2);
+  assert(helpers[0][1][0].endsWith('expoUpdates.js'));
+  assert.equal(helpers[1][1].at(-1), '--free-only');
   assert.equal(runner.parent.env.TROBAR_DEV_PORT_READY_PID, '100');
+});
+
+test('npm start reviews versions once before loading Expo and propagates explicit offline mode', () => {
+  const runner = harness({ args: ['--offline'] });
+  runner.runStartRaw();
+  runner.runStartRaw();
+  const reviews = runner.calls.filter(call => call[0] === 'node.exe' && call[1][0].endsWith('expoUpdates.js'));
+  assert.equal(reviews.length, 1);
+  assert(reviews[0][1].includes('--offline'));
+  assert(runner.calls.indexOf(reviews[0]) < runner.calls.findIndex(call => call[0] === 'expo'));
+});
+
+test('an accepted update or installation failure prevents loading a stale Expo CLI', () => {
+  for (const updateStatus of [10, 1]) {
+    const runner = harness({ updateStatus });
+    assert.throws(() => runner.runStartRaw(), /actualitzades|fallat/);
+    assert(!runner.calls.some(call => call[0] === 'expo'));
+    const direct = harness({ updateStatus });
+    direct.parent.argv = ['node.exe', path.join(__dirname, '../node_modules/expo/bin/cli'), 'start'];
+    assert.throws(() => direct.prepareDirectExpoStart(), /actualitzades|fallat/);
+    assert(!direct.calls.some(call => call[1]?.includes('--free-only')));
+  }
 });
 
 test('build, export and ordinary configuration evaluation never reclaim ports', () => {

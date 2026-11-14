@@ -67,7 +67,7 @@
     },
     "owner": "frolesti",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/38cbfee4-125b-4503-8073-7e3fe4df8549"
