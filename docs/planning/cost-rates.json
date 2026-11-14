@@ -1,0 +1,99 @@
+{
+  "asOf": "2026-11-02",
+  "currency": "USD",
+  "notes": [
+    "List prices, no negotiated discounts, VAT or temporary promotional credits.",
+    "EUR operational reserve is explicitly labelled; all other numeric rates are USD.",
+    "Firestore storage assumes 720 hours; free daily operations assume uniform daily load.",
+    "EU bucket receives no US-region GCS free grant. Internet egress is a planning rate.",
+    "Vercel assumes on-demand CDN because eligibility of video-heavy delivery for Flat Rate CDN is unconfirmed.",
+    "Vercel transfer rate 0.20 USD/GB is a regional planning allowance, not a quoted universal tariff.",
+    "Stripe processing is an unconfirmed planning assumption in cost-assumptions.json; Billing 0.7% was verified."
+  ],
+  "maps": {
+    "dynamicMaps": {
+      "free": 10000,
+      "bands": [[100000, 7], [500000, 5.6], [1000000, 4.2], [5000000, 2.1], [1000000000000, 0.53]]
+    },
+    "nearby": {
+      "free": 5000,
+      "bands": [[100000, 32], [500000, 25.6], [1000000, 19.2], [5000000, 9.6], [1000000000000, 2.4]]
+    },
+    "text": {
+      "free": 5000,
+      "bands": [[100000, 32], [500000, 25.6], [1000000, 19.2], [5000000, 9.6], [1000000000000, 2.4]]
+    },
+    "details": {
+      "free": 1000,
+      "bands": [[100000, 20], [500000, 16], [1000000, 12], [5000000, 6], [1000000000000, 1.51]]
+    },
+    "photos": {
+      "free": 1000,
+      "bands": [[100000, 7], [500000, 5.6], [1000000, 4.2], [5000000, 2.1], [1000000000000, 0.53]]
+    }
+  },
+  "firestore": {
+    "freeReadsPerDay": 50000,
+    "freeWritesPerDay": 20000,
+    "freeDeletesPerDay": 20000,
+    "freeGiB": 1,
+    "freeEgressGiB": 10,
+    "readsPer100k": 0.03,
+    "writesPer100k": 0.09,
+    "deletesPer100k": 0.01,
+    "storagePerGiB": 0.14794488,
+    "egressPerGiB": 0.12
+  },
+  "storage": { "storagePerGiB": 0.02, "egressPerGiB": 0.12, "classAPer1000": 0.005, "classBPer1000": 0.0004 },
+  "cloudRun": {
+    "freeRequests": 2000000,
+    "perMillionRequests": 0.4,
+    "freeVcpuSeconds": 180000,
+    "perVcpuSecond": 0.000024,
+    "freeGiBSeconds": 360000,
+    "perGiBSecond": 0.0000025
+  },
+  "scheduler": { "freeJobs": 3, "perJob": 0.1 },
+  "operationalReserveEur": 10,
+  "vercel": {
+    "proMonthly": 20,
+    "includedTransferGB": 0,
+    "includedRequests": 0,
+    "usageCredit": 20,
+    "transferPerGB": 0.2,
+    "perMillionRequests": 2
+  },
+  "expo": {
+    "planMonthly": 19,
+    "includedUpdateMau": 3000,
+    "includedUpdateGiB": 100,
+    "perUpdateMau": 0.005,
+    "perUpdateGiB": 0.1,
+    "includedMiBPerExtraMau": 40,
+    "includedBuildCredit": 45
+  },
+  "appleAnnual": 99,
+  "googlePlayOneOff": 25,
+  "sources": {
+    "maps": "https://developers.google.com/maps/billing-and-pricing/pricing",
+    "placesFields": "https://developers.google.com/maps/documentation/places/web-service/place-details",
+    "firestore": "https://cloud.google.com/firestore/pricing",
+    "storage": "https://cloud.google.com/storage/pricing",
+    "firebase": "https://firebase.google.com/pricing",
+    "cloudRun": "https://cloud.google.com/run/pricing",
+    "scheduler": "https://cloud.google.com/scheduler/pricing",
+    "secrets": "https://cloud.google.com/secret-manager/pricing",
+    "artifacts": "https://cloud.google.com/artifact-registry/pricing",
+    "build": "https://cloud.google.com/build/pricing",
+    "logging": "https://cloud.google.com/products/observability/pricing",
+    "vercel": "https://vercel.com/docs/plans/pro-plan",
+    "vercelCdn": "https://vercel.com/docs/pricing/flat-rate-cdn",
+    "vercelUsage": "https://vercel.com/docs/manage-cdn-usage",
+    "expo": "https://expo.dev/pricing",
+    "expoUsage": "https://docs.expo.dev/billing/usage-based-pricing/",
+    "apple": "https://developer.apple.com/programs/enroll/",
+    "googlePlay": "https://support.google.com/googleplay/android-developer/answer/6112435",
+    "stripe": "https://stripe.com/es/pricing",
+    "sports": "https://www.football-data.org/pricing"
+  }
+}
