@@ -1,3 +1,14 @@
+import type { Timestamp } from 'firebase/firestore';
+
+export interface LegalAcceptance {
+    termsVersion: string;
+    privacyVersion: string;
+    termsRead: true;
+    privacyRead: true;
+    acceptedAt: Timestamp;
+    platform: 'ios' | 'android' | 'web';
+}
+
 /** Preferències de notificacions push */
 export interface NotificationPreferences {
     /** Recordatori abans del partit (minuts). 0 = desactivat */
@@ -69,4 +80,5 @@ export interface UserProfile {
     role?: 'user' | 'bar_owner' | 'admin';
     ownedBars?: string[]; // Array d'IDs de bars propietat d'aquest usuari
     preferences?: UserPreferences;
+    legalAcceptance?: LegalAcceptance;
 }

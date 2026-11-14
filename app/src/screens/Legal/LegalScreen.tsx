@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { ScrollView, StyleSheet, View, TouchableOpacity, Linking } from 'react-native';
 import Text from '../../components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,9 @@ import IconCredits from '../../components/IconCredits';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles';
-import { LegalDoc, TERMS } from '../../data/legalContent';
+import { CREATOR_URL, LegalDoc, TERMS } from '../../data/legalContent';
+import { showAlert } from '../../components/AlertBanner';
+import { useScreenLoading } from '../../context/SplashContext';
 
 interface LegalScreenProps {
     doc: LegalDoc;
@@ -20,7 +22,22 @@ interface LegalScreenProps {
  */
 export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
     const navigation = useNavigation();
+    return <LegalDocument doc={doc} onBack={() => navigation.goBack()} />;
+};
 
+export const LegalDocument = ({ doc, onBack, onReadComplete }: LegalScreenProps & { onBack: () => void; onReadComplete?: () => void }) => {
+    useScreenLoading('LegalDocument', false);
+    const viewportHeight = useRef(0);
+    const contentHeight = useRef(0);
+    const scrollOffset = useRef(0);
+    const read = useRef(false);
+    const checkRead = () => {
+        if (!read.current && viewportHeight.current > 0 && contentHeight.current > 0 &&
+            scrollOffset.current + viewportHeight.current >= contentHeight.current - 24) {
+            read.current = true;
+            onReadComplete?.();
+        }
+    };
     // Detecta emails al text i els converteix en enllaços tappables
     const renderText = (text: string) => {
         const splitter = /([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g;
@@ -40,12 +57,20 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
     return (
         <SafeAreaView style={[styles.container, webScreenContainer]} edges={['top', 'left', 'right']}>
             <View style={styles.header}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tornar enrere" onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tornar enrere" onPress={onBack} style={styles.backButton}>
                     <AppIcon name="arrow-left" size={20} color={EDITORIAL.onBackground} />
                 </TouchableOpacity>
                 <Text style={styles.eyebrow}>Legal</Text>
             </View>
-            <ScrollView contentContainerStyle={styles.content} style={webScreenScroll}>
+            <ScrollView
+                testID="legal-document-scroll"
+                contentContainerStyle={styles.content}
+                style={webScreenScroll}
+                scrollEventThrottle={32}
+                onLayout={event => { viewportHeight.current = event.nativeEvent.layout.height; checkRead(); }}
+                onContentSizeChange={(_width, height) => { contentHeight.current = height; checkRead(); }}
+                onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; checkRead(); }}
+            >
                 <Text style={styles.title}>
                     {doc.title} {doc.titleAccent}
                 </Text>
@@ -84,6 +109,17 @@ export const LegalScreen: React.FC<LegalScreenProps> = ({ doc }) => {
                         <IconCredits style={{ color: EDITORIAL.onBackgroundMuted }} />
                     </View>
                 )}
+                <View style={styles.footer}>
+                    <Text style={styles.sectionText}>fet per </Text>
+                    <TouchableOpacity accessibilityRole="link" accessibilityLabel="Visitar el web de frolesti" onPress={() => {
+                        Linking.openURL(CREATOR_URL).catch(error => {
+                            console.info('[Legal] No s’ha pogut obrir el web de frolesti', error);
+                            showAlert({ tone: 'error', message: 'No hem pogut obrir el web de frolesti. Torna-ho a provar.' });
+                        });
+                    }}>
+                        <Text style={[styles.sectionText, styles.link]}>frolesti</Text>
+                    </TouchableOpacity>
+                </View>
             </ScrollView>
             <StatusBar style="light" />
         </SafeAreaView>
@@ -116,4 +152,5 @@ const styles = StyleSheet.create({
     listItem: { flexDirection: 'row', marginBottom: 6, paddingLeft: 4 },
     bullet: { ...ED_TYPE.body, color: EDITORIAL.onBackground, marginRight: 10, marginTop: 0 },
     link: { color: EDITORIAL.onBackground, textDecorationLine: 'underline' },
+    footer: { flexDirection: 'row', justifyContent: 'center', paddingTop: 24, borderTopWidth: 1, borderTopColor: EDITORIAL.borderOnBackground },
 });

@@ -1,12 +1,37 @@
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { auth, db, storage } from '../config/firebase';
 import { executeRequest, executeOrThrow } from '../api/core';
-import { UserProfile, UserPreferences, DEFAULT_PREFERENCES } from '../models/UserProfile';
+import { UserProfile, UserPreferences, DEFAULT_PREFERENCES, LegalAcceptance } from '../models/UserProfile';
+import { LEGAL_VERSIONS } from '../data/legalContent';
+import { hasCurrentLegalAcceptance } from '../utils/legalAcceptance';
 
 export type { UserProfile, UserPreferences };
+
+export const saveLegalAcceptance = async (userId: string): Promise<LegalAcceptance> => {
+    return executeOrThrow(async () => {
+        if (!auth.currentUser || auth.currentUser.uid !== userId) {
+            throw new Error('Cal iniciar sessió per desar l’acceptació dels documents.');
+        }
+        const platform = Platform.OS;
+        if (platform !== 'ios' && platform !== 'android' && platform !== 'web') {
+            throw new Error('Aquesta plataforma no és compatible amb l’acceptació legal.');
+        }
+        const userDocRef = doc(db, 'users', userId);
+        await setDoc(userDocRef, { legalAcceptance: {
+            termsVersion: LEGAL_VERSIONS.terms, privacyVersion: LEGAL_VERSIONS.privacy,
+            termsRead: true, privacyRead: true, acceptedAt: serverTimestamp(), platform,
+        } }, { merge: true });
+        const snapshot = await getDocFromServer(userDocRef);
+        const acceptance: LegalAcceptance | undefined = snapshot.data()?.legalAcceptance;
+        if (!hasCurrentLegalAcceptance(acceptance) || !acceptance) {
+            throw new Error('No s’ha pogut confirmar que l’acceptació s’hagi desat.');
+        }
+        return acceptance;
+    }, 'saveLegalAcceptance');
+};
 
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
     const result = await executeRequest(async () => {

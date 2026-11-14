@@ -27,13 +27,16 @@ export interface LegalDoc {
     contactEmail: string;
 }
 
+export const LEGAL_VERSIONS = { terms: '2026-11-10', privacy: '2026-11-10' } as const;
+export const CREATOR_URL = 'https://frolesti.cat';
+
 const p = (text: string): LegalBlock => ({ kind: 'p', text });
 const ul = (items: string[]): LegalBlock => ({ kind: 'ul', items });
 
 export const PRIVACY: LegalDoc = {
     title: 'Política de',
     titleAccent: 'Privacitat',
-    lastUpdated: '5 de novembre de 2026',
+    lastUpdated: '10 de novembre de 2026',
     contactEmail: contactEmails.support,
     sections: [
         { title: '1. Introducció', blocks: [
@@ -43,9 +46,11 @@ export const PRIVACY: LegalDoc = {
             ul([
                 'Ubicació: utilitzem el GPS del teu dispositiu per mostrar-te els bars més propers.',
                 'Perfil d\'Usuari: si inicies sessió, guardem el teu nom, correu electrònic i preferències.',
+                'Acceptació legal: guardem les versions dels Termes del Servei i de la Política de Privacitat que has acceptat, la confirmació de lectura, la plataforma i la data del servidor.',
                 'Activitat: estadístiques d\'ús anònimes per millorar l\'experiència.',
                 'Dades de negoci: si registres un bar, guardem el nom del local, NIF, adreça, telèfon, email i dades de pagament.',
                 'Dades del dispositiu: informació bàsica com el sistema operatiu i la versió de l\'aplicació, per garantir la compatibilitat.',
+                'Consultes de suport: si envies el formulari de contacte, guardem el tipus, assumpte i missatge, el teu identificador de compte i correu, la plataforma, la versió de l’aplicació i la data d’enviament. La bústia és privada i només hi pot accedir l’equip administrador.',
             ])
         ]},
         { title: '3. Base Legal del Tractament', blocks: [
@@ -63,6 +68,7 @@ export const PRIVACY: LegalDoc = {
                 'Gestionar el perfil i la subscripció del teu establiment.',
                 'Processar subscripcions i pagaments dels comptes de negoci.',
                 'Millorar les funcionalitats de l\'aplicació i corregir errors.',
+                'Gestionar les incidències i propostes que ens envies voluntàriament mitjançant el formulari de contacte.',
             ])
         ]},
         { title: '5. Compartició de Dades', blocks: [
@@ -112,14 +118,14 @@ export const PRIVACY: LegalDoc = {
 export const TERMS: LegalDoc = {
     title: 'Termes del',
     titleAccent: 'Servei',
-    lastUpdated: '5 de novembre de 2026',
+    lastUpdated: '10 de novembre de 2026',
     contactEmail: contactEmails.support,
     sections: [
         { title: '1. Introducció', blocks: [
             p('Benvingut a troBar! Aquests Termes del Servei regeixen l\'ús de la nostra aplicació mòbil i pàgina web per localitzar bars i establiments que emeten esdeveniments esportius. En utilitzar "troBar", acceptes aquestes condicions íntegrament.')
         ]},
         { title: '2. Acceptació dels Termes', blocks: [
-            p('En accedir o utilitzar l\'aplicació, confirmes que has llegit, entès i acceptat aquests Termes. Si no estàs d\'acord amb alguna part, no has d\'utilitzar el servei. Si utilitzes troBar en nom d\'una organització, declares que tens l\'autoritat per vincular-la a aquests Termes.')
+            p('Per utilitzar el teu compte, has de llegir aquests Termes i la Política de Privacitat i confirmar-ne explícitament l’acceptació. Guardem les versions acceptades i la data al teu perfil. Si no estàs d’acord amb alguna part, pots tancar la sessió sense acceptar. Si utilitzes troBar en nom d’una organització, declares que tens l’autoritat per vincular-la a aquests Termes.')
         ]},
         { title: '3. Edat Mínima', blocks: [
             p('Has de tenir almenys 16 anys per utilitzar troBar. Si ets menor d\'edat segons la legislació del teu país, necessites el consentiment del teu pare, mare o tutor legal.')

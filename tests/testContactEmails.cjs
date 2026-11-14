@@ -22,7 +22,7 @@ function load(segments, mocks = {}) {
       if (Object.hasOwn(mocks, name)) return mocks[name];
       if (name.endsWith('/contactEmails.json')) return contactEmails;
       if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
-      if (name === 'react') return { useState: initial => [initial, () => {}] };
+      if (name === 'react') return { useState: initial => [initial, () => {}], useRef: initial => ({ current: initial }) };
       if (name === 'next/head' || name === 'next/link') return { __esModule: true, default: name === 'next/link' ? 'a' : 'head' };
       if (name === '../components/Header' || name === '../components/Footer') return { __esModule: true, default: name };
       throw new Error(`Unexpected dependency ${name} in ${filename}`);
@@ -45,8 +45,8 @@ test('privacy and service help use support; billing and general enquiries use th
   const { PRIVACY, TERMS } = legal();
   assert.equal(PRIVACY.contactEmail, contactEmails.support);
   assert.equal(TERMS.contactEmail, contactEmails.support);
-  assert.equal(PRIVACY.lastUpdated, '5 de novembre de 2026');
-  assert.equal(TERMS.lastUpdated, '5 de novembre de 2026');
+  assert.equal(PRIVACY.lastUpdated, '10 de novembre de 2026');
+  assert.equal(TERMS.lastUpdated, '10 de novembre de 2026');
   const privacy = JSON.stringify(PRIVACY);
   assert.ok(privacy.includes(contactEmails.support));
   assert.ok(!privacy.includes(contactEmails.general));
@@ -88,7 +88,7 @@ test('the web contact directory labels and links each mailbox by its actual purp
 test('web and mobile legal renderers expose matching working mailto links from the canonical documents', async () => {
   const docs = legal();
   const opened = [];
-  const { LegalScreen } = load(['app', 'src', 'screens', 'Legal', 'LegalScreen.tsx'], {
+  const { LegalDocument } = load(['app', 'src', 'screens', 'Legal', 'LegalScreen.tsx'], {
     'react-native': {
       ScrollView: 'ScrollView', View: 'View', TouchableOpacity: 'TouchableOpacity',
       StyleSheet: { create: value => value }, Linking: { openURL: async url => opened.push(url) },
@@ -96,6 +96,8 @@ test('web and mobile legal renderers expose matching working mailto links from t
     '../../components/AppText': { __esModule: true, default: 'Text' },
     '../../components/AppIcon': { __esModule: true, default: 'AppIcon' },
     '../../components/IconCredits': { __esModule: true, default: 'IconCredits' },
+    '../../components/AlertBanner': { showAlert() {} },
+    '../../context/SplashContext': { useScreenLoading() {} },
     'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
     '../../theme/editorialTheme': { EDITORIAL: {}, ED_TYPE: {} },
     '@react-navigation/native': { useNavigation: () => ({ goBack() {} }) },
@@ -106,8 +108,8 @@ test('web and mobile legal renderers expose matching working mailto links from t
   const LegalBody = load(['web-app', 'components', 'LegalBody.tsx']).default;
   for (const doc of [docs.PRIVACY, docs.TERMS]) {
     const webTree = LegalBody({ doc });
-    const mobileTree = LegalScreen({ doc });
-    const webLinks = nodes(webTree).filter(node => node.type === 'a');
+    const mobileTree = LegalDocument({ doc, onBack() {} });
+    const webLinks = nodes(webTree).filter(node => node.type === 'a' && node.props.href?.startsWith('mailto:'));
     const mobileLinks = nodes(mobileTree).filter(node => node.type === 'Text' && node.props.onPress);
     const expected = [...JSON.stringify(doc.sections).matchAll(/[\w.+-]+@trobar\.cat/g)].map(match => `mailto:${match[0]}`);
     assert.deepEqual(webLinks.map(node => node.props.href), expected);

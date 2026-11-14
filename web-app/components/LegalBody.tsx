@@ -46,6 +46,9 @@ export default function LegalBody({ doc }: LegalBodyProps) {
                 {block.items.map((item, k) => (
                   <li key={k}>{renderInline(item)}</li>
                 ))}
+                <footer style={{ borderTop: '1px solid var(--hairline)', paddingTop: 24, textAlign: 'center', color: 'var(--paper-mute)' }}>
+                  fet per <a href="https://frolesti.cat" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>frolesti</a>
+                </footer>
               </ul>
             )
           })}

@@ -2,26 +2,60 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && 'role' in request.auth.token && request.auth.token.role == 'admin';
+    }
+    function ownsBar(barId) {
+      let bar = get(/databases/$(database)/documents/bars/$(barId)).data;
+      return request.auth != null && 'ownerId' in bar && bar.ownerId == request.auth.uid;
+    }
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+    match /matches/{matchId} { allow read: if true; }
+    match /competitions/{competitionId} { allow read: if true; }
+    match /teams/{teamId} { allow read: if true; }
+
     // Bars collection
     match /bars/{barId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow update: if ownsBar(barId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'description', 'promotionalText', 'socialMedia', 'amenities', 'gallery',
+          'broadcastingMatches', 'updatedAt', 'googlePlaceId', 'openingPeriods', 'placesEnrichedAt', 'showGoogleRating'
+        ])
+        && (!('showGoogleRating' in request.resource.data) || request.resource.data.showGoogleRating is bool)
+        && (!('description' in request.resource.data) || request.resource.data.description is string)
+        && (!('promotionalText' in request.resource.data) || request.resource.data.promotionalText is string)
+        && (!('socialMedia' in request.resource.data) || request.resource.data.socialMedia is map)
+        && (!('amenities' in request.resource.data) || request.resource.data.amenities is list)
+        && (!('gallery' in request.resource.data) || request.resource.data.gallery is list)
+        && (!('broadcastingMatches' in request.resource.data) || request.resource.data.broadcastingMatches is list)
+        && (!('googlePlaceId' in request.resource.data) || request.resource.data.googlePlaceId is string)
+        && (!('openingPeriods' in request.resource.data) || request.resource.data.openingPeriods is list)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) || request.resource.data.updatedAt == request.time)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['placesEnrichedAt']) || request.resource.data.placesEnrichedAt == request.time);
 
       // Anyone can report that a place shows Barça, without creating an account.
-      // Anonymous creation is restricted to minimal, inactive OSM reports.
-      allow create: if request.auth == null
-        && barId.matches('^osm_[0-9]+$')
+      // Anonymous creation is restricted to minimal, inactive place reports.
+      allow create: if (barId.matches('^osm_((node|way|relation)_)?[0-9]+$')
+          || (barId.matches('^google_[A-Za-z0-9_-]+$')
+            && 'googlePlaceId' in request.resource.data
+            && barId == 'google_' + request.resource.data.googlePlaceId))
         && request.resource.data.keys().hasAll([
           'name', 'location', 'address', 'amenities', 'source', 'createdAt',
           'isActive', 'isOpen', 'rating', 'usuallyShowsBarca', 'broadcastingMatches'
         ])
         && request.resource.data.keys().hasOnly([
           'name', 'location', 'address', 'amenities', 'source', 'createdAt',
-          'isActive', 'isOpen', 'rating', 'usuallyShowsBarca', 'broadcastingMatches'
+          'isActive', 'isOpen', 'rating', 'usuallyShowsBarca', 'broadcastingMatches', 'reportedBy', 'googlePlaceId'
         ])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 160
+        && (!('googlePlaceId' in request.resource.data)
+          || (request.resource.data.googlePlaceId is string
+            && request.resource.data.googlePlaceId.size() <= 255))
         && request.resource.data.location is map
         && request.resource.data.location.keys().hasOnly(['latitude', 'longitude'])
         && request.resource.data.location.keys().hasAll(['latitude', 'longitude'])
@@ -41,24 +75,99 @@ service cloud.firestore {
         && request.resource.data.rating == 0
         && request.resource.data.usuallyShowsBarca == true
         && request.resource.data.broadcastingMatches is list
-        && request.resource.data.broadcastingMatches.size() == 0;
+        && request.resource.data.broadcastingMatches.size() == 0
+        && (!('reportedBy' in request.resource.data)
+          || (request.auth != null && request.resource.data.reportedBy == request.auth.uid));
 
       // An unauthenticated report may only turn this public flag on. It cannot
       // modify ownership, status, payments, broadcast schedules or other fields.
-      allow update: if request.auth == null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usuallyShowsBarca'])
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usuallyShowsBarca'])
         && request.resource.data.usuallyShowsBarca == true;
+
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if ownsBar(barId)
+          && request.resource.data.keys().hasAll(['type', 'title', 'body', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['type', 'title', 'body', 'imageUrl', 'expiresAt', 'createdAt', 'updatedAt'])
+          && request.resource.data.type in ['promo', 'event', 'news', 'broadcast']
+          && request.resource.data.title is string && request.resource.data.title.size() > 0
+          && request.resource.data.body is string
+          && (!('imageUrl' in request.resource.data) || request.resource.data.imageUrl is string)
+          && (!('expiresAt' in request.resource.data) || request.resource.data.expiresAt == null || request.resource.data.expiresAt is timestamp)
+          && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+        allow delete: if ownsBar(barId);
+      }
+      match /promotions/{promotionId} { allow read: if true; }
+
+      match /reviews/{reviewId} {
+        function canReview() {
+          let bar = get(/databases/$(database)/documents/bars/$(barId)).data;
+          return request.auth != null && bar.tier == 'premium'
+            && (!('ownerId' in bar) || bar.ownerId != request.auth.uid);
+        }
+        function validReview() {
+          let data = request.resource.data;
+          return data.keys().hasAll(['userId', 'userName', 'rating', 'createdAt'])
+            && data.keys().hasOnly(['userId', 'userName', 'userAvatar', 'rating', 'comment', 'createdAt', 'updatedAt'])
+            && data.userId == request.auth.uid
+            && data.userName is string && data.userName.size() > 0 && data.userName.size() <= 160
+            && data.rating is int && data.rating >= 1 && data.rating <= 5
+            && (!('userAvatar' in data) || data.userAvatar == null || (data.userAvatar is string && data.userAvatar.size() <= 2048))
+            && (!('comment' in data) || (data.comment is string && data.comment.size() <= 2000));
+        }
+        allow read: if true;
+        allow create: if canReview() && reviewId == request.auth.uid && validReview()
+          && request.resource.data.createdAt == request.time
+          && !('updatedAt' in request.resource.data);
+        allow update: if canReview() && resource.data.userId == request.auth.uid && validReview()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'comment', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      }
+
+      match /reviewStats/{statsId} {
+        allow read: if true;
+      }
     }
 
     // Bar owners
     match /barOwners/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
 
     // Users
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      function validLegalAcceptance() {
+        let acceptance = request.resource.data.legalAcceptance;
+        return acceptance.keys().hasAll(['termsVersion', 'privacyVersion', 'termsRead', 'privacyRead', 'acceptedAt', 'platform'])
+          && acceptance.keys().hasOnly(['termsVersion', 'privacyVersion', 'termsRead', 'privacyRead', 'acceptedAt', 'platform'])
+          && acceptance.termsVersion == '2026-11-10'
+          && acceptance.privacyVersion == '2026-11-10'
+          && acceptance.termsRead == true && acceptance.privacyRead == true
+          && acceptance.acceptedAt == request.time
+          && acceptance.platform in ['ios', 'android', 'web'];
+      }
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['id', 'name', 'surname', 'email', 'avatar', 'favoriteTeam', 'favoriteSport', 'preferences', 'role', 'ownedBars', 'legalAcceptance'])
+        && (!('legalAcceptance' in request.resource.data) || validLegalAcceptance())
+        && (!('id' in request.resource.data) || request.resource.data.id == userId)
+        && (!('role' in request.resource.data) || request.resource.data.role == 'user')
+        && (!('ownedBars' in request.resource.data) || request.resource.data.ownedBars == []);
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'surname', 'email', 'avatar', 'favoriteTeam', 'favoriteSport', 'preferences', 'legalAcceptance'
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['legalAcceptance']) || validLegalAcceptance());
+      match /barSubscriptions/{barId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+          && get(/databases/$(database)/documents/bars/$(barId)).data.tier == 'premium'
+          && request.resource.data.keys().hasOnly(['barId', 'subscribedAt', 'notifications'])
+          && request.resource.data.barId == barId
+          && request.resource.data.subscribedAt == request.time
+          && request.resource.data.notifications is bool;
+      }
       match /pushDevices/{deviceId} {
         allow read, delete: if request.auth != null && request.auth.uid == userId;
         allow create, update: if request.auth != null && request.auth.uid == userId
@@ -83,7 +192,7 @@ service cloud.firestore {
     // Reviews
     match /reviews/{reviewId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
 }

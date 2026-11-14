@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
 import { 
     onAuthStateChanged, 
     signInWithEmailAndPassword, 
@@ -10,10 +10,15 @@ import {
     GoogleAuthProvider,
     OAuthProvider,
     updateProfile,
-    sendEmailVerification
+    sendEmailVerification,
+    getAdditionalUserInfo,
+    UserCredential
 } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../config/firebase';
-import { getUserProfile, UserProfile, deleteUserProfile } from '../services/userService';
+import { recordFirstAppLogin, recordAccountSecurity } from '../services/emailService';
+import { getUserProfile, UserProfile, deleteUserProfile, saveLegalAcceptance } from '../services/userService';
+import { hasCurrentLegalAcceptance } from '../utils/legalAcceptance';
 import { Platform, Alert, TurboModuleRegistry, AppState } from 'react-native';
 import { registerPushNotifications, unregisterPushNotifications, clearNotificationArea } from '../services/notificationService';
 import Constants from 'expo-constants';
@@ -28,6 +33,7 @@ import * as WebBrowser from 'expo-web-browser';
 auth.languageCode = 'ca';
 const GOOGLE_WEB_CLIENT_ID = '632303151235-t3egkpe42vrs3mk19ai1tmp0u15valdo.apps.googleusercontent.com';
 const EXPO_GOOGLE_PROXY_REDIRECT_URI = 'https://auth.expo.io/@frolesti/trobar-ios';
+const pendingRegistrationKey = (uid: string) => `@trobar:pending-legal-registration:${uid}`;
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -41,6 +47,8 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
   isAuthenticated: boolean;
+  acceptLegalDocuments: () => Promise<void>;
+  requiresRegistrationConsent: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +56,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingRegistrationUid, setPendingRegistrationUid] = useState<string | null>(null);
+  const authOperationPending = useRef(false);
+  const requiresRegistrationConsent = !!user && user.id === pendingRegistrationUid && !hasCurrentLegalAcceptance(user.legalAcceptance);
+
+  const trackRegistration = async (credential: UserCredential, created = false) => {
+    if (!created && !getAdditionalUserInfo(credential)?.isNewUser) return;
+    if (auth.currentUser?.uid !== credential.user.uid) throw new Error('La sessió ha canviat. Torna a iniciar sessió.');
+    setPendingRegistrationUid(credential.user.uid);
+    await AsyncStorage.setItem(pendingRegistrationKey(credential.user.uid), 'true');
+  };
 
   const fetchAndSetUser = async (firebaseUser: FirebaseUser) => {
     const defaultAvatar = firebaseUser.photoURL || firebaseUser.providerData?.find(provider => provider.providerId === 'google.com')?.photoURL || undefined;
@@ -71,12 +89,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             favoriteSport: firestoreProfile?.favoriteSport,
             role: firestoreProfile?.role || (roleClaim === 'bar_owner' || roleClaim === 'admin' ? roleClaim : undefined),
             ownedBars: firestoreProfile?.ownedBars,
+            legalAcceptance: firestoreProfile?.legalAcceptance,
         };
-        setUser(combinedUser);
+        if (auth.currentUser?.uid === firebaseUser.uid) setUser(combinedUser);
     } catch (error) {
-        console.error("Error fetching extended user profile:", error);
+        console.info("Error fetching extended user profile:", error);
         // Alternativa amb info bàsica d'auth
-        setUser({
+        if (auth.currentUser?.uid === firebaseUser.uid) setUser({
             id: firebaseUser.uid,
             name: firebaseUser.displayName || 'Usuari',
             surname: '',
@@ -88,18 +107,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Escolta canvis d'estat de Firebase
   useEffect(() => {
+    let active = true;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        console.log('[AuthContext] Firebase user found, fetching profile');
-        await fetchAndSetUser(firebaseUser);
-      } else {
-        console.log('[AuthContext] No Firebase user');
-        setUser(null);
+      try {
+        if (firebaseUser) {
+          console.log('[AuthContext] Firebase user found, fetching profile');
+          const pending = await AsyncStorage.getItem(pendingRegistrationKey(firebaseUser.uid));
+          if (!active || auth.currentUser?.uid !== firebaseUser.uid) return;
+          if (pending === 'true') setPendingRegistrationUid(firebaseUser.uid);
+          await fetchAndSetUser(firebaseUser);
+        } else {
+          console.log('[AuthContext] No Firebase user');
+          setUser(null);
+          setPendingRegistrationUid(null);
+        }
+      } catch (error) {
+        console.error('[AuthContext] Could not restore registration state', error);
+        showAlert({ tone: 'error', message: 'No hem pogut recuperar la sessió. Torna a iniciar sessió.' });
+        await signOut(auth);
+      } finally {
+        console.log('[AuthContext] Setting isLoading = false');
+        if (active && !authOperationPending.current) setIsLoading(false);
       }
-      console.log('[AuthContext] Setting isLoading = false');
-      setIsLoading(false);
     });
-    return unsubscribe;
+    return () => { active = false; unsubscribe(); };
   }, []);
 
   const refreshProfile = async () => {
@@ -108,13 +139,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
   };
 
+  const acceptLegalDocuments = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Cal iniciar sessió per acceptar els documents.');
+      const acceptance = await saveLegalAcceptance(currentUser.uid);
+      if (auth.currentUser?.uid !== currentUser.uid) throw new Error('La sessió ha canviat. Torna a iniciar sessió.');
+      await AsyncStorage.removeItem(pendingRegistrationKey(currentUser.uid));
+      if (auth.currentUser?.uid !== currentUser.uid) throw new Error('La sessió ha canviat. Torna a iniciar sessió.');
+      setUser(previous => previous?.id === currentUser.uid ? { ...previous, legalAcceptance: acceptance } : previous);
+      setPendingRegistrationUid(previous => previous === currentUser.uid ? null : previous);
+  };
+
   useEffect(() => {
-      if (!user || Platform.OS === 'web') return;
+      if (!user || isLoading || requiresRegistrationConsent) return;
+      if (auth.currentUser?.emailVerified) {
+          void recordAccountSecurity().catch(error => {
+              console.info('[Email] No s’ha pogut comprovar la seguretat del compte', error instanceof Error ? error.name : 'unknown');
+          });
+      }
+      if (process.env.EXPO_PUBLIC_ENABLE_LIFECYCLE_EMAILS === 'true') {
+          void recordFirstAppLogin().catch(error => {
+              console.info('[Email] No s’ha pogut registrar la benvinguda', error instanceof Error ? error.name : 'unknown');
+          });
+      }
+  }, [user?.id, isLoading, requiresRegistrationConsent]);
+
+  useEffect(() => {
+      if (!user || isLoading || requiresRegistrationConsent || Platform.OS === 'web') return;
       const refresh = () => { void registerPushNotifications(user.id, false); };
       refresh();
       const subscription = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
       return () => subscription.remove();
-  }, [user?.id]);
+  }, [user?.id, isLoading, requiresRegistrationConsent]);
 
   /**
    * Obté el token de sessió actual (JWT) de manera segura.
@@ -128,19 +184,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loginEmail = async (email: string, pass: string) => {
+      authOperationPending.current = true;
       setIsLoading(true);
       try {
           await executeOrThrow(() => signInWithEmailAndPassword(auth, email, pass), 'loginEmail');
       } finally {
+          authOperationPending.current = false;
           setIsLoading(false);
       }
   };
 
   const registerEmail = async (email: string, pass: string, name: string) => {
+    authOperationPending.current = true;
     setIsLoading(true);
     try {
         await executeOrThrow(async () => {
             const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            await trackRegistration(cred, true);
             if (cred.user) {
                 await updateProfile(cred.user, { displayName: name });
                 await sendEmailVerification(cred.user);
@@ -148,6 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         }, 'registerEmail');
     } finally {
+        authOperationPending.current = false;
         setIsLoading(false);
     }
   };
@@ -212,12 +273,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw new Error('La verificació de seguretat del login de Google no coincideix. Torna-ho a provar.');
       }
 
-      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+      await trackRegistration(await signInWithCredential(auth, GoogleAuthProvider.credential(idToken)));
       return true;
   };
 
   // Nota: Eliminem els Alerts interns. La UI (LoginModal) s'encarrega de mostrar l'error que llancem.
   const loginGoogle = async (): Promise<boolean> => {
+      authOperationPending.current = true;
       setIsLoading(true);
       try {
         if (Platform.OS !== 'web' && !TurboModuleRegistry.get('RNGoogleSignin')) {
@@ -231,7 +293,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           return signedIn;
         } catch (error: any) {
-          console.error('[API FAIL] loginGoogleExpoProxy:', {
+          console.info('[API FAIL] loginGoogleExpoProxy:', {
             name: error?.name,
             message: error?.message,
             code: error?.code,
@@ -246,7 +308,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (Platform.OS === 'web') {
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: 'select_account' });
-                await signInWithPopup(auth, provider);
+                await trackRegistration(await signInWithPopup(auth, provider));
                 return;
             }
 
@@ -271,15 +333,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                 // 4. Crear credencial de Firebase i autenticar
                 const credential = GoogleAuthProvider.credential(idToken);
-                await signInWithCredential(auth, credential);
+                await trackRegistration(await signInWithCredential(auth, credential));
         }, 'loginGoogle');
         return true;
       } finally {
+          authOperationPending.current = false;
           setIsLoading(false);
       }
   };
 
   const loginApple = async () => {
+    authOperationPending.current = true;
     setIsLoading(true);
     try {
       await executeOrThrow(async () => {
@@ -288,7 +352,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const provider = new OAuthProvider('apple.com');
             provider.addScope('email');
             provider.addScope('name');
-            await signInWithPopup(auth, provider);
+            await trackRegistration(await signInWithPopup(auth, provider));
             return;
         }
         if (Platform.OS === 'ios') {
@@ -298,7 +362,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 executionEnvironment: Constants.executionEnvironment,
                 appOwnership: Constants.appOwnership,
               };
-              console.error('[AppleAuth] Native module unavailable', runtime);
+              console.info('[AppleAuth] Native module unavailable', runtime);
               throw new Error(
                 `Apple Sign-In no està disponible en aquest runtime iOS (${runtime.executionEnvironment}, ownership: ${runtime.appOwnership ?? 'none'}). El mòdul és inclòs a Expo Go SDK 57; comprova el runtime registrat al log i que Expo Go estigui actualitzat.`,
               );
@@ -327,6 +391,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               });
               
               const userCredential = await signInWithCredential(auth, firebaseCredential);
+              await trackRegistration(userCredential);
 
               // 4. Si Apple ens passa el nom (només passa al primer login), actualitzem el perfil
               if (fullName && userCredential.user) {
@@ -347,6 +412,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }, 'loginApple');
     } finally {
+        authOperationPending.current = false;
         setIsLoading(false);
     }
   };
@@ -355,7 +421,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
         if (auth.currentUser) await unregisterPushNotifications(auth.currentUser.uid);
-        await executeRequest(() => signOut(auth), 'logout');
+        await executeOrThrow(() => signOut(auth), 'logout');
     } finally {
         setIsLoading(false);
     }
@@ -373,7 +439,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const { cancelSubscription } = await import('../services/subscriptionService');
             await cancelSubscription();
         } catch (stripeErr) {
-            console.warn("No s'ha pogut cancel·lar la subscripció de Stripe (potser no n'hi ha):", stripeErr);
+            console.info("No s'ha pogut cancel·lar la subscripció de Stripe (potser no n'hi ha):", stripeErr);
             // Continuar igualment — pot ser que no tingui subscripció
         }
 
@@ -385,7 +451,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         // La neteja d'estat passa a onAuthStateChanged
     } catch (error: any) {
-        console.error("Error deleting account:", error);
+        console.info("Error deleting account:", error);
         if (error.code === 'auth/requires-recent-login') {
             showAlert({
                 tone: 'error',
@@ -415,6 +481,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         getAccessToken,
         refreshProfile,
         isAuthenticated: !!user,
+        acceptLegalDocuments,
+        requiresRegistrationConsent,
       }}
     >
       {children}
