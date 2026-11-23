@@ -248,6 +248,18 @@ const MatchesScreen = ({ navigation }: Props) => {
         });
     }, [allMatches, competitionMatches, filter, isFemenino, selectedComp, competitionMap]);
 
+    const competitionLabel = COMPETITION_FILTERS.find(competition => competition.id === selectedComp)?.label;
+    const scheduleMessage = filteredFutureMatches.length
+        ? competitionLabel
+            ? `Aquests són tots els partits programats a la ${competitionLabel}.`
+            : 'Aquests són tots els partits programats del Barça.'
+        : competitionLabel
+            ? `No hi ha cap partit del Barça programat a la ${competitionLabel}.`
+            : 'Encara no hi ha partits programats';
+    const scheduleDetail = selectedComp && selectedComp !== 'league'
+        ? 'Els nous encreuaments apareixeran quan estiguin confirmats.'
+        : undefined;
+
     const displayedMatches = useMemo(() => {
         const filteredPast = pastMatches.filter(m => {
             if (filter !== 'ALL') {
@@ -503,7 +515,7 @@ const MatchesScreen = ({ navigation }: Props) => {
                 onEndReached={loadMoreMatches}
                 onEndReachedThreshold={0.3}
                 ListEmptyComponent={
-                    loading || competitionLoading ? <ActivityIndicator accessibilityLabel="Carregant partits" color={MATCHES_COLORS.text} style={{ marginTop: 32 }} /> : <EmptyState />
+                    loading || competitionLoading ? <ActivityIndicator accessibilityLabel="Carregant partits" color={MATCHES_COLORS.text} style={{ marginTop: 32 }} /> : <EmptyState message={scheduleMessage} detail={scheduleDetail} />
                 }
                 ListHeaderComponentStyle={{ minHeight: 54, flexShrink: 0 }}
                 ListHeaderComponent={
@@ -545,10 +557,8 @@ const MatchesScreen = ({ navigation }: Props) => {
                                 Carregant més partits...
                             </Text>
                         </View>
-                    ) : !loading && displayedMatches.length > 0 ? (
-                        <View style={{ alignItems: 'center', marginTop: 16, paddingBottom: 8 }}>
-                            <AppIcon name="checkmark-circle-outline" size={22} color={EDITORIAL.inkMuted} />
-                        </View>
+                    ) : !loading && !competitionLoading && displayedMatches.length > 0 ? (
+                        <EmptyState message={scheduleMessage} detail={scheduleDetail} />
                     ) : undefined
                 }
                 renderItem={({ item }) => {
@@ -594,7 +604,7 @@ const MatchesScreen = ({ navigation }: Props) => {
 };
 
 
-const EmptyState = () => (
+const EmptyState = ({ message, detail }: { message: string; detail?: string }) => (
     <View style={{ alignItems: 'center', paddingTop: 32, paddingHorizontal: 16 }}>
         <Text style={{ 
             color: MATCHES_COLORS.text,
@@ -602,8 +612,16 @@ const EmptyState = () => (
             fontFamily: EDITORIAL.fontBold,
             textAlign: 'center',
         }}>
-            Encara no hi ha partits programats
+            {message}
         </Text>
+        {!!detail && <Text style={{
+            color: MATCHES_COLORS.muted,
+            fontSize: 14,
+            lineHeight: 20,
+            fontFamily: EDITORIAL.fontRegular,
+            textAlign: 'center',
+            marginTop: 8,
+        }}>{detail}</Text>}
     </View>
 );
 

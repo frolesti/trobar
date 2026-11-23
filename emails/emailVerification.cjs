@@ -5,9 +5,10 @@ const { renderEmail, formatGreeting } = require('./template.cjs');
 /** verificationUrl must come from Firebase Admin with a fixed origin allowlist. */
 function renderEmailVerification({ verificationUrl, allowedActionOrigins, logoUrl, displayName = '' }) {
   return renderEmail({
+    design: 'email-verification',
     subject: 'Confirma el teu correu de troBar',
     preheader: 'Un últim pas per tenir el teu compte a punt.',
-    title: 'Confirma el teu correu',
+    title: 'Un últim pas per començar',
     greeting: formatGreeting(displayName),
     message: 'Per acabar el registre, confirma que aquesta adreça de correu és teva.',
     logoUrl,

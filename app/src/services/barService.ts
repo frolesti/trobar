@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp, query, where, limit as firestoreLimit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp, query, where, limit as firestoreLimit, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Bar, BarAmenity, OpeningPeriod } from '../models/Bar';
 import { OSMBar } from './osmService';
@@ -40,6 +40,8 @@ const mapDocToBar = (doc: any): Bar | null => {
         socialMedia: data.socialMedia || undefined,
         description: data.description || undefined,
         promotionalText: data.promotionalText || undefined,
+        reservationUrl: data.reservationUrl || undefined,
+        fullMatchIds: Array.isArray(data.fullMatchIds) ? data.fullMatchIds : [],
         gallery: Array.isArray(data.gallery) ? data.gallery : undefined,
         amenities: Array.isArray(data.amenities) ? data.amenities : undefined,
         openingPeriods: Array.isArray(data.openingPeriods) ? data.openingPeriods : undefined,
@@ -50,6 +52,23 @@ const mapDocToBar = (doc: any): Bar | null => {
     };
     return bar.isTestData === true && bar.tier === 'premium' ? enrichPremiumDemoBar(bar) : bar;
 };
+
+export function subscribeToBarDetails(barId: string, onUpdate: (bar: Bar | null) => void, onError: (error: Error) => void): () => void {
+    return onSnapshot(doc(db, 'bars', barId), snapshot => {
+        onUpdate(snapshot.exists() ? mapDocToBar(snapshot) : null);
+    }, onError);
+}
+
+export function subscribeToBars(onUpdate: (bars: Bar[]) => void, onError: (error: Error) => void): () => void {
+    return onSnapshot(collection(db, 'bars'), snapshot => {
+        const bars: Bar[] = [];
+        snapshot.forEach(document => {
+            const bar = mapDocToBar(document);
+            if (bar) bars.push(bar);
+        });
+        onUpdate(bars);
+    }, onError);
+}
 
 export const fetchBars = async (): Promise<Bar[]> => {
     // Utilitzem el nou wrapper 'executeRequest' per estandaritzar la crida

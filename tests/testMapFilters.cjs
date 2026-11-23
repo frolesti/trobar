@@ -12,7 +12,7 @@ const compile = code => ts.transpileModule(code, {
 function loadModule(file, dependencies = {}) {
     const module = { exports: {} };
     vm.runInNewContext(compile(fs.readFileSync(require.resolve(file), 'utf8')), {
-        module, exports: module.exports,
+        module, exports: module.exports, URL,
         require(name) {
             if (name in dependencies) return dependencies[name];
             throw new Error(`Unexpected dependency: ${name}`);
@@ -23,6 +23,7 @@ function loadModule(file, dependencies = {}) {
 const { AMENITY_OPTIONS, AMENITY_CATEGORIES } = loadModule('../app/src/data/amenities.ts');
 const { matchesBarFilters } = loadModule('../app/src/utils/barFilters.ts', {
     '../services/placesService': { isOpenNow: periods => periods?.[0]?.status },
+    './barReservations': loadModule('../app/src/utils/barReservations.ts'),
 });
 
 test('all 16 model amenities have exactly one filter and a visible category', () => {
@@ -63,6 +64,23 @@ test('open now excludes closed or unknown schedules, including discovered bars',
     assert(matchesBarFilters({ openingPeriods: [{ status: true }], amenities: ['wifi'] }, new Set(['open_now', 'wifi'])));
 });
 
+test('reservation filters distinguish a booking amenity, online booking and per-match full status', () => {
+    const premium = { tier: 'premium', reservationUrl: 'https://bar.example/reservar', fullMatchIds: ['men'] };
+    assert(matchesBarFilters(premium, new Set()));
+    assert(matchesBarFilters(premium, new Set(['reservations', 'online_reservations'])));
+    assert(!matchesBarFilters({ amenities: ['reservations'] }, new Set(['online_reservations'])));
+    assert(matchesBarFilters({ amenities: ['reservations'] }, new Set(['reservations'])));
+    for (const bar of [
+        { ...premium, tier: 'free' }, { ...premium, reservationUrl: 'javascript:alert(1)' }, {},
+    ]) assert(!matchesBarFilters(bar, new Set(['online_reservations'])));
+    assert(!matchesBarFilters(premium, new Set(['online_reservations', 'hide_full']), 'men'));
+    assert(matchesBarFilters(premium, new Set(['online_reservations', 'hide_full']), 'women'));
+    assert(matchesBarFilters(premium, new Set(['hide_full'])));
+    assert(matchesBarFilters({}, new Set(['hide_full']), 'men'));
+    assert(matchesBarFilters({ ...premium, tier: 'free' }, new Set(['hide_full']), 'men'));
+    assert(!matchesBarFilters(premium, new Set(['online_reservations', 'wifi']), 'women'));
+});
+
 test('filter panel renders every checkbox, active state, all groups and working reset/results actions', () => {
     const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
     const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -77,28 +95,38 @@ test('filter panel renders every checkbox, active state, all groups and working 
     let activeFilters = new Set(['wifi']);
     let visible = true;
     const actions = new Map();
-    const container = ({ children, testID, accessibilityRole, accessibilityLabel, accessibilityState, onPress }) => {
+    const container = ({ children, testID, accessibilityRole, accessibilityLabel, accessibilityState, onPress, disabled }) => {
         if (onPress) actions.set(accessibilityLabel || testID || 'results', onPress);
         return React.createElement(accessibilityRole === 'checkbox' ? 'button' : 'div', {
             'data-testid': testID, role: accessibilityRole, 'aria-label': accessibilityLabel,
             'aria-checked': accessibilityState?.checked,
+            'aria-disabled': accessibilityState?.disabled, disabled,
         }, children);
     };
     const context = {
-        React, AMENITY_OPTIONS, AMENITY_CATEGORIES, useMemo: fn => fn(),
+        React, AMENITY_OPTIONS, AMENITY_CATEGORIES, useMemo: fn => fn(), useCallback: fn => fn,
         View: container, TouchableOpacity: container, ScrollView: container, Text: container,
         MaterialCommunityIcons: () => null, Feather: () => null,
         Platform: { select: () => ({}) }, EDITORIAL: {}, styles: {},
-        activeFilters, height: 844, mobileDropdownTop: 66, safeBottomInset: 34,
-        setActiveFilters: value => { activeFilters = value; },
+        activeFilters, selectedMatch: { id: 'men' }, nextMatch: null, height: 844, mobileDropdownTop: 66, safeBottomInset: 34,
+        setActiveFilters: value => {
+            activeFilters = typeof value === 'function' ? value(activeFilters) : value;
+            context.activeFilters = activeFilters;
+        },
         setShowFiltersPanel: value => { visible = value; },
         toggleFilter() {},
     };
     const panel = vm.runInNewContext(compile(
         `const FILTER_OPTIONS = ${declarations.FILTER_OPTIONS}; (${declarations.renderFiltersPanel})`,
     ), context);
+    context.toggleFilter = vm.runInNewContext(compile(`(${declarations.toggleFilter})`), context);
     const html = renderToStaticMarkup(panel());
-    assert.equal((html.match(/role="checkbox"/g) || []).length, 17);
+    assert.equal((html.match(/role="checkbox"/g) || []).length, 19);
+    assert(html.includes('Disponibilitat'));
+    assert(html.includes('Reserves'));
+    assert(html.includes('Amb reserva en línia'));
+    assert(html.includes('Amagar complets'));
+    assert(html.indexOf('map-filter-reservations') < html.indexOf('Esports'));
     for (const option of AMENITY_OPTIONS) {
         assert(html.includes(`data-testid="map-filter-${option.key}"`));
         assert(html.includes(option.label));
@@ -106,10 +134,54 @@ test('filter panel renders every checkbox, active state, all groups and working 
     for (const category of AMENITY_CATEGORIES) assert(html.includes(category.label));
     assert.match(html, /aria-label="WiFi" aria-checked="true"/);
     assert(html.includes('1 filtre'));
+    for (const label of ['Oberts ara', 'Amagar complets', 'Amb reserva en línia', ...AMENITY_OPTIONS.map(option => option.label)]) {
+        actions.get(label)();
+    }
+    assert.equal(activeFilters.size, 18);
+    const selectedHtml = renderToStaticMarkup(panel());
+    assert(selectedHtml.includes('La resta no garanteix places.'));
+    context.selectedMatch = null;
+    assert.match(renderToStaticMarkup(panel()), /aria-label="Amagar complets" aria-checked="true" aria-disabled="true" disabled=""/);
     actions.get('Netejar tots els filtres')();
     assert.equal(activeFilters.size, 0);
     actions.get('Veure resultats dels filtres')();
     assert.equal(visible, false);
     assert.match(source, /showsVerticalScrollIndicator=\{true\}/);
-    assert.equal((source.match(/matchesBarFilters\(bar, activeFilters\)/g) || []).length, 2);
+    assert.equal((source.match(/matchesBarFilters\(bar, activeFilters, \(selectedMatch \|\| nextMatch\)\?\.id\)/g) || []).length, 2);
+});
+
+test('reservation filter updates stop on blur and failures clear only reservation filters with feedback', () => {
+    const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let effect;
+    function visit(node) {
+        if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+            && node.arguments[0]?.getText(ast).includes('subscribeToBars(setBars')) effect = node.arguments[0].getText(ast);
+        ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    let subscribed = 0, stopped = 0, failure;
+    const notices = [], logs = [];
+    const context = {
+        isFocused: true, needsLiveReservations: true, activeFilters: new Set(['wifi', 'reservations', 'online_reservations', 'hide_full']),
+        setBars() {}, console: { info: (...args) => logs.push(args) },
+        subscribeToBars: (_update, error) => { subscribed++; failure = error; return () => { stopped++; }; },
+        setActiveFilters: update => { context.activeFilters = update(context.activeFilters); },
+        showAlert: notice => notices.push(notice),
+    };
+    const run = vm.runInNewContext(compile(`(${effect})`), context);
+    const cleanup = run();
+    assert.equal(subscribed, 1);
+    failure(new Error('Offline'));
+    assert.deepEqual([...context.activeFilters], ['wifi']);
+    assert.equal(notices[0].tone, 'error');
+    assert.equal(logs.length, 1);
+    cleanup();
+    assert.equal(stopped, 1);
+    context.isFocused = false;
+    assert.equal(run(), undefined);
+    context.isFocused = true;
+    context.needsLiveReservations = false;
+    assert.equal(run(), undefined);
+    assert.equal(subscribed, 1);
 });

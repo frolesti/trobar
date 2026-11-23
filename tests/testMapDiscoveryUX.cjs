@@ -268,6 +268,7 @@ test('stale named searches cannot overwrite newer results or reopen a dismissed 
     visit(ast);
     const requests = [];
     const rendered = [];
+    const notices = [];
     const searchRequestRef = { current: 0 };
     const module = { exports: {} };
     vm.runInNewContext(compile(`export const ${declaration.getText(ast)};`), {
@@ -275,7 +276,7 @@ test('stale named searches cannot overwrite newer results or reopen a dismissed 
         centerLocation: { latitude: 41, longitude: 2 },
         setGeoSuggestions: value => rendered.push(value),
         searchMapLocations: () => new Promise(resolve => requests.push(resolve)),
-        showAlert() {}, console: { info() {} },
+        showAlert: notice => notices.push(notice), console: { info() {} },
     });
     const first = module.exports.searchNominatim('Old bar');
     const second = module.exports.searchNominatim('New bar');
@@ -289,6 +290,56 @@ test('stale named searches cannot overwrite newer results or reopen a dismissed 
     requests[2]({ suggestions: ['dismissed'], partial: false });
     await third;
     assert.deepEqual(rendered, [['new']]);
+    const partial = module.exports.searchNominatim('Available bar');
+    requests[3]({ suggestions: ['available'], partial: true });
+    await partial;
+    assert.deepEqual(rendered.at(-1), ['available']);
+    assert.equal(notices.length, 0, 'partial provider failure must not interrupt usable results');
+    const empty = module.exports.searchNominatim('Missing bar');
+    requests[4]({ suggestions: [], partial: true });
+    await empty;
+    assert.equal(notices.length, 1);
+    assert.match(notices[0].message, /No hem trobat coincidències/);
+});
+
+test('manual discovery shows the same results for partial coverage and retains actionable total-failure errors', async () => {
+    const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let scan;
+    const visit = node => {
+        if (ts.isFunctionDeclaration(node) && node.name?.text === 'handleManualScan') scan = node.getText(ast);
+        ts.forEachChild(node, visit);
+    };
+    visit(ast);
+    const messages = [], rendered = [], errors = [], busy = [];
+    let discovery = { bars: [{ id: 'new-bar' }], partial: false };
+    let failure;
+    class OSMSearchError extends Error {}
+    const context = {
+        centerLocation: { latitude: 41, longitude: 2 }, isScanning: false, searchRadiusKm: 1,
+        visibleBounds: null, bars: [], OSMSearchError,
+        setIsScanning: value => busy.push(value), setScanMessage: value => messages.push(value),
+        discoverMapBars: async () => { if (failure) throw failure; return discovery; },
+        isSameVenue: () => false, mergeDiscoveredBars: (previous, next) => [...previous, ...next],
+        setScannedBars: update => rendered.push(update([])),
+        console: { info: (...args) => errors.push(args) },
+    };
+    vm.runInNewContext(compile(`${scan}\nglobalThis.scan = handleManualScan;`), context);
+    await context.scan();
+    const completeMessage = messages.at(-1);
+    discovery.partial = true;
+    await context.scan();
+    assert.equal(messages.at(-1), completeMessage);
+    assert.deepEqual(rendered[0], rendered[1]);
+    assert.match(completeMessage, /1 local sense registrar/);
+    discovery = { bars: [], partial: true };
+    await context.scan();
+    assert.match(messages.at(-1), /No hem trobat locals nous/);
+    failure = new Error('All providers timed out');
+    await context.scan();
+    assert.match(messages.at(-1), /Torna-ho a provar/);
+    assert.equal(errors.length, 1);
+    assert.deepEqual(busy, [true, false, true, false, true, false, true, false]);
 });
 
 test('unregistered popup accepts zero coordinates, preserves Place ID and address, blocks duplicate reports and cleans navigation timers', async () => {

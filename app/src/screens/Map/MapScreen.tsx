@@ -10,7 +10,7 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // Icones vectorials
 
-import { fetchBars, fetchBarsForMatch, fetchBarsInBounds, cacheBarPlaceData } from '../../services/barService';
+import { fetchBars, fetchBarsForMatch, fetchBarsInBounds, cacheBarPlaceData, subscribeToBarDetails, subscribeToBars } from '../../services/barService';
 
 import { useAuth } from '../../context/AuthContext';
 import { useScreenLoading } from '../../context/SplashContext';
@@ -462,8 +462,8 @@ const MapScreen = () => {
 
     // Bars escanejats filtrats per amenitats actives (dinàmic)
     const filteredScannedBars = useMemo(() => {
-        return scannedBars.filter(bar => matchesBarFilters(bar, activeFilters));
-    }, [scannedBars, activeFilters]);
+        return scannedBars.filter(bar => matchesBarFilters(bar, activeFilters, (selectedMatch || nextMatch)?.id));
+    }, [scannedBars, activeFilters, selectedMatch, nextMatch]);
 
 
 
@@ -554,6 +554,7 @@ const MapScreen = () => {
     const [venueMeasurement, setVenueMeasurement] = useState<{ id: string; height: number } | null>(null);
     const venueCardHeight = venueMeasurement?.id === selectedVenueId ? venueMeasurement?.height ?? 280 : 280;
     const [mobileHeaderHeight, setMobileHeaderHeight] = useState(0);
+    const [searchBarHeight, setSearchBarHeight] = useState(54);
     const [desktopCardTop, setDesktopCardTop] = useState(280);
 
 
@@ -568,7 +569,7 @@ const MapScreen = () => {
     const safeTopInset = Math.max(insets.top, androidStatusInset);
     const safeBottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
     const mobileHeaderTop = safeTopInset + 8;
-    const mobileDropdownTop = mobileHeaderTop + 58;
+    const mobileDropdownTop = mobileHeaderTop + searchBarHeight + 4;
     const mobileFabBottom = safeBottomInset + (user ? 88 : 16);
     const mapAttributionBottom = user ? 88 : 36;
     const selectedPinY = Math.min(
@@ -583,9 +584,36 @@ const MapScreen = () => {
     // Reserve the entire control column, including when notice text wraps.
     const mapNoticeRight = 20 + 48 + 12;
     const mapNoticeLeft = mapNoticeRight;
-    const [mapNoticeHeight, setMapNoticeHeight] = useState(48);
     const [transientAlertVisible, setTransientAlertVisible] = useState(false);
     const isFocused = useIsFocused();
+    const needsLiveReservations = activeFilters.has('hide_full') || activeFilters.has('online_reservations') || activeFilters.has('reservations');
+    useEffect(() => {
+        if (!isFocused || !needsLiveReservations) return;
+        return subscribeToBars(setBars, error => {
+            console.info('[MapScreen] Reservation filters subscription failed', error);
+            setActiveFilters(previous => {
+                const next = new Set(previous);
+                next.delete('hide_full');
+                next.delete('online_reservations');
+                next.delete('reservations');
+                return next;
+            });
+            showAlert({ tone: 'error', message: 'No hem pogut actualitzar les reserves. Hem desactivat aquests filtres; torna-ho a provar.' });
+        });
+    }, [isFocused, needsLiveReservations]);
+    useEffect(() => {
+        if (!selectedBar || !isFocused) return;
+        return subscribeToBarDetails(selectedBar.id, updated => {
+            setSelectedBar(updated);
+            setBars(previous => updated
+                ? previous.map(bar => bar.id === updated.id ? updated : bar)
+                : previous.filter(bar => bar.id !== selectedBar.id));
+        }, error => {
+            console.info('[MapScreen] Bar details subscription failed', error);
+            setSelectedBar(null);
+            showAlert({ tone: 'error', message: 'No hem pogut actualitzar la fitxa del bar. Torna-la a obrir.' });
+        });
+    }, [selectedBar?.id, isFocused]);
 
 
 
@@ -943,7 +971,7 @@ const MapScreen = () => {
 
         if (!centerLocation) return; // Esperant ubicació
 
-        const applyFilters = (list: Bar[]) => list.filter(bar => matchesBarFilters(bar, activeFilters));
+        const applyFilters = (list: Bar[]) => list.filter(bar => matchesBarFilters(bar, activeFilters, (selectedMatch || nextMatch)?.id));
 
         // Si hi ha un partit seleccionat (filtre overlay), pre-filtrar per bars que l'emeten
         const activeMatchId = selectedMatch?.id ?? null;
@@ -985,7 +1013,7 @@ const MapScreen = () => {
 
 
 
-    }, [centerLocation, visibleBounds, bars, selectedMatch, upcomingMatches, currentZoom, activeFilters]);
+    }, [centerLocation, visibleBounds, bars, selectedMatch, nextMatch, upcomingMatches, currentZoom, activeFilters]);
 
 
 
@@ -1137,9 +1165,9 @@ const MapScreen = () => {
                 visibleBounds ? { south: visibleBounds.minLat, west: visibleBounds.minLng, north: visibleBounds.maxLat, east: visibleBounds.maxLng } : undefined,
             );
             const newScanned = discovery.bars.filter(item => !bars.some(bar => isSameVenue(item, bar)));
-            setScanMessage(`${newScanned.length} locals sense registrar. ${discovery.partial
-                ? 'Cobertura parcial; una font no ha pogut completar la cerca.'
-                : 'Toca un pin gris per veure el local. Cerca limitada als resultats disponibles.'}`);
+            setScanMessage(newScanned.length
+                ? `${newScanned.length} ${newScanned.length === 1 ? 'local sense registrar' : 'locals sense registrar'}. Toca un pin per veure el local.`
+                : 'No hem trobat locals nous en aquesta zona. Prova de moure el mapa.');
             setScannedBars(prev => mergeDiscoveredBars(prev, newScanned));
 
 
@@ -1544,8 +1572,7 @@ const MapScreen = () => {
             const result = await searchMapLocations(query, centerLocation?.latitude ?? 41.3851, centerLocation?.longitude ?? 2.1734);
             if (request !== searchRequestRef.current) return;
             setGeoSuggestions(result.suggestions);
-            if (result.partial) showAlert({ tone: 'info', message: 'La cerca té cobertura parcial. Prova el nom del local i el municipi.' });
-            else if (!result.suggestions.length) showAlert({ tone: 'info', message: 'No hem trobat coincidències. Prova el nom del local i el municipi.' });
+            if (!result.suggestions.length) showAlert({ tone: 'info', message: 'No hem trobat coincidències. Prova el nom del local i el municipi.' });
         } catch (e) {
             console.info('[MapScreen] Search failed', e);
             if (request !== searchRequestRef.current) return;
@@ -1837,6 +1864,9 @@ const MapScreen = () => {
 
                     tier={selectedBar.tier || 'free'}
                     promotionalText={selectedBar.promotionalText}
+                    reservationUrl={selectedBar.reservationUrl}
+                    fullMatchIds={selectedBar.fullMatchIds}
+                    matchId={(selectedMatch || nextMatch)?.id}
 
                     onProfileOpen={() => setShowBarProfile(true)}
                     profileHandleHidden={insidePremiumSheet}
@@ -1941,11 +1971,13 @@ const MapScreen = () => {
     // -- Configuració de filtres (dinàmica des de amenities.ts) --
     const FILTER_OPTIONS = useMemo(() => {
         const opts: { key: BarFilterKey; label: string; icon: string; iconFamily?: 'feather' | 'mci'; category?: string }[] = [
-            { key: 'open_now', label: 'Oberts ara', icon: 'clock', iconFamily: 'feather' },
+            { key: 'open_now', label: 'Oberts ara', icon: 'clock', iconFamily: 'feather', category: 'availability' },
+            { key: 'online_reservations', label: 'Amb reserva en línia', icon: 'calendar', iconFamily: 'feather', category: 'booking' },
+            { key: 'hide_full', label: 'Amagar complets', icon: 'users', iconFamily: 'feather', category: 'availability' },
         ];
         // Totes les amenities agrupades
         AMENITY_OPTIONS.forEach(a => {
-            opts.push({ key: a.key, label: a.label, icon: a.icon, iconFamily: a.iconFamily, category: a.category });
+            opts.push({ key: a.key, label: a.label, icon: a.icon, iconFamily: a.iconFamily, category: a.key === 'reservations' ? 'booking' : a.category });
         });
         return opts;
     }, []);
@@ -1960,27 +1992,29 @@ const MapScreen = () => {
     }, []);
 
     const renderFiltersPanel = () => {
-        // Separar filtres especials (sense categoria) dels d'amenities
-        const specialFilters = FILTER_OPTIONS.filter(f => !f.category);
-        const amenityFilters = FILTER_OPTIONS.filter(f => !!f.category);
-        // Agrupar per categoria
-        const grouped = AMENITY_CATEGORIES.map(cat => ({
+        const grouped = [
+            { key: 'availability', label: 'Disponibilitat' },
+            { key: 'booking', label: 'Reserves' },
+            ...AMENITY_CATEGORIES,
+        ].map(cat => ({
             ...cat,
-            items: amenityFilters.filter(f => f.category === cat.key),
+            items: FILTER_OPTIONS.filter(f => f.category === cat.key),
         })).filter(g => g.items.length > 0);
 
         const renderFilterRow = (f: typeof FILTER_OPTIONS[0]) => {
             const isActive = activeFilters.has(f.key);
+            const isDisabled = f.key === 'hide_full' && !(selectedMatch || nextMatch);
             const IconComp = f.iconFamily === 'mci' ? MaterialCommunityIcons : Feather;
             return (
                 <TouchableOpacity
                     key={f.key}
                     accessibilityRole="checkbox"
                     accessibilityLabel={f.label}
-                    accessibilityState={{ checked: isActive }}
+                    accessibilityState={{ checked: isActive, disabled: isDisabled }}
                     aria-checked={isActive}
+                    disabled={isDisabled}
                     testID={`map-filter-${f.key}`}
-                    style={[styles.filterChip, isActive && styles.filterChipActive]}
+                    style={[styles.filterChip, isActive && styles.filterChipActive, isDisabled && { opacity: 0.5 }]}
                     onPress={() => toggleFilter(f.key)}
                 >
                     <View style={{
@@ -2029,10 +2063,6 @@ const MapScreen = () => {
                     bounces={false}
                     showsVerticalScrollIndicator={true}
                 >
-                    <View style={styles.filterChipGrid}>{specialFilters.map(renderFilterRow)}</View>
-                    {activeFilters.has('open_now') && <Text style={styles.filterHint}>Només locals amb horari conegut i oberts ara.</Text>}
-
-                    {/* Amenities agrupades per categoria */}
                     {grouped.map(cat => (
                         <View key={cat.key}>
                             <Text style={{
@@ -2044,6 +2074,13 @@ const MapScreen = () => {
                                 {cat.label}
                             </Text>
                             <View style={styles.filterChipGrid}>{cat.items.map(renderFilterRow)}</View>
+                            {cat.key === 'availability' && <>
+                                {activeFilters.has('open_now') && <Text style={styles.filterHint}>Només locals amb horari conegut i oberts ara.</Text>}
+                                {(selectedMatch || nextMatch)
+                                    ? activeFilters.has('hide_full') && <Text style={styles.filterHint}>S'amaguen els locals marcats com a complets per al partit que veus al mapa. La resta no garanteix places.</Text>
+                                    : <Text style={styles.filterHint}>Cal un partit per filtrar els locals complets.</Text>}
+                            </>}
+                            {cat.key === 'booking' && activeFilters.has('online_reservations') && <Text style={styles.filterHint}>Locals amb un enllaç de reserva al perfil.</Text>}
                         </View>
                     ))}
                 </ScrollView>
@@ -2094,7 +2131,9 @@ const MapScreen = () => {
 
         // Input natiu
         return (
-             <View testID="map-search-bar" style={styles.searchBar}>
+             <View testID="map-search-bar" style={[styles.searchBar, { flexDirection: 'column' }]}
+                onLayout={event => setSearchBarHeight(event.nativeEvent.layout.height)}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
                 <Feather name="search" size={18} color={EDITORIAL.onBackgroundMuted} style={{marginRight: 10}} />
                 <TextInput 
                     accessibilityLabel="Cercar una ubicació"
@@ -2112,6 +2151,14 @@ const MapScreen = () => {
                     </TouchableOpacity>
                 )}
                 {filterIconButton}
+                </View>
+                <MapDataAttribution
+                    venues={[...scannedBars, ...geoSuggestions.flatMap(suggestion => suggestion.venue ? [suggestion.venue] : [])]}
+                    googleDetails={!!placeDetails || discoveredGoogleDetails}
+                    osmGeocoding={geoSuggestions.some(suggestion => !suggestion.venue)}
+                    googleMapAttributed={Platform.OS === 'android' || Platform.OS === 'web'}
+                    style={{ paddingLeft: 28 }}
+                />
             </View>
         );
     };
@@ -2333,13 +2380,6 @@ const MapScreen = () => {
     return (
 
         <View style={[styles.container, { position: 'relative' }, isDesktop && { flexDirection: 'row' }]}>
-            <MapDataAttribution
-                venues={[...scannedBars, ...geoSuggestions.flatMap(suggestion => suggestion.venue ? [suggestion.venue] : [])]}
-                googleDetails={!!placeDetails || discoveredGoogleDetails}
-                osmGeocoding={geoSuggestions.some(suggestion => !suggestion.venue)}
-                googleMapAttributed={Platform.OS === 'android' || Platform.OS === 'web'}
-                style={{ position: 'absolute', bottom: mapLoadFailed || (!selectedLocation && (scanMessage || matchNotice)) ? mapNoticeBottom + mapNoticeHeight + 8 : mapAttributionBottom, left: 12, right: mapControlsInline ? 132 : mapNoticeRight, zIndex: 40 }}
-            />
             {/* BARRA LATERAL D'ESCRIPTORI */}
 
             {isDesktop && (
@@ -2373,7 +2413,7 @@ const MapScreen = () => {
                         <ActivityIndicator accessibilityLabel="Carregant el mapa" color={EDITORIAL.grana} style={{ position: 'absolute', top: mobileHeaderHeight + 20, alignSelf: 'center', zIndex: 2 }} />
                     )}
                     {mapLoadFailed && !transientAlertVisible && (
-                        <View onLayout={event => setMapNoticeHeight(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, alignItems: 'center', zIndex: 51 }}>
+                        <View style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, alignItems: 'center', zIndex: 51 }}>
                             <View style={{ width: '100%', maxWidth: 480 }}>
                             <UserNotice
                                 compact
@@ -2389,7 +2429,7 @@ const MapScreen = () => {
                         </View>
                     )}
                     {!mapLoadFailed && !transientAlertVisible && !selectedLocation && (scanMessage || matchNotice) && (
-                        <View pointerEvents="box-none" onLayout={event => setMapNoticeHeight(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, zIndex: 50, alignItems: 'center' }}>
+                        <View pointerEvents="box-none" style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, zIndex: 50, alignItems: 'center' }}>
                             <View style={{ width: '100%', maxWidth: 480 }}>
                                 <UserNotice
                                     compact
@@ -2857,6 +2897,7 @@ const MapScreen = () => {
                             bar={selectedBar}
                             placeDetails={placeDetails}
                             allMatches={upcomingMatches}
+                            matchId={(selectedMatch || nextMatch)?.id}
                             onClose={() => setShowBarProfile(false)}
                             onNavigate={() => openExternalMaps(selectedBar)}
                             onReviewStatsChange={setSelectedBarReviewStats}

@@ -64,6 +64,9 @@ function editorGlobals(overrides = {}) {
         description: 'El nostre local', promotionalText: 'La promoció', showGoogleRating: true,
         configuredSocials: 1, socials: { instagram: 'elnostrebar' }, selectedAmenities: new Set(['wifi']),
         broadcastingIds: new Set(['match']), upcomingMatches: [], matchGenderFilter: null,
+        reservationLink: '', fullMatchIds: new Set(),
+        setReservationLink(value) { globals.reservationLink = value; },
+        setFullMatchIds(update) { globals.fullMatchIds = update(globals.fullMatchIds); },
         SOCIAL_NETWORKS: evaluate(`export const value = ${initializer(dashboard, 'SOCIAL_NETWORKS')}`).value,
         AMENITY_OPTIONS: [{ key: 'wifi', label: 'Wi-Fi', icon: 'wifi' }],
         saving: false, hasChanges: true, ActivityIndicator: 'ActivityIndicator',
@@ -91,11 +94,11 @@ test('owner profile exposes all editors inline with exactly one save action at t
     const tree = component.renderProfileTab();
     const sections = nodes(tree, node => node.props.testID?.startsWith('bar-profile-section-'));
     assert.deepEqual(sections.map(node => node.props.testID), [
-        'bar-profile-section-description', 'bar-profile-section-promotions', 'bar-profile-section-amenities',
+        'bar-profile-section-description', 'bar-profile-section-promotions', 'bar-profile-section-reservations', 'bar-profile-section-amenities',
         'bar-profile-section-matches', 'bar-profile-section-socials', 'bar-profile-section-googleRating',
     ]);
     assert(sections.every(node => node.type === 'View' && !node.props.onPress));
-    assert.equal(nodes(tree, node => node.type === 'TextInput').length, 2 + editorGlobals().SOCIAL_NETWORKS.length);
+    assert.equal(nodes(tree, node => node.type === 'TextInput').length, 3 + editorGlobals().SOCIAL_NETWORKS.length);
     assert.equal(nodes(tree, node => node.type === 'Switch').length, 1);
     assert.equal(nodes(tree, node => node.type === 'Image')[0].props.source.uri, 'https://example.test/cover.jpg');
     const buttons = nodes(tree, node => node.props.testID === 'bar-profile-save');
@@ -280,6 +283,35 @@ test('owner footer reuses standard compact legal links, preserves destinations a
     assert(!initializer(dashboard, 'renderSettingsTab').includes('Legal i suport'));
 });
 
+test('Premium capacity switches affect only the chosen broadcast and deselection clears its full state', () => {
+    const globals = editorGlobals({
+        broadcastingIds: new Set(['men', 'women']), fullMatchIds: new Set(['women']),
+        upcomingMatches: [
+            { id: 'men', category: 'masculino', homeTeam: 'Barça', awayTeam: 'Rival', date: '2026-12-01', competition: {} },
+            { id: 'women', category: 'femenino', homeTeam: 'Barça', awayTeam: 'Rival', date: '2026-12-02', competition: {} },
+        ],
+    });
+    const render = () => evaluate(`export const render = ${initializer(dashboard, 'renderSectionContent')};`, globals).render('matches');
+    let tree = render();
+    const switches = nodes(tree, node => node.type === 'Switch');
+    assert.equal(switches.length, 2);
+    switches[0].props.onValueChange(true);
+    assert.deepEqual([...globals.fullMatchIds], ['women', 'men']);
+    tree = render();
+    nodes(tree, node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel?.includes('masculí'))[0].props.onPress();
+    assert.deepEqual([...globals.fullMatchIds], ['women']);
+    assert.equal(globals.broadcastingIds.has('men'), false);
+    assert.equal(nodes(render(), node => node.type === 'Switch').length, 1);
+    globals.matchGenderFilter = 'femenino';
+    tree = render();
+    nodes(tree, node => node.type === 'TouchableOpacity' && node.props.style === themed.default.selectAllBtn)[0].props.onPress();
+    assert.equal(globals.fullMatchIds.size, 0);
+    globals.bar = { ...globals.bar, tier: 'free' };
+    globals.broadcastingIds = new Set(['men', 'women']);
+    globals.matchGenderFilter = null;
+    assert.equal(nodes(render(), node => node.type === 'Switch').length, 0);
+});
+
 test('match colors match standard gender tokens and filtered select-all never changes other matches', () => {
     const globals = editorGlobals({
         broadcastingIds: new Set(['other']),
@@ -289,6 +321,7 @@ test('match colors match standard gender tokens and filtered select-all never ch
             { id: 'queen', homeTeam: 'Barça', awayTeam: 'Rival', date: '2026-12-03', competition: { name: 'Copa de la Reina' } },
         ],
     });
+
     const render = () => evaluate(`export const render = ${initializer(dashboard, 'renderSectionContent')};`, globals, {
         '../../../../assets/app/img/competicions/copa-reina.png': 'queen-crest',
     }).render('matches');
@@ -297,14 +330,14 @@ test('match colors match standard gender tokens and filtered select-all never ch
     assert.deepEqual(Array.from(filters, node => node.props.children.props.children), ['Masculí', 'Femení']);
     assert.equal(filters[0].props.style[1].backgroundColor, baseTheme.EDITORIAL.masculine);
     assert.equal(filters[1].props.style[1].backgroundColor, baseTheme.EDITORIAL.feminine);
-    const rows = nodes(tree, node => node.props.accessibilityLabel?.includes(' vs '));
+    const rows = nodes(tree, node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel?.includes(' vs '));
     assert.deepEqual(rows.map(node => node.props.style[1].backgroundColor), [
         baseTheme.EDITORIAL.masculine, baseTheme.EDITORIAL.feminine, baseTheme.EDITORIAL.feminine,
     ]);
     assert(!/[♂♀]/u.test(initializer(dashboard, 'renderSectionContent')));
     filters[1].props.onPress();
     tree = render();
-    assert.equal(nodes(tree, node => node.props.accessibilityLabel?.includes(' vs ')).length, 2);
+    assert.equal(nodes(tree, node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel?.includes(' vs ')).length, 2);
     tree.props.children[1].props.onPress();
     assert.deepEqual([...globals.broadcastingIds], ['other', 'women', 'queen']);
     render().props.children[1].props.onPress();

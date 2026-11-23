@@ -67,6 +67,10 @@ export interface Bar {
     description?: string;
     /** Text promocional visible a la targeta */
     promotionalText?: string;
+    /** Enllaç HTTPS extern de reserves del bar Premium. */
+    reservationUrl?: string;
+    /** Partits amb aforament complet, independent de l'horari d'obertura. */
+    fullMatchIds?: string[];
     /** URLs de Firebase Storage amb fotos pròpies del propietari */
     gallery?: string[];
     /** Amenitats del bar (claus fixes que es mapegen a icones) */

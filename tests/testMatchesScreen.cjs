@@ -10,6 +10,7 @@ test('competition switches reset rendered history and restore the load-previous 
     let focused = true;
     let defaultCategory = 'all';
     let pendingPreferences = null;
+    let championsUpcoming = true;
     const slots = [];
     let hookIndex = 0;
     let dirty = true;
@@ -72,7 +73,7 @@ test('competition switches reset rendered history and restore the load-previous 
             if (name.includes('AuthContext')) return { useAuth: () => ({ user: currentUser }) };
             if (name.includes('SplashContext')) return { useScreenLoading: () => {} };
             if (name === 'firebase/firestore') return { collection: () => 'competitions', getDocs: async () => ({ forEach: callback => ['1', '2', '3', '4'].forEach(id => callback({ id, data: () => ({ name: id === '1' ? 'Primera Division' : id === '2' ? 'Champions League' : id === '4' ? "UEFA Women's Champions League" : 'Copa del Rey' }) })) }) };
-            if (name.includes('matchService')) return { fetchAllMatches: async () => ({ matches: [champions.at(-1), ...league.slice(1), female] }), subscribeToMatchUpdates: () => () => {}, fetchCompetitionMatches: async ids => ids.includes('2') ? [...champions, ...(ids.includes('4') ? [womensChampions] : [])] : ids.includes('3') ? [] : league, fetchPastMatches: async () => [] };
+            if (name.includes('matchService')) return { fetchAllMatches: async () => ({ matches: [champions.at(-1), ...league.slice(1), female] }), subscribeToMatchUpdates: () => () => {}, fetchCompetitionMatches: async ids => ids.includes('2') ? championsUpcoming ? [...champions, ...(ids.includes('4') ? [womensChampions] : [])] : champions.slice(0, -1) : ids.includes('3') ? [] : league, fetchPastMatches: async () => [] };
             if (name.includes('barService')) return { fetchBroadcastMatchIds: async () => new Set() };
             if (name.includes('matchBroadcast')) return { nextBroadcastMatchId: () => 'cl-next' };
             if (name.includes('matchHistory')) return { previousMatchPage: (matches, before, count) => matches.filter(match => match.date < before).sort((first, second) => second.date - first.date).slice(0, count).reverse() };
@@ -120,6 +121,9 @@ test('competition switches reset rendered history and restore the load-previous 
     assert.equal(ids().filter(id => id.startsWith('cl-') && id !== 'cl-next').length, 10);
     await pressCompetition('Lliga');
     assert.deepEqual(ids(), ['league-next', 'league-next-month']);
+    const footer = list().props.ListFooterComponent;
+    assert.match(text(footer.type(footer.props)), /tots els partits programats a la Lliga/);
+    assert.equal(elements(footer.type(footer.props)).some(node => node.type === 'AppIcon'), false);
     list().props.renderItem({ item: list().props.data.find(item => item.id === 'league-next') }).props.onPress();
     assert.deepEqual(JSON.parse(JSON.stringify(navigationCalls)), [['Map', { matchId: 'league-next' }]], 'returning with a filter must pop the existing Map rather than push a new screen');
     const months = Array.from(list().props.data).filter(item => item.type === 'month');
@@ -134,6 +138,20 @@ test('competition switches reset rendered history and restore the load-previous 
     assert.equal(list().props.ListHeaderComponent.props.accessibilityLabel, 'Carregar 10 partits anteriors');
     await pressCompetition('Champions');
     assert.deepEqual(ids(), ['cl-next', 'wcl-next']);
+    championsUpcoming = false;
+    await pressCompetition('Champions');
+    await pressCompetition('Champions');
+    assert.deepEqual(ids(), []);
+    const noUpcoming = list().props.ListEmptyComponent;
+    assert.match(text(noUpcoming.type(noUpcoming.props)), /No hi ha cap partit del Barça programat a la Champions/);
+    assert.match(text(noUpcoming.type(noUpcoming.props)), /encreuaments.*confirmats/);
+    await list().props.ListHeaderComponent.props.onPress();
+    await settle();
+    assert.equal(ids().length, 10);
+    const historyFooter = list().props.ListFooterComponent;
+    assert.match(text(historyFooter.type(historyFooter.props)), /No hi ha cap partit del Barça programat a la Champions/);
+    assert.equal(elements(historyFooter.type(historyFooter.props)).some(node => node.type === 'AppIcon'), false);
+    championsUpcoming = true;
     await pressCompetition('Copa');
     assert.deepEqual(ids(), []);
     const historyControl = list().props.ListHeaderComponent;
@@ -143,8 +161,9 @@ test('competition switches reset rendered history and restore the load-previous 
     assert.equal(historyControl.props.style.borderRadius, undefined);
     assert.equal(list().props.ListHeaderComponentStyle.minHeight, 54);
     assert.equal(elements(historyControl).find(node => node.type === 'AppIcon').props.name, 'chevron-up');
-    const empty = list().props.ListEmptyComponent.type();
-    assert.equal(text(empty), 'Encara no hi ha partits programats');
+    const empty = list().props.ListEmptyComponent.type(list().props.ListEmptyComponent.props);
+    assert.match(text(empty), /No hi ha cap partit del Barça programat a la Copa/);
+    assert.match(text(empty), /encreuaments.*confirmats/);
     assert.equal(elements(empty).filter(node => node.type === 'AppIcon').length, 0);
     await pressCompetition('Copa');
     for (const [label, color] of [['Masculí', '#8C003B'], ['Femení', '#AD2857']]) {

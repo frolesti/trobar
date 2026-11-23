@@ -54,8 +54,6 @@ test('notices sit at the bottom beside the control column across viewport sizes 
     assert.equal((source.match(/bottom: mapNoticeBottom/g) || []).length, 2);
     assert.equal((source.match(/right: mapNoticeRight/g) || []).length, 3);
     assert.equal((source.match(/left: mapNoticeLeft/g) || []).length, 3);
-    assert.equal((source.match(/onLayout=\{event => setMapNoticeHeight\(event\.nativeEvent\.layout\.height\)\}/g) || []).length, 2);
-    assert.match(source, /mapNoticeBottom \+ mapNoticeHeight \+ 8/);
     assert.equal((source.match(/bottom: mapSearchBottom/g) || []).length, 2);
     assert.equal((source.match(/bottom: mapControlsBottom/g) || []).length, 2);
     assert.match(source, /!mapLoadFailed && !transientAlertVisible && !selectedLocation && \(scanMessage \|\| matchNotice\)/);

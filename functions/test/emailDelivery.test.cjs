@@ -240,6 +240,62 @@ test('first verified app access queues one welcome, ignores client UID and never
   assert.equal((await h.api.recordFirstLogin(input)).status, 'not-new');
 });
 
+test('public welcome remains double-gated and never enables billing or other lifecycle mail', async () => {
+  for (const env of [{}, { EMAIL_DELIVERY_MODE: 'public' }, { EMAIL_PUBLIC_WELCOME_READY: 'true' }]) {
+    const h = setup({ env });
+    assert.equal((await h.api.recordFirstLogin({ auth: { uid: 'owner' } })).status, 'suppressed');
+    assert.equal(h.jobs().length, 0);
+  }
+  const h = setup({ env: { EMAIL_DELIVERY_MODE: 'public', EMAIL_PUBLIC_WELCOME_READY: 'true', EMAIL_PORTAL_READY: 'true' } });
+  assert.equal((await h.api.recordFirstLogin({ auth: { uid: 'owner' } })).status, 'queued');
+  await h.email.planSubscriptionEmails(h.database, h.stripe, event(h), h.sub, h.now);
+  assert.equal(h.jobs().length, 1, 'a public welcome switch must not enable billing messages');
+  assert.equal(h.email.emailEnabledFor('owner@example.test', 'support-received'), false);
+  const [key] = h.jobs()[0];
+  let payload;
+  await h.email.deliverEmailJob(h.database, h.stripe, h.ref(key), 'fixture', Date.now(), async mail => {
+    payload = mail;
+    return accepted();
+  });
+  assert.equal(h.documents.get(key).state, 'accepted');
+  assert.equal(payload.template.variables.SUBJECT_PREFIX, '');
+});
+
+test('bar registration and app login share one idempotent welcome for the authenticated account', async () => {
+  const h = setup();
+  const registration = { params: { uid: 'owner' }, data: { data: () => ({ barId: 'bar' }) } };
+  await Promise.all([
+    h.api.onBarWelcomeEmail(registration), h.api.onBarWelcomeEmail(registration),
+    h.api.recordFirstLogin({ auth: { uid: 'owner' }, data: { uid: 'victim' } }),
+  ]);
+  assert.equal(h.jobs().length, 1);
+  assert.equal(h.jobs()[0][1].kind, 'welcome');
+  assert.equal(h.jobs()[0][1].uid, 'owner');
+  const user = setup({ documents: {} });
+  await user.api.recordFirstLogin({ auth: { uid: 'owner' } });
+  assert.equal(user.jobs().length, 1, 'ordinary users do not need a bar or subscription');
+  for (const authUser of [
+    { uid: 'owner', email: 'owner@example.test', emailVerified: false },
+    { uid: 'owner', email: 'owner@example.test', emailVerified: true, disabled: true },
+  ]) {
+    const blocked = setup({ authUser });
+    await blocked.api.onBarWelcomeEmail(registration);
+    assert.equal(blocked.jobs().length, 0);
+  }
+});
+
+test('public welcome eligibility is checked again before delivery', async () => {
+  const env = { EMAIL_DELIVERY_MODE: 'public', EMAIL_PUBLIC_WELCOME_READY: 'true' };
+  const h = setup({ env });
+  await h.api.recordFirstLogin({ auth: { uid: 'owner' } });
+  const [key] = h.jobs()[0];
+  h.options.authUser.emailVerified = false;
+  await h.email.deliverEmailJob(h.database, h.stripe, h.ref(key), 'fixture', Date.now(), () => {
+    throw new Error('Unverified accounts must not receive a welcome');
+  });
+  assert.equal(h.documents.get(key).state, 'suppressed');
+});
+
 test('activation and two absolute-date reminders are idempotent; updates do not send another welcome', async () => {
   const h = setup();
   await h.email.planSubscriptionEmails(h.database, h.stripe, event(h), h.sub, h.now);

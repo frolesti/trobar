@@ -5,9 +5,10 @@ const { renderEmail, formatGreeting } = require('./template.cjs');
 /** resetUrl must come from Firebase Admin, never from a client-supplied link. */
 function renderPasswordResetEmail({ resetUrl, allowedActionOrigins, logoUrl, displayName = '' }) {
   return renderEmail({
+    design: 'password-reset',
     subject: 'Restableix la teva contrasenya de troBar',
     preheader: 'Tria una contrasenya nova per al teu compte.',
-    title: 'Restableix la contrasenya',
+    title: 'Recuperació del compte',
     greeting: formatGreeting(displayName),
     message: 'Fes servir aquest enllaç per triar una contrasenya nova.',
     logoUrl,

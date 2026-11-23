@@ -317,10 +317,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             GoogleSignin.configure({
               webClientId: GOOGLE_WEB_CLIENT_ID,
+              iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
             });
 
             // 1. Comprovar si Google Play Services està disponible
-            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+            if (Platform.OS === 'android') {
+                await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+            }
 
                 // 2. Iniciar sessió amb Google (obre diàleg natiu)
                 const signInResult = await GoogleSignin.signIn();

@@ -1,5 +1,126 @@
 # troBar: campanya de prova gratuïta i primer cobrament
 
+## Preparació de la benvinguda pública — 15 de novembre de 2026
+
+Canvis locals, **sense desplegar, publicar a Resend ni activar enviaments**:
+
+- La plantilla compartida utilitza una composició editorial, una capçalera compacta
+  amb el logo amb la pilota fora de la campana al costat del nom, títols Barlow
+  Condensed i un únic botó grana centrat. El text s'alinea a l'esquerra, sense
+  ombres ni marc de modal. El peu és fora del cos del missatge,
+  amb dos blocs en columnes separades per un filet: «Comparteix troBar»
+  (WhatsApp, Facebook i Twitter amb l'ocell clàssic) i «Segueix-nos»
+  (Instagram: `https://www.instagram.com/trobarapp/`).
+  No inclou enllaços a Contacte ni Privacitat.
+  Les quatre icones són PNG transparents del crema corporatiu `#F4E6CC`,
+  sense filtres CSS ni versions multicolor. No mostra cap bústia. Els remitents i
+  `Reply-To` de suport i facturació es conserven.
+- `welcome` serveix tant per a usuaris com per a propietaris. L'app manté el
+  callable `recordFirstLogin` després del consentiment, amb
+  `EXPO_PUBLIC_ENABLE_LIFECYCLE_EMAILS=true`. El nou trigger
+  `onBarWelcomeEmail` sobre `barOwners/{uid}` cobreix també l'alta del bar al
+  web. Els dos fluxos comparteixen `welcome:<uid>`: reintentar o entrar a
+  l'app després del registre no duplica el correu.
+- Es requereixen un compte verificat, no desactivat i creat fa menys de set
+  dies. No s'envien benvingudes retroactives a tota la base de dades.
+- El mode intern manté l'allowlist. La preparació pública requereix **tots dos**
+  `EMAIL_DELIVERY_MODE=public` i `EMAIL_PUBLIC_WELCOME_READY=true`.
+  Només habilita `welcome`; facturació i els altres correus continuen
+  restringits al mode intern. Sense aquests valors no hi ha enviament públic.
+  El prefix `[PROVA INTERNA]` es retira només per decisió del servidor.
+
+Abans d'activar-ho amb aprovació explícita: substituir els placeholders
+fotogràfics descrits més avall, publicar els assets del web
+(`logo-email-open-cloche.png`, `instagram-email.png`) i comprovar que responen;
+actualitzar i verificar les 18 plantilles allotjades amb
+`node scripts/publishEmailTemplates.cjs --update`; desplegar les funcions de
+correu incloent `onBarWelcomeEmail`; validar una alta d'usuari i una de bar
+amb destinataris interns, i només llavors configurar els dos indicadors públics
+i l'indicador de l'app. El preparador de desplegament continua generant mode
+intern: no activa públic accidentalment. No cal canviar IDs ni esquemes de
+variables a Resend. Una previsualització local no prova el lliurament real.
+Abans de canviar de mode cal buidar o cancel·lar els treballs interns pendents:
+els reintents conserven el payload original per respectar la idempotència del
+proveïdor, inclòs el prefix de prova.
+
+### Criteri editorial i visual dels correus
+
+El títol dona context o comunica un resultat; el botó indica la següent acció.
+La benvinguda i els consells de perfil desenvolupen el missatge en paràgrafs
+breus, sense files de dades que repeteixin el cos. Els imports, dates, condicions de facturació,
+avisos de seguretat i la baixa dels consells es mantenen. No s'amaga ni es
+retalla contingut per forçar una alçada. La versió editorial amb fotografia i
+collage pot requerir desplaçament; l'acció principal va abans del collage.
+Les verificacions, contrasenyes, cobraments fallits i seguretat no tenen
+fotografia abans de l'acció. Imports, dates, baixes i avisos continuen sent text
+HTML llegible, encara que les imatges estiguin bloquejades.
+
+Els botons de compartir difonen exclusivament `https://www.trobar.cat`, mai
+el contingut del correu, dades del destinatari o enllaços personals de compte,
+facturació o recuperació. Instagram porta al perfil de troBar: no es presenta
+com un botó de compartir perquè no ofereix un equivalent web compatible.
+La separació entre compartir i seguir aplica la distinció de
+[Delivra: Social Share and Social Follow](https://help.delivra.com/portal/en/kb/articles/what-is-the-difference-between-social-share-and-social-follow-buttons-in-the-email-designer):
+etiquetes explícites, accions diferents i només perfils oficials coneguts.
+Els enllaços de compartir són HTTPS simples, sense scripts ni widgets de
+tercers; no es creen perfils propis ficticis de Facebook o Twitter.
+Les previsualitzacions individuals no mostren cap banda d'avís; les dades de
+mostra i els enllaços d'acció ficticis es mantenen. La galeria i aquesta guia
+expliquen l'estat de preparació, sense afegir-lo al disseny del correu.
+
+Referents consultats: [Postmark: Welcome email best practices](https://postmarkapp.com/guides/welcome-email-best-practices)
+(un següent pas clar) i [Really Good Emails: Welcome email design tips](https://reallygoodemails.com/school/blog/welcome-email-design-tips)
+(Allbirds: fotografia protagonista, carta breu i collage). S'adapten aquests
+principis a troBar, sense copiar-ne textos ni recursos.
+
+### Direcció d'imatge i substitució dels placeholders
+
+Les 18 plantilles comparteixen marca i peu, però utilitzen cinc composicions:
+editorial amb collage (benvinguda i consells), fotografia protagonista (alta i
+final de Premium), franja panoràmica (recordatoris i canvi de pla), resum
+econòmic (rebut i reemborsament) i carta de servei (compte, suport i seguretat).
+La selecció és a `emails/artDirection.cjs`; no canvia les dades ni les variables
+de les plantilles allotjades.
+
+Els onze PNG de `assets/web/img/emails/` són **placeholders expressament
+etiquetats**, no fotografies finals. Cada imatge mostra l'ambient buscat i el
+nom exacte del fitxer. Substitueix-lo per una foto pròpia o amb llicència per a
+correu comercial, conservant nom, format PNG i proporció. No incorporis textos
+essencials a la fotografia. No s'han reutilitzat els pòsters amb marca d'aigua
+d'Artlist ni recursos d'Allbirds.
+
+| Fitxer PNG | Mida en px | Ambient / ús |
+|---|---|---|
+| `match-night-together.png` | 1120 × 600 | Culers mirant el partit junts; capçalera de benvinguda |
+| `shared-table.png` | 560 × 480 | Tapes i begudes compartides; collage de benvinguda |
+| `goal-celebration.png` | 560 × 480 | Celebració espontània; collage de benvinguda |
+| `bar-interior-warm.png` | 1120 × 600 | Interior acollidor; consells de perfil |
+| `screen-ready.png` | 560 × 480 | Pantalla i local preparats; collage de consells |
+| `tapas-closeup.png` | 560 × 480 | Especialitats del local; collage de consells |
+| `bar-doors-open.png` | 1120 × 400 | Porta oberta i llum de tarda; alta Premium |
+| `evening-bar-lights.png` | 1120 × 320 | Bar en marxa al vespre; recordatori de set dies |
+| `kickoff-countdown.png` | 1120 × 320 | Instants abans del partit; recordatori de 24 hores |
+| `bar-after-match.png` | 1120 × 400 | Calma després del partit; final de Premium |
+| `bar-preparing-match.png` | 1120 × 320 | Equip preparant el local; canvi de pla |
+
+Apunta a menys de 200 KB per imatge. Els originals poden tenir el doble de
+resolució que la mida visible (màxim 560 px d'amplada per al correu).
+`node emails/renderPreview.cjs` regenera la galeria amb rutes locals: canviar
+un PNG ja actualitza la imatge en recarregar la previsualització. El build web
+copia aquesta carpeta a `/assets/img/emails/`. Només substituir una imatge
+sense canviar-ne el nom requereix publicar assets, no modificar variables de
+Resend; els clients de correu poden mantenir imatges en memòria cau. Si cal
+canviar URLs, actualitza la direcció d'imatge i republica les plantilles amb
+autorització. No publicar ni activar els correus amb els placeholders encara
+visibles.
+
+Validació local de la versió editorial: 29 proves de renderització, dades i
+variables allotjades; 54 comprovacions de navegador (18 correus a 320, 390 i
+1048 px), sense desbordament horitzontal i amb botons d'almenys 44 px.
+Comprovats també el text amb fotos i fonts bloquejades, la paleta fosca i la
+presència de la direcció d'imatge al paquet de Functions. Aquestes comprovacions
+de navegador no substitueixen una prova posterior als clients de correu reals.
+
 ## Estat i objectiu
 
 **Estat vigent: 6 de novembre de 2026. Beta amb Stripe sandbox i enviaments

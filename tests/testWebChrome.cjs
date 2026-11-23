@@ -79,11 +79,16 @@ test('official favicon variants are concrete deployable images with the advertis
     const png = fs.readFileSync(path.join(publicDir, 'assets', 'logos', file));
     assert.equal(png.readUInt32BE(16), size);
     assert.equal(png.readUInt32BE(20), size);
+    assert.deepEqual(png, fs.readFileSync(path.resolve(__dirname, '..', 'assets', 'web', 'logos', file)));
+    if (size === 32) {
+      const entry = 6 + 16;
+      assert.deepEqual(png, icon.subarray(icon.readUInt32LE(entry + 12), icon.readUInt32LE(entry + 12) + icon.readUInt32LE(entry + 8)));
+    }
   }
   const document = fs.readFileSync(require.resolve('../web-app/pages/_document.tsx'), 'utf8');
-  assert.match(document, /href="\/favicon\.ico\?v=1"/);
-  assert.match(document, /sizes="32x32" href="\/assets\/logos\/favicon-32\.png"/);
-  assert.match(document, /sizes="180x180" href="\/assets\/logos\/apple-touch-icon\.png"/);
+  assert.match(document, /href="\/favicon\.ico\?v=mascot-ball-2"/);
+  assert.match(document, /sizes="32x32" href="\/assets\/logos\/favicon-32\.png\?v=mascot-ball-2"/);
+  assert.match(document, /sizes="180x180" href="\/assets\/logos\/apple-touch-icon\.png\?v=mascot-ball-2"/);
 });
 
 test('download badges never link to generic stores and explain when the app is not published', () => {

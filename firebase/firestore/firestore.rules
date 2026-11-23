@@ -22,8 +22,26 @@ service cloud.firestore {
       allow update: if ownsBar(barId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'description', 'promotionalText', 'socialMedia', 'amenities', 'gallery',
-          'broadcastingMatches', 'updatedAt', 'googlePlaceId', 'openingPeriods', 'placesEnrichedAt', 'showGoogleRating'
+          'broadcastingMatches', 'updatedAt', 'googlePlaceId', 'openingPeriods', 'placesEnrichedAt', 'showGoogleRating',
+          'reservationUrl', 'fullMatchIds'
         ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reservationUrl']) || !('reservationUrl' in request.resource.data) || (
+          request.resource.data.reservationUrl is string
+          && (request.resource.data.reservationUrl == '' || (
+            resource.data.tier == 'premium'
+            && request.resource.data.reservationUrl.size() <= 2048
+            && request.resource.data.reservationUrl.matches('^https://[A-Za-z0-9][A-Za-z0-9.-]*\\.[A-Za-z]{2,}(:[0-9]{1,5})?([/?#][^\\s]*)?$')
+          ))
+        ))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['fullMatchIds', 'broadcastingMatches']) || !('fullMatchIds' in request.resource.data) || (
+          request.resource.data.fullMatchIds is list
+          && request.resource.data.fullMatchIds.size() <= 100
+          && (request.resource.data.fullMatchIds.size() == 0 || (
+            resource.data.tier == 'premium'
+            && request.resource.data.broadcastingMatches is list
+            && request.resource.data.fullMatchIds.toSet().hasOnly(request.resource.data.broadcastingMatches)
+          ))
+        ))
         && (!('showGoogleRating' in request.resource.data) || request.resource.data.showGoogleRating is bool)
         && (!('description' in request.resource.data) || request.resource.data.description is string)
         && (!('promotionalText' in request.resource.data) || request.resource.data.promotionalText is string)

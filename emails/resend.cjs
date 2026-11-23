@@ -76,7 +76,7 @@ function createHostedTemplate(kind) {
   return { name: `troBar - ${kind}`, alias: `trobar-${kind}`, from: mail.from, replyTo: mail.replyTo, subject, html, variables };
 }
 
-function createHostedMessage(kind, input) {
+function createHostedMessage(kind, input, { internalTest = true } = {}) {
   const entry = templates[kind];
   if (!entry?.id || !entry.published || !Array.isArray(entry.variables)) {
     throw new Error(`Published Resend template missing: ${kind}`);
@@ -85,7 +85,7 @@ function createHostedMessage(kind, input) {
   const { from, replyTo } = render(kind, input);
   const variables = {};
   for (const key of entry.variables) {
-    if (key === 'SUBJECT_PREFIX') { variables[key] = '[PROVA INTERNA] '; continue; }
+    if (key === 'SUBJECT_PREFIX') { variables[key] = internalTest ? '[PROVA INTERNA] ' : ''; continue; }
     const isSubject = key.startsWith('SUBJECT_');
     const read = readers[isSubject ? key.slice(8) : key];
     if (!read) throw new Error(`Unknown Resend variable: ${key}`);

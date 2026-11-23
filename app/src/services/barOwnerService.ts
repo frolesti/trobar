@@ -17,6 +17,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { executeRequest, executeOrThrow } from '../api/core';
 import { Bar, BarSocialMedia, BarAmenity } from '../models/Bar';
+import { reservationUrl } from '../utils/barReservations';
 
 // ── Tipus ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ export interface BarProfileUpdate {
     socialMedia?: BarSocialMedia;
     amenities?: BarAmenity[];
     broadcastingMatches?: string[];
+    reservationUrl?: string;
+    fullMatchIds?: string[];
 }
 
 // ── Lectura ──────────────────────────────────────────────────────────────────
@@ -105,9 +108,13 @@ export async function getBarPosts(barId: string, maxPosts = 20): Promise<BarPost
 /** Actualitzar el perfil del bar */
 export async function updateBarProfile(barId: string, update: BarProfileUpdate): Promise<void> {
     await executeOrThrow(async () => {
+        if (update.reservationUrl?.trim() && !reservationUrl(update.reservationUrl)) {
+            throw new Error('Introdueix un enllaç de reserves vàlid que comenci per https://.');
+        }
         const barRef = doc(db, 'bars', barId);
         // Netejar undefined/null per evitar errors de Firestore
         const clean = JSON.parse(JSON.stringify(update));
+        if (update.reservationUrl !== undefined) clean.reservationUrl = reservationUrl(update.reservationUrl) || '';
         await updateDoc(barRef, {
             ...clean,
             updatedAt: serverTimestamp(),

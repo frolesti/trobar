@@ -9,7 +9,7 @@ import { planSubscriptionEmails, planRefundEmail } from "./emailDelivery";
 export { recordFirstLogin, processEmailQueue } from "./emailDelivery";
 export { searchRegistrationLocations, getRegistrationLocationDetails } from "./registrationLocations";
 export {
-  onContactEmail, replyToContact, onSupportReplyEmail, onAccountDeletedEmail,
+  onBarWelcomeEmail, onContactEmail, replyToContact, onSupportReplyEmail, onAccountDeletedEmail,
   recordAccountSecurity, onAccountSecurityEmail, getBarEmailTips, setBarEmailTips,
 } from "./accountEmailEvents";
 

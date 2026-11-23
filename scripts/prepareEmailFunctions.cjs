@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
-for (const name of ['template.cjs', 'lifecycle.cjs', 'emailVerification.cjs', 'passwordReset.cjs', 'resend.cjs', 'resendTemplates.json']) {
+for (const name of ['template.cjs', 'artDirection.cjs', 'lifecycle.cjs', 'emailVerification.cjs', 'passwordReset.cjs', 'resend.cjs', 'resendTemplates.json']) {
   const target = path.join(root, 'functions', 'lib', 'emails', name);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.copyFileSync(path.join(root, 'emails', name), target);

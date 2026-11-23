@@ -39,7 +39,12 @@ function providerRetryAfter(value: string | undefined, now: number): number | un
   return Number.isFinite(result) ? result : undefined;
 }
 
-export function emailEnabledFor(email: string): boolean {
+function publicWelcomeEnabled(): boolean {
+  return process.env.EMAIL_DELIVERY_MODE === "public" && process.env.EMAIL_PUBLIC_WELCOME_READY === "true";
+}
+
+export function emailEnabledFor(email: string, kind?: Kind): boolean {
+  if (publicWelcomeEnabled() && kind === "welcome") return true;
   if (process.env.EMAIL_DELIVERY_MODE !== "internal") return false;
   const allowed = (process.env.EMAIL_INTERNAL_RECIPIENTS || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
   return allowed.includes(email.toLowerCase());
@@ -50,8 +55,8 @@ function jobId(key: string): string {
 }
 
 export async function enqueueEmail(db: admin.firestore.Firestore, key: string, job: Omit<Job, "state" | "attempts" | "expiresAt">): Promise<void> {
-  if (!emailEnabledFor(job.to)) {
-    console.info("[Email] Recipient suppressed by internal-only policy", job.kind);
+  if (!emailEnabledFor(job.to, job.kind)) {
+    console.info("[Email] Recipient suppressed by delivery policy", job.kind);
     return;
   }
   const ref = db.collection("emailJobs").doc(jobId(key));
@@ -215,11 +220,10 @@ export async function planRefundEmail(db: admin.firestore.Firestore, stripe: Str
   });
 }
 
-export const recordFirstLogin = onCall({ region, cors: true }, async request => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Has d'iniciar sessió.");
-  const account = await admin.auth().getUser(request.auth.uid);
+export async function queueWelcome(uid: string): Promise<{ status: "unverified" | "suppressed" | "not-new" | "queued" }> {
+  const account = await admin.auth().getUser(uid);
   if (!account.emailVerified || !account.email || account.disabled) return { status: "unverified" };
-  if (!emailEnabledFor(account.email)) return { status: "suppressed" };
+  if (!emailEnabledFor(account.email, "welcome")) return { status: "suppressed" };
   const created = Date.parse(account.metadata.creationTime);
   if (!Number.isFinite(created) || Date.now() - created > 7 * 86400000) return { status: "not-new" };
   await enqueueEmail(admin.firestore(), `welcome:${account.uid}`, {
@@ -227,6 +231,11 @@ export const recordFirstLogin = onCall({ region, cors: true }, async request => 
     input: { displayName: account.displayName || "" }, nextAttemptAt: Date.now(),
   });
   return { status: "queued" };
+}
+
+export const recordFirstLogin = onCall({ region, cors: true }, async request => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Has d'iniciar sessió.");
+  return queueWelcome(request.auth.uid);
 });
 
 async function currentInput(db: admin.firestore.Firestore, stripe: Stripe, job: Job, now: number): Promise<Input | null> {
@@ -247,7 +256,7 @@ async function currentInput(db: admin.firestore.Firestore, stripe: Stripe, job: 
     if (typeof error === "object" && error !== null && "code" in error && error.code === "auth/user-not-found") return null;
     throw error;
   }
-  if (!account.email || account.email.toLowerCase() !== job.to.toLowerCase() || !account.emailVerified || account.disabled || !emailEnabledFor(job.to)) return null;
+  if (!account.email || account.email.toLowerCase() !== job.to.toLowerCase() || !account.emailVerified || account.disabled || !emailEnabledFor(job.to, job.kind)) return null;
   if (job.kind === "welcome") return job.input;
   if (job.kind === "support-received" || job.kind === "support-reply") {
     if (!job.sourceId) throw new Error("Support email has no reference");
@@ -338,7 +347,7 @@ export async function deliverEmailJob(
   db: admin.firestore.Firestore, stripe: Stripe, ref: admin.firestore.DocumentReference, apiKey: string,
   now = Date.now(), sender?: Sender,
 ): Promise<void> {
-  if (process.env.EMAIL_DELIVERY_MODE !== "internal") return;
+  if (process.env.EMAIL_DELIVERY_MODE !== "internal" && !publicWelcomeEnabled()) return;
   const job = await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() as Job | undefined;
@@ -363,14 +372,14 @@ export async function deliverEmailJob(
     }
     if (!apiKey) throw new DeliveryError("missing-resend-configuration", false);
     if (job.payload && !job.payload.template) throw new DeliveryError("unsupported-cached-email-payload", false);
-    const render: (kind: Kind, input: object) => Mail = require("./emails/resend.cjs").createHostedMessage;
+    const render: (kind: Kind, input: object, options: { internalTest: boolean }) => Mail = require("./emails/resend.cjs").createHostedMessage;
     const payload = job.payload || render(job.kind, {
       ...input, logoUrl: `${origin}/assets/logos/logo-red.png`,
       allowedActionOrigins: [origin, "https://invoice.stripe.com"],
       appUrl: origin,
       manageUrl: job.kind === "payment-action-required" ? input.invoiceUrl : `${origin}/subscripcio`,
       profileUrl: `${origin}/consells-bar`, unsubscribeUrl: `${origin}/consells-bar`,
-    });
+    }, { internalTest: process.env.EMAIL_DELIVERY_MODE !== "public" });
     // A retry must reuse the exact payload inside Resend's 24-hour idempotency window.
     if (!job.payload) await ref.update({ payload });
     const client = new Resend(apiKey);
@@ -411,7 +420,7 @@ export const processEmailQueue = onSchedule({
   region, schedule: "every 5 minutes", timeZone: "Etc/UTC", maxInstances: 1, concurrency: 1,
   timeoutSeconds: 120, retryCount: 0, secrets: [stripeKey, resendKey],
 }, async () => {
-  if (process.env.EMAIL_DELIVERY_MODE !== "internal") { console.info("[Email] Delivery is disabled"); return; }
+  if (process.env.EMAIL_DELIVERY_MODE !== "internal" && !publicWelcomeEnabled()) { console.info("[Email] Delivery is disabled"); return; }
   const db = admin.firestore();
   const stripe = new Stripe(stripeKey.value(), { timeout: 15000, maxNetworkRetries: 0 });
   const jobs = await db.collection("emailJobs").where("nextAttemptAt", "<=", Date.now()).limit(2).get();

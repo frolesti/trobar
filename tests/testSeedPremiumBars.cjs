@@ -83,7 +83,7 @@ test('test owner loads the editable fixture without contacting Stripe or Google 
         AMENITY_OPTIONS: [{ key: 'projector' }],
         setBar: bar => { loaded = bar; },
     };
-    for (const name of ['Loading', 'Description', 'ShowGoogleRating', 'PromotionalText', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'LoadingPlaceDetails', 'PlaceDetails', 'ReviewStats', 'NotifPrefs', 'SubscriptionActive', 'SubscriptionLoaded', 'BillingCycle', 'NotifPermission', 'UpcomingMatches']) context[`set${name}`] = () => {};
+    for (const name of ['Loading', 'Description', 'ShowGoogleRating', 'PromotionalText', 'ReservationLink', 'FullMatchIds', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'LoadingPlaceDetails', 'PlaceDetails', 'ReviewStats', 'NotifPrefs', 'SubscriptionActive', 'SubscriptionLoaded', 'BillingCycle', 'NotifPermission', 'UpcomingMatches']) context[`set${name}`] = () => {};
     vm.runInNewContext(ts.transpileModule(`(${effect})();`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(loaded?.isTestData, true);

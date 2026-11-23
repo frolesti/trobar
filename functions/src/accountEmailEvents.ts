@@ -3,10 +3,16 @@ import * as functionsV1 from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { createHash } from "node:crypto";
-import { emailEnabledFor, enqueueEmail } from "./emailDelivery";
+import { emailEnabledFor, enqueueEmail, queueWelcome } from "./emailDelivery";
 
 const region = "europe-west1";
 const options = { region, cors: true, maxInstances: 3 };
+
+export const onBarWelcomeEmail = onDocumentCreated({ region, document: "barOwners/{uid}", retry: true }, async event => {
+  if (!event.data) throw new Error("Missing bar owner event");
+  const result = await queueWelcome(event.params.uid);
+  console.info("[Email] Bar registration welcome", result.status);
+});
 
 async function verifiedUser(uid: string) {
   const user = await admin.auth().getUser(uid);

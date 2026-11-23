@@ -21,6 +21,11 @@ function renderBarCard(tier, overrides = {}) {
             if (name.endsWith('editorialTheme')) return { EDITORIAL: { background: '#7a0033', onBackground: '#FFFFFF', onBackgroundMuted: '#F0CDD9', borderOnBackground: 'rgba(255,255,255,0.3)', matchday: '#EDBB00', ink: '#202631', inkMuted: '#66707D', grana: '#a50044', paperAlt: '#EAF0F5', hairline: '#ddd', fontBold: 'Barlow', fontRegular: 'Barlow' } };
             if (name.endsWith('PremiumProfileSlider')) return { __esModule: true, default: 'PremiumProfileSlider' };
             if (name.endsWith('VenuePhotoGallery')) return { __esModule: true, default: 'VenuePhotoGallery' };
+            if (name.endsWith('BarReservationAction')) return { __esModule: true, default: 'BarReservationAction' };
+            if (name.endsWith('barReservations')) return {
+                reservationUrl: value => value || null,
+                isBarFullForMatch: (bar, matchId) => bar.tier === 'premium' && bar.fullMatchIds?.includes(matchId),
+            };
             throw new Error(`Unexpected dependency: ${name}`);
         },
     });
@@ -44,6 +49,15 @@ function renderBarCard(tier, overrides = {}) {
     visit(tree);
     return { nodes, calls, text: nodes.filter(node => typeof node === 'string').join(' ') };
 }
+
+test('premium map card forwards the chosen match and capacity state to its reservation action', () => {
+    const card = renderBarCard('premium', { reservationUrl: 'https://bar.example/reservar', fullMatchIds: ['match'], matchId: 'match' });
+    const action = card.nodes.find(node => node.type === 'BarReservationAction');
+    assert.equal(action.props.matchId, 'match');
+    assert.deepEqual(action.props.bar.fullMatchIds, ['match']);
+    assert.equal(action.props.bar.reservationUrl, 'https://bar.example/reservar');
+    assert.equal(renderBarCard('free').nodes.some(node => node.type === 'BarReservationAction'), false);
+});
 
 test('discovered, free and premium profiles share the header and details template with profile-specific actions', () => {
     for (const [tier, verified] of [['free', false], ['free', true], ['premium', true]]) {

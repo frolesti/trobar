@@ -74,12 +74,25 @@ amb `Content-Type: text/html` pot ser una pàgina d'error, no un asset vàlid.
 
 ### Filtres i controls del mapa
 
-El panell inclou «Oberts ara» i les 16 amenitats d'[amenities.ts](app/src/data/amenities.ts),
-agrupades en esports, serveis, ambient i accessibilitat. Les opcions es combinen
-amb criteri AND i s'apliquen igual als locals registrats i als descoberts.
-Una amenitat només coincideix si consta explícitament a les dades; «Oberts ara»
-exclou els locals sense horari conegut. Totes les opcions són accessibles amb
-scroll, amb selecció visible, «Netejar tot» i «Veure resultats».
+El panell inclou 19 opcions: disponibilitat («Oberts ara», «Amagar complets»),
+reserves («Reservable», «Amb reserva en línia»), esports, serveis, ambient
+i accessibilitat. Les 16 amenitats d'[amenities.ts](app/src/data/amenities.ts)
+continuen disponibles; «Reservable» es mostra al grup de reserves, sense duplicar-se
+a serveis. Les opcions es combinen amb criteri AND i s'apliquen igual als locals
+registrats i als descoberts.
+Una amenitat només coincideix si consta explícitament a les dades, excepte
+«Reservable», que també admet un enllaç de reserves Premium vàlid.
+«Amb reserva en línia» exigeix aquest enllaç; tenir només l'amenitat no és suficient.
+«Amagar complets» és opcional i exclou exclusivament els Premium marcats com a
+complets per al partit seleccionat o, si no hi ha selecció, el partit visible.
+Sense partit es desactiva el control. No equival a garantir disponibilitat.
+«Oberts ara» exclou els locals sense horari conegut.
+Els filtres de reserves mantenen una subscripció a la col·lecció de bars mentre
+el mapa té focus; s'atura en treure'ls o sortir de la pantalla. Això implica lectures
+Firestore addicionals, sense polling. Un error desactiva aquests filtres i avisa
+l'usuari, en lloc de mantenir una disponibilitat aparentment actualitzada.
+Totes les opcions són accessibles amb scroll, selecció visible,
+«Netejar tot» i «Veure resultats».
 
 Els avisos apareixen a baix, al costat dels controls originals de cerca i
 ubicació, sense envair-ne la columna. Els escuts es carreguen directament:
@@ -186,6 +199,20 @@ Les fitxes dels bars tenen
 fons grana, la mateixa capçalera, estat, foto i adreça. Les premium afegeixen
 l'etiqueta daurada i la promoció; les descobertes mostren la pregunta de confirmació
 amb l'acció positiva destacada i la cancel·lació secundària al costat.
+Els bars Premium poden desar un enllaç HTTPS de reserves a «Perfil > Reserves».
+La targeta compacta mostra «Reservar» en groc al costat de «Com arribar-hi»;
+el perfil desplegat conserva la reserva al peu i a cada partit que emet.
+A «Partits que emets», el propietari pot marcar un partit com a «Complet»:
+es mostra l'avís per a aquell partit i es desactiva la reserva, sense canviar
+l'estat obert/tancat ni afectar altres partits. Els canvis s'apliquen amb
+«Desar canvis»; desmarcar una emissió també n'esborra l'estat de complet.
+Firestore desa `reservationUrl` i `fullMatchIds` al document del bar, amb
+escriptura restringida al propietari Premium i aforament limitat als partits
+que emet. La fitxa oberta al mapa escolta els canvis del document en temps real.
+Les reserves són externes: troBar no crea reserves ni garanteix places.
+Els permisos d'aquests camps estan desplegats a Firebase de producció.
+El desplegament ha conservat la resta de regles publicades, sense incorporar
+altres diferències locals.
 Una línia discreta als perfils premium, sense text ni icones, permet
 desplegar la mateixa targeta: segueix el dit mentre s'arrossega i s'assenta
 oberta o plegada en deixar-la anar. També es pot plegar arrossegant avall.
@@ -231,8 +258,10 @@ bars/pubs, cafeteries i restauració/oci nocturn (fins a 20 per grup).
 Inclou bars esportius, de vins i còctels, cerveseries, cafeteries i restaurants;
 OSM també inclou jardins de cervesa, menjar ràpid i zones de restauració.
 Es mantenen la deduplicació, la memòria cau i el pressupost de 60 peticions
-Google per hora i sessió. Les categories fallides o saturades indiquen cobertura
-parcial, sense descartar els resultats de la resta.
+Google per hora i sessió. Les categories fallides o saturades conserven la marca
+interna de cobertura parcial, sense descartar els resultats de la resta.
+Les fallades de fonts queden als logs, sense avisos tècnics a la interfície;
+si tota la cerca falla, es manté l'avís per tornar-ho a provar.
 
 La descoberta conserva Google Places i OpenStreetMap, sense migrar ni fusionar
 documents remots. Els resultats d'una sessió s'unifiquen per identificador o,
@@ -244,14 +273,22 @@ el Place ID i l'adreça de Google, sense perdre etiquetes i serveis d'OSM.
 La consulta de detalls reutilitza el mateix criteri; només els noms exactes
 mantenen el radi anterior de 250 m.
 
-Els crèdits dels resultats es mostren en un únic peu grana amb enllaços a les
+Els crèdits dels resultats s'integren dins la barra de cerca existent, amb
+text blanc llegible sobre el grana i enllaços a les
 fonts presents i als proveïdors que ho requereixin. Les fitxes del mapa no
-repeteixen aquesta línia. La posició automàtica del pin seleccionat reserva
-espai per al peu, sense canviar el zoom ni l'orientació. L'atribució nativa del mapa es conserva i, quan ja
+repeteixen aquesta línia i no hi ha cap franja de crèdits flotant al peu del
+mapa. Els desplegables es posicionen segons l'alçada real de la barra de cerca,
+també quan els crèdits ocupen més d'una línia. L'atribució nativa del mapa es conserva i, quan ja
 identifica Google Maps, no es duplica. No es traslladen tots els crèdits als
 textos legals: cal respectar les
 [condicions de Google Places](https://developers.google.com/maps/documentation/places/web-service/policies)
 i les [directrius d'OSM](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines).
+
+La llista de partits acaba amb un text de calendari en lloc d'una icona.
+Si una competició no té partits futurs, ho indica i, en les eliminatòries,
+explica que els nous encreuaments apareixeran quan estiguin confirmats.
+L'absència de partits no es tracta com una prova d'eliminació: les dades
+actuals no proporcionen un estat de participació que permeti afirmar-ho.
 
 El perfil agrupa els enllaços legals en un peu compacte; els crèdits d'icones
 es poden consultar a l'apartat «Crèdits» dels termes del servei.
@@ -416,7 +453,8 @@ Si hi ha canvis, es mostren els paquets i les versions i es demana confirmació
 (`s` per acceptar; Enter per ajornar). Només després d'acceptar s'executa
 `expo install --fix --npm`, que actualitza el manifest i el lockfile segons el SDK
 actual, sense saltar a un SDK major nou ni fer un `npm update` general.
-Després d'instal·lar, l'arrencada s'atura: torna a executar la mateixa ordre per
+Després d'instal·lar, l'arrencada acaba correctament (codi 0), sense presentar
+un error de configuració: torna a executar la mateixa ordre per
 evitar continuar amb mòduls de la CLI antiga carregats en memòria.
 Si canvien dependències natives, cal recompilar i reinstal·lar la development build.
 
@@ -430,6 +468,105 @@ Per consultar explícitament sense instal·lar ni iniciar Metro:
 ```powershell
 node scripts/expoUpdates.js --check-only
 ```
+
+### Preparació per a App Store
+
+La configuració de compilació no equival a una app aprovada ni preparada per
+enviar a revisió. No s'ha creat cap compte Apple, iniciat cap build de pagament
+ni enviat cap binari. El següent pas de distribució ha de ser TestFlight,
+abans de sol·licitar la publicació pública.
+
+Preparació tècnica inclosa:
+
+- Perfil EAS `production` amb distribució `store`, entorn `production`,
+  dispositiu físic, sense development client i numeració incremental remota.
+- Bundle ID `com.trobar.app` i versió comercial `1.0.0`.
+- Icona iOS de 1024 × 1024, PNG RGB opac, derivada del recurs corporatiu existent.
+- Plugin natiu de Sign in with Apple.
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` configura tant el client Google de l'app
+  com el seu esquema de retorn natiu. Ha de ser un client OAuth **iOS**
+  registrat per a `com.trobar.app`, no el client web existent. És un identificador
+  públic, no un secret de client.
+
+Comprovació local sense compilació, càrrecs ni enviament:
+
+```powershell
+npm run ios:check
+```
+
+Valida l'entorn Firebase de troBar, la presència de configuració pública,
+la coherència del retorn Google, Sign in with Apple i el format de la icona.
+No valida restriccions de claus a Google Cloud, credencials Apple, variables
+remotes d'EAS, manifests del binari compilat ni el compliment de les normes.
+Si el terminal té l'entorn de desenvolupament actiu, el control falla expressament.
+No s'ha canviat automàticament l'entorn local: `.env.local` té prioritat sobre
+`.env.production`. Quan es prepari la versió de distribució, cal completar
+`.env.production`, executar `npm run env:prod` i reiniciar Metro si s'utilitza;
+després es pot tornar a desenvolupament amb `npm run env:dev`.
+Les mateixes variables públiques s'han de configurar a l'entorn `production`
+d'EAS; els fitxers `.env` locals no es versionen ni es donen per disponibles al núvol.
+No hi posis claus Stripe privades, comptes de servei o claus Apple.
+
+Pendents abans d'enviar a Apple:
+
+1. **Alta a Apple Developer.** Cal un Apple Account amb doble factor i la
+   subscripció de pagament. Si publica una entitat legal, valorar l'alta
+   d'organització (amb D-U-N-S); amb alta individual el nom legal personal
+   apareix com a venedor. No cal un compte per cada bar: els bars són comptes
+   del nostre servei, no apps ni desenvolupadors Apple independents.
+2. **App Store Connect i signatura.** Registrar l'app amb el bundle ID indicat,
+   habilitar Sign in with Apple, configurar el proveïdor a Firebase Auth i
+   les credencials APNs a EAS. Afegir l'Apple ID numèric real de l'app com a
+   `submit.production.ios.ascAppId` quan existeixi; no inventar-ne un.
+   Gestionar totes les credencials amb Apple/EAS, mai al repositori ni al xat.
+3. **Google natiu.** Crear/configurar el client OAuth iOS, les restriccions de
+   Maps per bundle ID i provar el login real. La introspecció amb un identificador
+   fictici només valida l'estructura del plugin, no autentica.
+4. **Premium i pagaments.** L'app actual obre Stripe per comprar i gestionar
+   funcions digitals Premium. Cal definir el flux iOS segons els països
+   de distribució i les regles 3.1.1/3.1.3: no assumir que vendre a bars n'eximeix.
+   troBar també mostra els perfils promocionats, de manera que no es pot
+   donar per aplicable l'excepció d'app exclusivament de gestió publicitària.
+   Valorar IAP o un flux permès i verificar-lo abans de distribuir.
+   Les reserves de serveis físics al bar són un cas diferent.
+   No s'han activat cobraments reals ni alterat Stripe durant aquesta preparació.
+5. **Ressenyes i contingut de tercers.** Les ressenyes actuals no tenen un flux
+   integrat de denúncia/bloqueig; cal completar filtratge, denúncies, moderació
+   i tractament d'usuaris abusius segons la regla 1.2. Revisar també fotos i textos
+   publicats pels bars, així com els drets d'ús d'imatges i escuts.
+6. **Mapa d'iOS.** El mapa natiu actual utilitza Apple Maps a iOS i també
+   consulta Google Places. Abans de publicar cal alinear el proveïdor/dades
+   amb les condicions de Google; no n'hi ha prou amb mostrar l'atribució.
+7. **Privacitat.** Completar App Privacy amb les dades reals (compte, ubicació,
+   fotos/ressenyes, identificadors de notificació, suport i dades del negoci),
+   revisar els manifests `PrivacyInfo.xcprivacy` agregats al binari i els
+   permisos. No declarar que no es recullen dades. Provar eliminació de compte,
+   cancel·lació quan pertoqui i revocació Apple, així com permisos denegats.
+   Validar la política pública a https://www.trobar.cat/politica-privacitat.
+8. **Fitxa i revisió.** Preparar descripció, categoria, qüestionari d'edat,
+   captures reals d'iPhone i iPad (l'app declara suport de tauleta), suport,
+   contacte i accessos de prova per als rols d'usuari i propietari.
+   Excloure dades fictícies del catàleg públic i documentar els casos de revisió.
+9. **Prova nativa.** Verificar en una build real d'iPhone/iPad login amb
+   correu/Google/Apple, mapa/GPS, reserves, complets/filtres, notificacions,
+   permisos i eliminació. Una exportació JS o Expo Go no substitueixen aquesta prova.
+   Confirmar la imatge EAS amb Xcode/SDK admesos per Apple en el moment de construir.
+
+Només després de completar aquests punts i autoritzar el possible cost:
+
+```powershell
+npm run ios:build:production
+npm run ios:submit:production
+```
+
+L'ordre de build passa primer el control local, però no certifica compliment.
+La pujada arriba a App Store Connect/TestFlight; publicar exigeix una revisió
+posterior d'Apple. Windows permet EAS Build/Submit, però no compilar iOS localment.
+
+Fonts: [alta Apple](https://developer.apple.com/programs/enroll/),
+[normes de revisió](https://developer.apple.com/app-store/review/guidelines/),
+[enviament amb EAS](https://docs.expo.dev/submit/ios/),
+[privacitat nativa](https://docs.expo.dev/guides/apple-privacy/).
 
 ### Provar a l'iPhone amb la build de desenvolupament (Windows)
 

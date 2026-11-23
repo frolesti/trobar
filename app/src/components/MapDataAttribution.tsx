@@ -21,18 +21,22 @@ export default function MapDataAttribution({ venues, googleDetails = false, osmG
     ];
     const unique = [...new Map(credits.map(credit => [`${credit.name}:${credit.uri}`, credit])).values()];
     if (!unique.length) return null;
+    const textStyle = {
+        color: EDITORIAL.onBackground,
+        fontFamily: EDITORIAL.fontRegular,
+        fontSize: 12,
+    };
     return (
-        <View testID="map-data-attribution" style={[{
+        <View testID="map-data-attribution" pointerEvents="box-none" style={[{
             flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', alignSelf: 'flex-start',
-            backgroundColor: EDITORIAL.background, paddingHorizontal: 4, borderRadius: 4,
         }, style]}>
             {unique.map((credit, index) => (
                 <React.Fragment key={`${credit.name}:${credit.uri}`}>
-                    {index > 0 && <Text style={{ color: EDITORIAL.onBackgroundMuted, fontSize: 12 }}> · </Text>}
+                    {index > 0 && <Text style={textStyle}> · </Text>}
                     <TouchableOpacity
                         accessibilityRole="link"
                         accessibilityLabel={credit.name}
-                        style={{ minHeight: 28, justifyContent: 'center' }}
+                        style={{ minHeight: 24, justifyContent: 'center' }}
                         onPress={() => {
                             if (credit.uri.startsWith('https://')) {
                                 void Linking.openURL(credit.uri).catch(error => console.info('[MapDataAttribution] Attribution link failed', error));
@@ -41,7 +45,7 @@ export default function MapDataAttribution({ venues, googleDetails = false, osmG
                             }
                         }}
                     >
-                        <Text style={{ color: EDITORIAL.onBackground, fontSize: 12 }}>{credit.name}</Text>
+                        <Text style={textStyle}>{credit.name}</Text>
                     </TouchableOpacity>
                 </React.Fragment>
             ))}

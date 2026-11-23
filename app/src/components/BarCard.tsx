@@ -5,6 +5,8 @@ import { EDITORIAL } from '../theme/editorialTheme';
 import { PlaceDetails } from '../services/placesService';
 import PremiumProfileSlider from './PremiumProfileSlider';
 import VenuePhotoGallery from './VenuePhotoGallery';
+import BarReservationAction from './BarReservationAction';
+import { reservationUrl as safeReservationUrl, isBarFullForMatch } from '../utils/barReservations';
 
 export interface BarCardProps {
     name: string;
@@ -31,13 +33,16 @@ export interface BarCardProps {
     reviewAvgRating?: number;
     reviewCount?: number;
     demo?: boolean;
+    reservationUrl?: string;
+    fullMatchIds?: string[];
+    matchId?: string;
 }
 
 const BarCard: React.FC<BarCardProps> = ({
     name, address, placeDetails: pd, loadingPlaceDetails, gallery = [], verified,
     fallbackIsOpen, distanceText, onNavigate, onClose, onConfirm, onCancel, isSubmitting,
     promotionalText, tier, onProfileOpen, profileHandleHidden, dense = false,
-    reviewAvgRating, reviewCount, demo = false,
+    reviewAvgRating, reviewCount, demo = false, reservationUrl, fullMatchIds, matchId,
 }) => {
     const displayName = name.replace(/\s+\d+$/, '');
     const displayAddress = pd?.formattedAddress || address || 'Adreça no disponible';
@@ -45,6 +50,7 @@ const BarCard: React.FC<BarCardProps> = ({
     const openStatus = pd?.currentOpeningHours?.openNow ?? fallbackIsOpen;
     const isPremium = verified && tier === 'premium';
     const close = onClose || onCancel;
+    const hasReservation = isPremium && (!!safeReservationUrl(reservationUrl) || isBarFullForMatch({ tier, fullMatchIds }, matchId));
 
     return (
         <View testID={isPremium ? 'premium-bar-summary' : 'venue-bar-summary'} style={{ backgroundColor: EDITORIAL.background }}>
@@ -111,14 +117,17 @@ const BarCard: React.FC<BarCardProps> = ({
                 </View>
             )}
             {verified ? (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                {hasReservation && <View style={{ flex: 1 }}><BarReservationAction bar={{ tier, reservationUrl, fullMatchIds }} matchId={matchId} demo={demo} /></View>}
                 <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel={`Com arribar a ${displayName}`}
                     onPress={onNavigate}
-                    style={{ minHeight: 44, backgroundColor: EDITORIAL.onBackground, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}
+                    style={{ flex: 1, minHeight: 48, backgroundColor: EDITORIAL.onBackground, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}
                 >
                     <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 14 }}>Com arribar-hi</Text>
                 </TouchableOpacity>
+                </View>
             ) : (
                 <View testID="venue-card-report">
                     <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 14, lineHeight: 18, marginBottom: dense ? 6 : 8 }}>Es poden veure partits aquí?</Text>

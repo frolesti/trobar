@@ -167,6 +167,7 @@ function modalHarness({ user = { id: 'visitor', name: 'Visitor' }, fetchReviews,
         if (name.endsWith('GoogleRatingSection')) return { __esModule: true, default: 'GoogleRatingSection' };
         if (name.endsWith('UserNotice')) return { __esModule: true, default: 'UserNotice' };
         if (name.endsWith('VenuePhotoGallery')) return { __esModule: true, default: 'VenuePhotoGallery' };
+        if (name.endsWith('BarReservationAction')) return { __esModule: true, default: 'BarReservationAction' };
         if (name.includes('premiumDemoReviewService')) return {
             fetchDemoUserReviews: async () => [],
             addDemoUserReview: async (...args) => { calls.writes.push(['addDemoUserReview', ...args]); },

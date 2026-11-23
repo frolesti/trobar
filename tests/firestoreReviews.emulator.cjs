@@ -123,6 +123,31 @@ test('Firestore authorizes premium reviews and subscriptions without trusting cl
             await assertFails(setDoc(doc(alice, 'bars', 'premium', 'posts', 'other'), post));
             await assertSucceeds(deleteDoc(postRef));
         });
+        await t.test('only Premium owners can publish safe booking links and full capacity for their broadcast matches', async () => {
+            const ref = doc(owner, 'bars', 'premium');
+            await assertSucceeds(updateDoc(ref, {
+                reservationUrl: 'https://bar.example/reservar?partit=next',
+                fullMatchIds: ['next'], broadcastingMatches: ['next'], updatedAt: serverTimestamp(),
+            }));
+            const publicBar = (await assertSucceeds(getDoc(doc(guest, 'bars', 'premium')))).data();
+            assert.deepEqual(publicBar.fullMatchIds, ['next']);
+            assert.equal(publicBar.reservationUrl, 'https://bar.example/reservar?partit=next');
+            for (const client of [guest, alice]) {
+                await assertFails(updateDoc(doc(client, 'bars', 'premium'), { fullMatchIds: [] }));
+                await assertFails(updateDoc(doc(client, 'bars', 'premium'), { reservationUrl: 'https://attacker.example/' }));
+            }
+            for (const url of ['javascript:alert(1)', 'http://bar.example/', 'https://user:pass@bar.example/', 'https://', 'https://bar.example/' + 'x'.repeat(2048)]) {
+                await assertFails(updateDoc(ref, { reservationUrl: url }));
+            }
+            await assertFails(updateDoc(ref, { fullMatchIds: 'next' }));
+            await assertFails(updateDoc(ref, { fullMatchIds: ['not-broadcast'] }));
+            await assertFails(updateDoc(ref, { broadcastingMatches: [] }));
+            await assertFails(updateDoc(ref, { fullMatchIds: Array(101).fill('next') }));
+            await assertFails(updateDoc(doc(owner, 'bars', 'free'), { reservationUrl: 'https://bar.example/' }));
+            await assertFails(updateDoc(doc(owner, 'bars', 'free'), { fullMatchIds: ['next'], broadcastingMatches: ['next'] }));
+            await assertSucceeds(updateDoc(ref, { fullMatchIds: [], reservationUrl: '', broadcastingMatches: [] }));
+            await assertSucceeds(updateDoc(doc(owner, 'bars', 'free'), { fullMatchIds: [], reservationUrl: '' }));
+        });
         await t.test('anonymous and signed-in OSM reports stay restricted to inactive reports', async () => {
             const report = {
                 name: 'Reported bar', location: { latitude: 41, longitude: 2 }, address: '', amenities: ['wifi'],

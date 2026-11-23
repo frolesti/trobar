@@ -205,7 +205,7 @@ test('web legal renderer includes the same creator link', () => {
     assert.match(source, /rel="noopener noreferrer"/);
 });
 
-function authHarness({ platform = 'web', newAccount = false, storage = new Map(), profile = null, beforeStorageWrite = async () => {} } = {}) {
+function authHarness({ platform = 'web', nativeGoogle = platform === 'android', googleIosClientId, newAccount = false, storage = new Map(), profile = null, beforeStorageWrite = async () => {} } = {}) {
     let cursor = 0, effectCursor = 0, listener, listenerWork, failSave = false, pushRegistrations = 0;
     const states = [], dependencies = [], pendingEffects = [];
     const firebaseUser = { uid: 'alice', email: 'alice@example.test', providerData: [], getIdToken: async () => 'token', getIdTokenResult: async () => ({ claims: {} }) };
@@ -221,7 +221,8 @@ function authHarness({ platform = 'web', newAccount = false, storage = new Map()
         credential() { return {}; }
         static credential() { return {}; }
     }
-    const nativeGoogle = platform === 'android';
+    const googleConfigurations = [];
+    let playServicesChecks = 0;
     const module = load('../app/src/context/AuthContext.tsx', {
         react: { ...React,
             useState(initial) {
@@ -261,7 +262,11 @@ function authHarness({ platform = 'web', newAccount = false, storage = new Map()
         '../components/AlertBanner': { showAlert() {} },
         '../api/core': { executeOrThrow: callback => callback() },
         'expo-apple-authentication': { isAvailableAsync: async () => true, AppleAuthenticationScope: {}, signInAsync: async () => ({ identityToken: 'apple-token' }) },
-        '@react-native-google-signin/google-signin': { GoogleSignin: { configure() {}, hasPlayServices: async () => {}, signIn: async () => ({ data: { idToken: 'google-token' } }) } },
+        '@react-native-google-signin/google-signin': { GoogleSignin: {
+            configure: options => googleConfigurations.push(options),
+            hasPlayServices: async () => { playServicesChecks++; },
+            signIn: async () => ({ data: { idToken: 'google-token' } }),
+        } },
         'expo-crypto': { randomUUID: () => 'nonce', CryptoDigestAlgorithm: {}, digestStringAsync: async () => 'digest' },
         'expo-auth-session': {
             getDefaultReturnUrl: () => 'trobar://auth', ResponseType: {}, Prompt: {},
@@ -271,7 +276,7 @@ function authHarness({ platform = 'web', newAccount = false, storage = new Map()
             },
         },
         'expo-web-browser': { openAuthSessionAsync: async () => ({ type: 'success', url: 'trobar://auth' }) },
-    }, { console: { log() {}, info() {}, error() {} }, URL, atob, process: { env: {} } });
+    }, { console: { log() {}, info() {}, error() {} }, URL, atob, process: { env: { EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: googleIosClientId } } });
     const render = () => {
         cursor = effectCursor = 0;
         const tree = module.AuthProvider({ children: null });
@@ -280,13 +285,28 @@ function authHarness({ platform = 'web', newAccount = false, storage = new Map()
     };
     render();
     return {
-        render, storage,
+        render, storage, googleConfigurations,
+        get playServicesChecks() { return playServicesChecks; },
         get pushRegistrations() { return pushRegistrations; },
         async settle() { await listenerWork; return render(); },
         async restore() { auth.currentUser = firebaseUser; await listener(firebaseUser); return render(); },
         failSave: value => { failSave = value; },
     };
 }
+
+test('native iOS Google uses its configured OAuth client without requesting Android Play Services', async () => {
+    const clientId = '123456-iosfixture.apps.googleusercontent.com';
+    const ui = authHarness({ platform: 'ios', nativeGoogle: true, googleIosClientId: clientId });
+    await ui.render().loginGoogle();
+    await ui.settle();
+    assert.equal(ui.googleConfigurations.length, 1);
+    assert.equal(ui.googleConfigurations[0].iosClientId, clientId);
+    assert.equal(ui.playServicesChecks, 0);
+    const android = authHarness({ platform: 'android' });
+    await android.render().loginGoogle();
+    await android.settle();
+    assert.equal(android.playServicesChecks, 1);
+});
 
 test('every social provider gates only account creation, not returning login', async () => {
     for (const [platform, method] of [['web', 'loginGoogle'], ['ios', 'loginGoogle'], ['android', 'loginGoogle'], ['web', 'loginApple'], ['ios', 'loginApple']]) {

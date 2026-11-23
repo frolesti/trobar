@@ -56,8 +56,14 @@
 
 ## Favicon, peu de pàgina i progrés de Checkout (5 de novembre de 2026)
 
+- Actualització local del 16 de novembre: les tres variants del favicon
+  utilitzen la mascota amb la pilota fora de la campana, derivada de
+  `assets/app/img/logo/mascot-open-cloche.png`, en crema sobre un disc grana.
+  Les tres rutes declarades a `_document.tsx` porten `?v=mascot-ball-2` per
+  invalidar la memòria cau de les icones anteriors en publicar el web.
+  Aquesta correcció no modifica el disseny de la portada ni activa correus.
 - El logo oficial identifica totes les pestanyes: ICO de 16/32/48 px,
-  PNG de 32 px i icona Apple de 180 px, derivats de `logo-red.png`.
+  PNG de 32 px i icona Apple de 180 px (originalment derivats de `logo-red.png`).
   Els originals es versionen a `assets/web/logos`; `sync-shared-assets.js`
   copia les imatges a `public/assets/logos` i l'ICO a `/favicon.ico`,
   també quan Vercel executa `next build` directament.

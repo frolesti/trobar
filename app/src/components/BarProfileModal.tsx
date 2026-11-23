@@ -21,6 +21,7 @@ import UserNotice from './UserNotice';
 import { fetchDemoUserReviews, addDemoUserReview, deleteDemoUserReview } from '../services/premiumDemoReviewService';
 import { enrichPremiumDemoBar, isPremiumDemoBar, getPremiumDemoReviews, getPremiumDemoHours, getPremiumDemoBroadcastMatches, isZuritoDevelopmentPreview, ZURITO_PREVIEW_NOTICE } from '../data/premiumDemoProfiles';
 import VenuePhotoGallery from './VenuePhotoGallery';
+import BarReservationAction from './BarReservationAction';
 
 // ── Tipus ──────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ interface BarProfileModalProps {
     onRequestLogin?: () => void;
     embedded?: boolean;
     onReviewStatsChange?: (stats: BarReviewStats) => void;
+    matchId?: string;
 }
 
 const P = {
@@ -64,7 +66,7 @@ const SOCIAL_CONFIG: Record<string, { label: string; icon: string; family: 'feat
 // ── Component ──────────────────────────────────────────
 
 const BarProfileModal: React.FC<BarProfileModalProps> = ({
-    visible, bar: originalBar, placeDetails, allMatches = [], onClose, onNavigate, onRequestLogin, embedded = false, onReviewStatsChange,
+    visible, bar: originalBar, placeDetails, allMatches = [], onClose, onNavigate, onRequestLogin, embedded = false, onReviewStatsChange, matchId,
 }) => {
     const bar = originalBar ? enrichPremiumDemoBar(originalBar) : null;
     const isDemo = isPremiumDemoBar(bar);
@@ -297,6 +299,7 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     {broadcastMatches.map((match, index) => (
                         <View key={match.id} style={{ width: Math.min(340, screenWidth - 44) }}>
                             <MatchCard match={match} compact isNextMatch={index === 0} style={{ flex: 1 }} />
+                            {bar && <BarReservationAction bar={bar} matchId={match.id} demo={isDemo} />}
                         </View>
                     ))}
                 </ScrollView>
@@ -906,7 +909,8 @@ const BarProfileModal: React.FC<BarProfileModalProps> = ({
                     </View>
 
                 </ScrollView>
-                <View testID="premium-profile-actions" style={{ borderTopWidth: 1, borderTopColor: P.separator, paddingHorizontal: 20, paddingTop: 10, paddingBottom: Math.max(12, insets.bottom) }}>
+                <View testID="premium-profile-actions" style={{ gap: 8, borderTopWidth: 1, borderTopColor: P.separator, paddingHorizontal: 20, paddingTop: 10, paddingBottom: Math.max(12, insets.bottom) }}>
+                    {bar && <BarReservationAction bar={bar} matchId={matchId ?? broadcastMatches[0]?.id ?? allMatches[0]?.id} demo={isDemo} />}
                     <TouchableOpacity
                         style={{
                             backgroundColor: P.accent, borderRadius: 8,

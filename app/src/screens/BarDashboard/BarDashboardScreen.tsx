@@ -40,6 +40,7 @@ import { webScreenContainer, webScreenScroll } from '../../utils/webScreenStyles
 import { showAlert } from '../../components/AlertBanner';
 import { getUserFriendlyError } from '../../utils/errorHandler';
 import { barProfileDraft } from '../../utils/barProfileDraft';
+import { reservationUrl } from '../../utils/barReservations';
 import OwnerBottomNav from '../../components/OwnerBottomNav';
 import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import MatchCard from '../../components/MatchCard';
@@ -54,7 +55,7 @@ const SOCIAL_NETWORKS = [
     { key: 'website',   label: 'Pàgina web', icon: 'globe'   as const, placeholder: 'Enllaç al web del bar' },
 ] as const;
 
-type Section = 'description' | 'promotions' | 'socials' | 'amenities' | 'matches' | 'googleRating';
+type Section = 'description' | 'promotions' | 'socials' | 'amenities' | 'matches' | 'googleRating' | 'reservations';
 type Tab = 'profile' | 'settings';
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -115,9 +116,12 @@ export default function BarDashboardScreen() {
     const [selectedAmenities, setSelectedAmenities] = useState<Set<BarAmenity>>(new Set());
     const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([]);
     const [broadcastingIds, setBroadcastingIds] = useState<Set<string>>(new Set());
+    const [reservationLink, setReservationLink] = useState('');
+    const [fullMatchIds, setFullMatchIds] = useState<Set<string>>(new Set());
     const profileUpdate = barProfileDraft({
         description, promotionalText, socialMedia: socials,
         amenities: Array.from(selectedAmenities), broadcastingMatches: Array.from(broadcastingIds), showGoogleRating,
+        reservationUrl: reservationLink, fullMatchIds: Array.from(fullMatchIds),
     });
     const profileDraftRef = useRef(profileUpdate);
     profileDraftRef.current = profileUpdate;
@@ -308,6 +312,8 @@ export default function BarDashboardScreen() {
                     const validKeys = new Set(AMENITY_OPTIONS.map(o => o.key));
                     setSelectedAmenities(new Set((ownedBar.amenities || []).filter(a => validKeys.has(a))));
                     setBroadcastingIds(new Set(ownedBar.broadcastingMatches || []));
+                    setReservationLink(ownedBar.reservationUrl || '');
+                    setFullMatchIds(new Set(ownedBar.fullMatchIds || []));
                     savedProfile.current = JSON.stringify(barProfileDraft({
                         ...ownedBar, amenities: (ownedBar.amenities || []).filter(a => validKeys.has(a)),
                     }));
@@ -388,6 +394,10 @@ export default function BarDashboardScreen() {
     const handleSaveProfile = async (): Promise<boolean> => {
         if (!bar || savingRef.current) return false;
         const update = profileDraftRef.current;
+        if (update.reservationUrl && !reservationUrl(update.reservationUrl)) {
+            showToast('Introdueix un enllaç de reserves vàlid que comenci per https://.', 'error');
+            return false;
+        }
         const snapshot = JSON.stringify(update);
         if (snapshot === savedProfile.current) return true;
         savingRef.current = true;
@@ -417,6 +427,7 @@ export default function BarDashboardScreen() {
     const profileSections: { key: Section; title: string }[] = [
         { key: 'description', title: 'Descripció' },
         { key: 'promotions', title: 'Promoció' },
+        { key: 'reservations', title: 'Reserves' },
         { key: 'amenities', title: 'Serveis' },
         { key: 'matches', title: 'Partits que emets' },
         { key: 'socials', title: 'Xarxes socials' },
@@ -533,6 +544,7 @@ export default function BarDashboardScreen() {
                     { section: 'description', icon: 'file-text', title: 'La presentació del bar', detail: bar.description?.trim() ? 'La gent ja pot conèixer el teu local' : 'Explica què el fa especial' },
                     { section: 'amenities', icon: 'coffee', title: 'Serveis i ambient', detail: bar.amenities?.length ? `${bar.amenities.length} serveis al perfil` : 'Pantalles, menjar, terrassa…' },
                     { section: 'promotions', icon: 'tag', title: 'La teva promoció', detail: bar.promotionalText?.trim() || 'Tens alguna proposta per al dia de partit?' },
+                    { section: 'reservations', icon: 'calendar', title: 'Reserves i aforament', detail: bar.reservationUrl ? 'Gestiona l’enllaç i els partits complets' : 'Afegeix l’enllaç de reserves del bar' },
                 ] as const).map(item => <TouchableOpacity key={item.section} accessibilityRole="button" onPress={() => openEditor(item.section)} style={styles.managerRow}>
                     <View style={styles.managerIcon}><AppIcon name={item.icon} size={21} color="#A50044" /></View>
                     <View style={{ flex: 1, gap: 4 }}><Text style={styles.managerRowTitle}>{item.title}</Text><Text numberOfLines={2} style={styles.managerMuted}>{item.detail}</Text></View>
@@ -735,6 +747,25 @@ export default function BarDashboardScreen() {
     ═══════════════════════════════════════════════════════════════════════ */
     const renderSectionContent = (section: Section) => {
         switch (section) {
+            case 'reservations':
+                return (
+                    <View style={{ gap: 12 }}>
+                        <Text style={{ color: EDITORIAL.inkMuted, fontSize: 14, lineHeight: 20 }}>
+                            Les reserves es fan al web que indiquis. Pots marcar cada partit com a complet a «Partits que emets».
+                        </Text>
+                        <TextInput
+                            accessibilityLabel="Enllaç de reserves"
+                            style={styles.input}
+                            editable={!saving && bar.tier === 'premium'}
+                            value={reservationLink}
+                            onChangeText={setReservationLink}
+                            placeholder="https://"
+                            placeholderTextColor={EDITORIAL.inkMuted}
+                            autoCapitalize="none" autoCorrect={false} keyboardType="url" maxLength={2048}
+                        />
+                        {bar.tier !== 'premium' && <Text style={{ color: EDITORIAL.inkMuted }}>Disponible amb Premium.</Text>}
+                    </View>
+                );
             case 'googleRating':
                 return (
                     <View style={{ gap: 16 }}>
@@ -892,6 +923,9 @@ export default function BarDashboardScreen() {
                             <TouchableOpacity
                                 style={styles.selectAllBtn}
                                 onPress={() => {
+                                    if (allFilteredSelected) {
+                                        setFullMatchIds(current => new Set([...current].filter(id => !filteredMatches.some(match => match.id === id))));
+                                    }
                                     setBroadcastingIds(prev => {
                                         const next = new Set(prev);
                                         if (allFilteredSelected) {
@@ -920,8 +954,8 @@ export default function BarDashboardScreen() {
                             const isFem = isFemenino(match);
                             const compLogo = resolveCompLogo(match);
                             return (
+                                <View key={match.id} style={{ marginBottom: 8 }}>
                                 <TouchableOpacity
-                                    key={match.id}
                                     accessibilityRole="button"
                                     accessibilityLabel={`${home.name} vs ${away.name}, ${isFem ? 'femení' : 'masculí'}`}
                                     accessibilityState={{ selected: isSelected }}
@@ -931,9 +965,12 @@ export default function BarDashboardScreen() {
                                         borderWidth: isSelected ? 2 : 1,
                                     }]}
                                     onPress={() => {
+                                        if (isSelected) setFullMatchIds(current => new Set([...current].filter(id => id !== match.id)));
                                         setBroadcastingIds(prev => {
                                             const next = new Set(prev);
-                                            next.has(match.id) ? next.delete(match.id) : next.add(match.id);
+                                            if (next.has(match.id)) {
+                                                next.delete(match.id);
+                                            } else next.add(match.id);
                                             return next;
                                         });
                                     }}
@@ -968,6 +1005,32 @@ export default function BarDashboardScreen() {
                                         </View>
                                     </View>
                                 </TouchableOpacity>
+                                {isSelected && bar.tier === 'premium' && (
+                                    <View style={{
+                                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                                        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                                        backgroundColor: fullMatchIds.has(match.id) ? EDITORIAL.matchdaySoft : EDITORIAL.granaSoft,
+                                    }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ color: fullMatchIds.has(match.id) ? EDITORIAL.granaDeep : EDITORIAL.ink, fontFamily: EDITORIAL.fontBold, fontSize: 14 }}>Complet</Text>
+                                            <Text style={{ color: fullMatchIds.has(match.id) ? EDITORIAL.granaDeep : EDITORIAL.inkMuted, fontSize: 12, lineHeight: 16 }}>
+                                                {fullMatchIds.has(match.id) ? 'Reserves tancades per a aquest partit' : 'Marca’l quan no quedin places'}
+                                            </Text>
+                                        </View>
+                                        <Switch
+                                            accessibilityLabel={`Complet: ${home.name} vs ${away.name}, ${dateStr}`}
+                                            disabled={saving}
+                                            value={fullMatchIds.has(match.id)}
+                                            onValueChange={value => setFullMatchIds(previous => {
+                                                const next = new Set(previous);
+                                                value ? next.add(match.id) : next.delete(match.id);
+                                                return next;
+                                            })}
+                                            trackColor={{ true: EDITORIAL.grana }}
+                                        />
+                                    </View>
+                                )}
+                                </View>
                             );
                         })}
                         {filteredMatches.length === 0 && (
@@ -1049,6 +1112,8 @@ export default function BarDashboardScreen() {
                             setSocials({ ...persisted.socialMedia });
                             setSelectedAmenities(new Set(persisted.amenities));
                             setBroadcastingIds(new Set(persisted.broadcastingMatches));
+                            setReservationLink(persisted.reservationUrl || '');
+                            setFullMatchIds(new Set(persisted.fullMatchIds));
                             setShowGoogleRating(persisted.showGoogleRating === true);
                             continueLeaving();
                         }}>

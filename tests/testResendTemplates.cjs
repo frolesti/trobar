@@ -11,9 +11,17 @@ test('all 18 hosted designs declare exactly their placeholders and contain no pr
     const used = [...new Set([...(template.html + template.subject).matchAll(/\{\{\{(\w+)\}\}\}/g)].map(match => match[1]))].sort();
     assert.deepEqual(used, template.variables.map(variable => variable.key).sort(), kind);
     assert.doesNotMatch(template.html, /example\.invalid|TROBAR_\w+_VARIABLE|__email_variable__/);
-    assert.match(template.html, /assets\/logos\/logo-brand.png/);
+    assert.match(template.html, /assets\/logos\/logo-email-open-cloche.png/);
     assert.equal(template.text, undefined);
   }
+});
+
+test('public messages omit the internal prefix only when the server explicitly requests it', () => {
+  const internal = createHostedMessage('welcome', authoringInput());
+  const publicMail = createHostedMessage('welcome', authoringInput(), { internalTest: false });
+  assert.equal(internal.template.variables.SUBJECT_PREFIX, '[PROVA INTERNA] ');
+  assert.equal(publicMail.template.variables.SUBJECT_PREFIX, '');
+  assert.deepEqual(Object.keys(publicMail.template.variables), Object.keys(internal.template.variables));
 });
 
 test('published runtime messages contain only the hosted ID and exact variables, with safe HTML and raw subject text', () => {

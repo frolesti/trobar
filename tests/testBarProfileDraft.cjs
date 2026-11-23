@@ -24,10 +24,10 @@ test('profile normalization ignores order and whitespace, preserves explicit fal
         amenities: ['wifi', 'parking', 'wifi'], broadcastingMatches: ['2', '1'], showGoogleRating: false,
     }), {
         description: 'Local', promotionalText: '', socialMedia: { instagram: '@local' },
-        amenities: ['parking', 'wifi'], broadcastingMatches: ['1', '2'], showGoogleRating: false,
+        amenities: ['parking', 'wifi'], broadcastingMatches: ['1', '2'], showGoogleRating: false, reservationUrl: '', fullMatchIds: [],
     });
     assert.deepEqual(normalize({}), {
-        description: '', promotionalText: '', socialMedia: {}, amenities: [], broadcastingMatches: [], showGoogleRating: false,
+        description: '', promotionalText: '', socialMedia: {}, amenities: [], broadcastingMatches: [], showGoogleRating: false, reservationUrl: '', fullMatchIds: [],
     });
 });
 
@@ -44,6 +44,7 @@ test('Firestore profile update replaces the social map instead of merging back d
             if (name === 'firebase/storage') return {};
             if (name.endsWith('config/firebase')) return { db: {} };
             if (name.endsWith('api/core')) return { executeOrThrow: callback => callback() };
+            if (name.endsWith('barReservations')) return {};
             throw new Error(name);
         },
     });
@@ -114,7 +115,7 @@ test('cancel keeps drafts and discard restores every persisted field without wri
     };
     visit(ast);
     const calls = [];
-    const stored = { description: 'Saved', promotionalText: '', socialMedia: {}, amenities: [], broadcastingMatches: ['a'], showGoogleRating: false };
+    const stored = { description: 'Saved', promotionalText: '', socialMedia: {}, amenities: [], broadcastingMatches: ['a'], showGoogleRating: false, reservationUrl: 'https://bar.example/reservar', fullMatchIds: ['a'] };
     const context = {
         React, TouchableOpacity: 'TouchableOpacity', Text: 'Text', AppIcon: 'AppIcon', saving: false, styles: {},
         bar: { ...stored, amenities: ['legacy'] }, savedProfile: { current: JSON.stringify(stored) },
@@ -122,7 +123,7 @@ test('cancel keeps drafts and discard restores every persisted field without wri
         setShowUnsavedChanges: value => calls.push(['modal', value]),
         continueLeaving: () => calls.push(['leave']),
     };
-    for (const setter of ['Description', 'PromotionalText', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'ShowGoogleRating']) {
+    for (const setter of ['Description', 'PromotionalText', 'Socials', 'SelectedAmenities', 'BroadcastingIds', 'ShowGoogleRating', 'ReservationLink', 'FullMatchIds']) {
         context[`set${setter}`] = value => { context[setter] = value; };
     }
     vm.runInNewContext(compile(`globalThis.cancel = () => (${buttons.get('bar-leave-cancel')}); globalThis.discard = () => (${buttons.get('bar-leave-discard')});`), context);
@@ -138,5 +139,7 @@ test('cancel keeps drafts and discard restores every persisted field without wri
     assert.deepEqual([...context.BroadcastingIds], ['a']);
     assert.deepEqual([...context.SelectedAmenities], [], 'discard restores the editable baseline, not filtered-out legacy values');
     assert.equal(context.ShowGoogleRating, false);
+    assert.equal(context.ReservationLink, stored.reservationUrl);
+    assert.deepEqual([...context.FullMatchIds], ['a']);
     assert.deepEqual(calls, [['leave']]);
 });

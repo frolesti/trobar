@@ -48,9 +48,13 @@ function renderLifecycleEmail(kind, input) {
     case 'welcome':
       content = {
         subject: 'Benvingut a troBar',
-        preheader: 'Troba un bar per veure el pròxim partit.',
-        title: 'On veuràs el pròxim partit?',
-        message: 'Gràcies per sumar-te a troBar. Aquí trobaràs bars on veure el Barça i podràs compartir amb altres culers els llocs que coneixes.',
+        preheader: 'Ja formes part de la comunitat de troBar.',
+        title: 'Benvingut a troBar',
+        message: 'Hi ha partits que recordes pel gol. I d’altres, per la gent amb qui els has viscut. Gràcies per sumar-te a troBar, el punt de trobada entre els culers i els bars on compartir el Barça.',
+        paragraphs: [
+          'Troba on veure el Barça, descobreix locals i tria el lloc per al pròxim partit. Tant si hi vas amb els de sempre com si busques un racó nou, hi ha una taula, una pantalla i una afició per descobrir.',
+          'Si ets al darrere de la barra, dona a conèixer el teu bar: mostra com és, explica què hi oferiu i ajuda els culers a trobar-vos. El partit comença molt abans del xiulet inicial.',
+        ],
         action: action('Descobrir troBar', 'appUrl'),
       };
       break;
@@ -60,11 +64,12 @@ function renderLifecycleEmail(kind, input) {
         subject: `${bar()}: la prova Premium ja està activa`,
         preheader: `Primer cobrament previst: ${amount()}. Prova fins al ${date(input.trialEnd)}.`,
         title: 'El teu bar ja és a troBar',
-        message: `Ja pots preparar el perfil de ${bar()} amb Premium. No t’hem cobrat res: ara tens temps de provar-lo i veure si et va bé.`,
+        message: `La prova Premium de ${bar()} ja està activa. No t’hem cobrat res.`,
+        paragraphs: ['Ara és un bon moment per preparar el perfil: afegeix fotos, revisa la informació del local i explica què hi trobaran els aficionats quan vinguin a veure el partit.'],
         summary: row('Primer cobrament previst', date(input.trialEnd)),
-        details: [row('Establiment', bar()), row('Pla', cycle()), row('Primer import previst', amount()), row('Renovació', 'Automàtica si no cancel·les abans')],
+        details: [row('Pla', cycle()), row('Primer import previst', amount()), row('Renovació', 'Automàtica si no cancel·les abans')],
         action: action('Gestionar la subscripció', 'manageUrl'),
-        notice: 'En acabar la prova, passarem la primera quota al mètode de pagament que has desat. Pots cancel·lar abans des del teu compte. Si canvies el pla o les dades fiscals, l’import pot variar.',
+        notice: 'En acabar la prova, cobrarem la primera quota. Pots cancel·lar abans des del teu compte. Si canvies el pla o les dades fiscals, l’import pot variar.',
       };
       break;
     case 'trial-reminder-7':
@@ -74,11 +79,11 @@ function renderLifecycleEmail(kind, input) {
         subject: `${bar()}: la prova s’acaba el ${date(input.trialEnd)}`,
         preheader: `Cobrament previst: ${amount()}. Pots revisar o cancel·lar la subscripció.`,
         title: kind === 'trial-reminder-7' ? 'La prova Premium s’acaba aviat' : 'El primer cobrament s’acosta',
-        message: `La prova de ${bar()} s’acaba el ${date(input.trialEnd)}. Si vols continuar amb Premium, no cal que facis res: a partir d’aquell moment passarem la quota al mètode de pagament que has desat.`,
+        message: `La prova de ${bar()} s’acaba aviat. Si continues amb Premium, cobrarem la quota automàticament al mètode de pagament desat.`,
         summary: row('Primer import previst', amount()),
-        details: [row('Final de la prova', date(input.trialEnd)), row('Establiment', bar()), row('Periodicitat', cycle())],
+        details: [row('Final de la prova', date(input.trialEnd)), row('Periodicitat', cycle())],
         action: action('Revisar o cancel·lar la subscripció', 'manageUrl'),
-        notice: 'Si prefereixes no continuar, pots cancel·lar abans que acabi la prova. Ho pots fer des de la gestió de la subscripció.',
+        notice: 'Pots cancel·lar abans que acabi la prova des de la gestió de la subscripció.',
       };
       break;
     case 'payment-received':
@@ -89,9 +94,9 @@ function renderLifecycleEmail(kind, input) {
         subject: `Pagament rebut: ${amount()} · ${bar()}`,
         preheader: 'Aquí tens el resum del cobrament i l’accés a la factura.',
         title: 'Ja hem rebut el teu pagament',
-        message: `La quota de ${bar()} ja està pagada. Et deixem el resum i la factura perquè els tinguis a mà.`,
+        message: `La quota de ${bar()} ja està pagada. Aquí tens el resum i la factura.`,
         summary: row('Import cobrat', amount()),
-        details: [row('Establiment', bar()), row('Factura', required(input.invoiceNumber, 'invoiceNumber')), row('Període des de', date(input.periodStart)), row('Període fins a', date(input.periodEnd))],
+        details: [row('Factura', required(input.invoiceNumber, 'invoiceNumber')), row('Període', `${date(input.periodStart)} – ${date(input.periodEnd)}`)],
         action: action('Veure la factura', 'invoiceUrl'),
         secondaryAction: action('Gestionar la subscripció', 'manageUrl'),
       };
@@ -131,9 +136,9 @@ function renderLifecycleEmail(kind, input) {
       content = {
         channel: 'billing', subject: `${bar()}: hem actualitzat la subscripció`,
         preheader: 'Revisa la nova periodicitat i l’import previst.', title: 'El nou pla ja està desat',
-        message: 'Ja hem desat el canvi que ens has demanat. Aquí tens la quota i la data de la pròxima renovació.',
+        message: `Ja hem desat el nou pla de ${bar()}. Aquí tens la quota i la pròxima renovació.`,
         summary: row('Pròxim import previst', amount()),
-        details: [row('Establiment', bar()), row('Periodicitat', cycle()), row('Pròxima renovació', date(input.periodEnd))],
+        details: [row('Periodicitat', cycle()), row('Pròxima renovació', date(input.periodEnd))],
         action: action('Revisar la subscripció', 'manageUrl'), notice: 'Si el canvi comporta un ajust de l’import, el trobaràs a la factura de Stripe.',
       };
       break;
@@ -178,15 +183,20 @@ function renderLifecycleEmail(kind, input) {
     case 'bar-onboarding':
       content = {
         subject: `${bar()}: mostra com es viu el partit al teu bar`,
-        preheader: 'Revisa els detalls que ajuden els aficionats a triar.',         title: 'Posa al dia el perfil del teu bar',
-        message: 'Com es viu un partit a casa vostra? Afegeix fotos del local i explica quines pantalles teniu, què s’hi pot menjar i quin ambient s’hi troba.',
-        details: [row('Establiment', bar())], action: action('Revisar el perfil', 'profileUrl'),
+        preheader: 'Mostra als culers què trobaran al teu local.',
+        title: 'El partit també es viu al teu bar',
+        message: `Cada bar té una manera de viure el futbol. A ${bar()}, pot ser aquella taula de sempre, l’ambient abans del xiulet o la tapa que acompanya cada partit. El perfil és el primer tast que en tenen els culers que encara no us coneixen.`,
+        paragraphs: [
+          `Mostra les fotos de ${bar()} amb llum i des de diferents racons. Explica quines pantalles teniu, què s’hi pot menjar i com és l’ambient els dies de partit: els detalls ajuden a imaginar-s’hi.`,
+          'No cal dir-ho tot. Una presentació propera i la informació al dia poden explicar millor què fa especial el vostre local. Comença pel que t’agradaria que sabés algú que hi entra per primer cop.',
+        ],
+        action: action('Editar el perfil', 'profileUrl'),
         secondaryAction: action('Deixar de rebre consells de perfil', 'unsubscribeUrl'),
-        notice: 'Pots deixar de rebre aquests consells des de l’enllaç de baixa. Continuaràs rebent els avisos de compte i facturació.',
+        notice: 'Continuaràs rebent els avisos de compte i facturació encara que et donis de baixa d’aquests consells.',
       };
       break;
   }
-  return renderEmail({ ...base, ...content });
+  return renderEmail({ ...base, ...content, design: kind });
 }
 
 module.exports = { renderLifecycleEmail, kinds, date, money };

@@ -16,7 +16,7 @@ const theme = {
 const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
 const text = node => Array.isArray(node) ? node.map(text).join('') : node?.props ? (node.props.message || '') + text(node.props.children) : typeof node === 'string' ? node : '';
 
-function render({ owner = false, editing = false, reviewForm = false, width = 390, height = 844, authenticated = true, reviewError = null, reviewLoading = false, subscribed = false, embedded = false, showGoogleRating = false } = {}) {
+function render({ owner = false, editing = false, reviewForm = false, width = 390, height = 844, authenticated = true, reviewError = null, reviewLoading = false, subscribed = false, embedded = false, showGoogleRating = false, fullMatchIds = [] } = {}) {
     let state = 0;
     const values = {
         0: true,
@@ -62,6 +62,7 @@ function render({ owner = false, editing = false, reviewForm = false, width = 39
             if (name.endsWith('GoogleRatingSection')) return { __esModule: true, default: 'GoogleRatingSection' };
             if (name.endsWith('UserNotice')) return { __esModule: true, default: 'UserNotice' };
             if (name.endsWith('VenuePhotoGallery')) return { __esModule: true, default: 'VenuePhotoGallery' };
+            if (name.endsWith('BarReservationAction')) return { __esModule: true, default: 'BarReservationAction' };
             if (name.includes('premiumDemoReviewService')) return {};
             if (name.includes('premiumDemoProfiles')) return {
                 enrichPremiumDemoBar: bar => bar, isPremiumDemoBar: () => false,
@@ -78,17 +79,27 @@ function render({ owner = false, editing = false, reviewForm = false, width = 39
             showGoogleRating,
             amenities: ['wifi'], gallery: ['owner-photo'], description: 'Un bar de barri', promotionalText: 'Promo',
             socialMedia: { instagram: 'bar-del-barri' }, broadcastingMatches: ['match'],
+            reservationUrl: 'https://bar.example/reservar', fullMatchIds,
         },
         placeDetails: {
             photoUrls: ['public-photo'], phoneNumber: '123456789', websiteUri: 'https://example.test',
             currentOpeningHours: { openNow: true, weekdayDescriptions: ['Dilluns: 10-22'] },
         },
         allMatches: [{ id: 'match' }],
+        matchId: 'selected',
         onClose: () => calls.push('close'), onNavigate: () => calls.push('navigate'),
         onRequestLogin: () => calls.push('login'),
     });
     return { tree, calls };
 }
+
+test('profile bookings preserve selected-match context and individual broadcast capacity', () => {
+    const { tree } = render({ fullMatchIds: ['selected'] });
+    const actions = nodes(tree).filter(node => node.type === 'BarReservationAction');
+    assert.deepEqual(actions.map(action => action.props.matchId), ['match', 'selected']);
+    assert(actions.every(action => action.props.bar.reservationUrl === 'https://bar.example/reservar'));
+    assert(actions.every(action => action.props.bar.fullMatchIds.includes('selected')));
+});
 
 test('premium close target stays inside the sheet with an inset and clears the gallery', () => {
     for (const embedded of [false, true]) {

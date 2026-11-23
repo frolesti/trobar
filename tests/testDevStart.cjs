@@ -145,15 +145,33 @@ test('npm start reviews versions once before loading Expo and propagates explici
   assert(runner.calls.indexOf(reviews[0]) < runner.calls.findIndex(call => call[0] === 'expo'));
 });
 
-test('an accepted update or installation failure prevents loading a stale Expo CLI', () => {
-  for (const updateStatus of [10, 1]) {
-    const runner = harness({ updateStatus });
-    assert.throws(() => runner.runStartRaw(), /actualitzades|fallat/);
+test('an accepted update exits successfully without loading a stale CLI or reporting a config error', () => {
+  for (const direct of [false, true]) {
+    const runner = harness({ updateStatus: 10 });
+    if (direct) {
+      runner.parent.argv = ['node.exe', path.join(__dirname, '../node_modules/expo/bin/cli'), 'start'];
+      assert.doesNotThrow(() => runner.prepareDirectExpoStart());
+    } else {
+      assert.doesNotThrow(() => runner.runStartRaw());
+    }
+    assert.deepEqual(runner.calls.filter(call => call[0] === 'exit'), [['exit', 0]]);
     assert(!runner.calls.some(call => call[0] === 'expo'));
-    const direct = harness({ updateStatus });
-    direct.parent.argv = ['node.exe', path.join(__dirname, '../node_modules/expo/bin/cli'), 'start'];
-    assert.throws(() => direct.prepareDirectExpoStart(), /actualitzades|fallat/);
-    assert(!direct.calls.some(call => call[1]?.includes('--free-only')));
+    assert(!runner.calls.some(call => call[1]?.includes?.('--free-only')));
+    assert.equal(runner.parent.env.TROBAR_EXPO_UPDATE_READY_PID, undefined);
+  }
+});
+
+test('an installation failure still prevents startup and is reported as an error', () => {
+  for (const direct of [false, true]) {
+    const runner = harness({ updateStatus: 1 });
+    if (direct) {
+      runner.parent.argv = ['node.exe', path.join(__dirname, '../node_modules/expo/bin/cli'), 'start'];
+      assert.throws(() => runner.prepareDirectExpoStart(), /fallat/);
+    } else {
+      assert.throws(() => runner.runStartRaw(), /fallat/);
+    }
+    assert(!runner.calls.some(call => call[0] === 'expo' || call[0] === 'exit'));
+    assert(!runner.calls.some(call => call[1]?.includes?.('--free-only')));
   }
 });
 
