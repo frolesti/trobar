@@ -501,8 +501,9 @@ node scripts/expoUpdates.js --check-only
 ### Preparació per a App Store
 
 La configuració de compilació no equival a una app aprovada ni preparada per
-enviar a revisió pública. La versió iOS `1.0.0 (1)` està disponible per a
-proves internes a TestFlight després de la compilació amb EAS i l'enviament
+enviar a revisió pública. La versió iOS `1.0.0 (2)`, amb la pilota visible a
+la icona, està disponible per a proves internes a TestFlight després de la
+compilació amb EAS i l'enviament
 a App Store Connect. L'app registrada és `6838633050`; les proves externes
 requereixen la configuració de testers i la revisió beta que correspongui.
 
