@@ -16,7 +16,9 @@ function formHarness(options = {}) {
   const timers = [];
   const calls = [];
   const location = { search: options.searchParams || '', origin: 'http://localhost:3000', assign: url => calls.push(['redirect', url]) };
-  let cursor, subscriber;
+  let cursor, subscriber, authStarted = false;
+  const storage = new Map(options.searchParams && options.checkoutOwner !== null
+    ? [['trobar.checkout.owner', 'owner']] : []);
   const user = {
     uid: 'owner', email: 'owner@example.test', displayName: 'Propietari',
     emailVerified: options.verified !== false,
@@ -27,14 +29,19 @@ function formHarness(options = {}) {
       return { claims: server.claims.at(-1)?.data || options.claims || {} };
     },
   };
-  const auth = { currentUser: null, signOut: async () => { calls.push(['signOut']); auth.currentUser = null; } };
+  const auth = { currentUser: null, signOut: async () => {
+    calls.push(['signOut']);
+    if (options.signOutError) throw new Error('sign-out-failed');
+    auth.currentUser = null;
+  } };
   const jsx = (type, props) => ({ type, props });
   const module = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../web-app/components/ContactForm.tsx'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
-    module, exports: module.exports, URLSearchParams, URL,
+    module, exports: module.exports, URLSearchParams, URL, console,
     window: { crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' },
+      sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
       history: { length: options.historyLength ?? 2, back: () => calls.push(['historyBack']) },
       location },
     setInterval: callback => { timers.push(callback); return 1; }, clearInterval() {},
@@ -63,12 +70,14 @@ function formHarness(options = {}) {
         },
       };
       if (name === 'firebase/auth') return {
-        onAuthStateChanged: (client, callback) => { subscriber = callback; return () => {}; },
+        onAuthStateChanged: (client, callback) => { subscriber = async user => { authStarted = true; await callback(user); }; return () => {}; },
+        browserSessionPersistence: 'session',
+        setPersistence: async (client, mode) => { calls.push(['persistence', mode]); },
         fetchSignInMethodsForEmail: async () => [],
         createUserWithEmailAndPassword: async () => {
           calls.push(['create']);
           if (options.duplicate) throw { code: 'auth/email-already-in-use' };
-          auth.currentUser = user; return { user };
+          auth.currentUser = user; await subscriber(user); return { user };
         },
         signInWithEmailAndPassword: async () => {
           calls.push(['login']);
@@ -80,7 +89,7 @@ function formHarness(options = {}) {
       };
       if (name === 'firebase/firestore') return {
         doc: (db, collection, id) => `${collection}/${id}`,
-        getDocFromServer: async key => ({ exists: () => server.documents.has(key), data: () => server.documents.get(key) }),
+        getDocFromServer: async key => { calls.push(['read', key]); return { exists: () => server.documents.has(key), data: () => server.documents.get(key) }; },
       };
       if (name === 'firebase/functions') return {
         httpsCallable: (client, operation) => async data => {
@@ -142,10 +151,21 @@ function formHarness(options = {}) {
       render();
     },
     restore: async () => { auth.currentUser = user; await subscriber(user); },
+    authenticate: async () => { if (!authStarted) await subscriber(null); auth.currentUser = user; slots[0] = 3; },
+    resumeWithCredentials: async () => {
+      options.duplicate = true;
+      slots[0] = 1;
+      slots[1] = user.email;
+      slots[2] = { ...slots[2], password: 'Strong-test-password-123!' };
+      const button = nodes(render(), node => node.type === 'button' && node.props.onClick?.name === 'handleCreateAccount')[0];
+      await button.props.onClick();
+      render();
+    },
     tick: async () => { await timers.at(-1)(); },
     prepare: (step, data = {}) => { slots[0] = step; slots[1] = user.email; slots[2] = { ...slots[2],
       contactName: user.displayName, password: 'Strong-test-password-123!', ...data }; },
     click: async handler => {
+      if (!authStarted) await subscriber(null);
       const button = nodes(render(), node => node.type === 'button' && node.props.onClick?.name === handler)[0];
       assert.ok(button, handler);
       await button.props.onClick();
@@ -217,16 +237,35 @@ test('verification refreshes ID token; network and email-send failures preserve 
   assert.ok(h.calls.some(call => call[0] === 'token' && call[1] === true));
 });
 
-test('completed registration restores persisted owner session after reload; partial profile returns to repair', async () => {
+test('ordinary registration clears inherited auth without reading the old bar or opening Stripe', async () => {
   const documents = { 'barOwners/owner': { barId: 'bar', barName: 'Bar restaurat', billingCycle: 'annual' },
     'users/owner': { role: 'bar_owner', ownedBars: ['bar'] } };
   const h = formHarness({ claims: { role: 'bar_owner' }, server: { documents } });
   await h.restore();
-  assert.equal(h.slots[0], 6);
-  assert.equal(h.slots[2].billing, 'annual');
-  h.server.documents.delete('users/owner');
+  assert.equal(h.slots[0], 1);
+  assert.equal(h.slots[1], '');
+  assert.ok(h.calls.some(call => call[0] === 'signOut'));
+  assert.ok(h.calls.some(call => call[0] === 'persistence' && call[1] === 'session'));
+  assert.equal(h.calls.some(call => ['read', 'getSubscriptionStatus', 'createCheckoutSession'].includes(call[0])), false);
+  assert.doesNotMatch(h.text(), /Bar restaurat|ja està activat/);
+});
+
+test('a checkout-looking link without the current tab marker cannot restore a legacy account', async () => {
+  const h = formHarness({ searchParams: '?checkout=success', checkoutOwner: null });
   await h.restore();
-  assert.equal(h.slots[0], 3);
+  assert.equal(h.slots[0], 1);
+  assert.ok(h.calls.some(call => call[0] === 'signOut'));
+  assert.equal(h.calls.some(call => call[0] === 'read'), false);
+  assert.match(h.text(), /Introdueix el correu/);
+});
+
+test('failed cleanup blocks account creation and offers a retry rather than restoring the bar', async () => {
+  const h = formHarness({ signOutError: true });
+  await h.restore();
+  h.prepare(1);
+  await h.click('handleCreateAccount');
+  assert.equal(h.calls.some(call => call[0] === 'create'), false);
+  assert.match(h.text(), /Tornar-ho a provar/);
 });
 
 test('final confirmation verifies the draft then opens Stripe directly without a premature success screen', async () => {
@@ -234,7 +273,7 @@ test('final confirmation verifies the draft then opens Stripe directly without a
     nif: 'B12345674', contactName: 'Propietari', billing: 'quarterly', acceptTerms: true,
     location: { latitude: 41.38, longitude: 2.17 } };
   const h = formHarness({ server: { env: { FUNCTIONS_EMULATOR: 'true' } } });
-  await h.restore();
+  await h.authenticate();
   h.prepare(5, bar);
   await h.click('handleSubmit');
   assert.equal(h.slots[0], 5);
@@ -246,7 +285,7 @@ test('final confirmation verifies the draft then opens Stripe directly without a
   assert.match(h.calls.find(call => call[0] === 'redirect')[1], /^https:\/\/checkout\.stripe\.com\//);
   assert.doesNotMatch(h.text(), /registrat correctament|Benvingut|Creant compte de bar/);
   const fake = formHarness({ fakeSuccess: true });
-  await fake.restore();
+  await fake.authenticate();
   fake.prepare(5, bar);
   await fake.click('handleSubmit');
   assert.equal(fake.slots[0], 5);
@@ -256,7 +295,7 @@ test('final confirmation verifies the draft then opens Stripe directly without a
 
 test('Checkout failure preserves the pending draft and exposes a retry without claiming activation', async () => {
   const h = formHarness({ checkoutError: true });
-  await h.restore();
+  await h.authenticate();
   h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
     nif: 'B12345674', acceptTerms: true, location: { latitude: 41.38, longitude: 2.17 } });
   await h.click('handleSubmit');
@@ -271,7 +310,7 @@ test('opening Checkout shows one progress message in the button, without duplica
   const pending = new Promise(resolve => { release = resolve; });
   const h = formHarness({ checkoutWait: () => pending });
   h.location.origin = 'https://www.trobar.cat';
-  await h.restore();
+  await h.authenticate();
   h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
     nif: 'B12345674', acceptTerms: true, location: { latitude: 41.38, longitude: 2.17 } });
   const submission = h.click('handleSubmit');
@@ -288,7 +327,7 @@ test('opening Checkout shows one progress message in the button, without duplica
 
 test('missing fields are identified individually, focused and scrolled into view in form order', async () => {
   const h = formHarness();
-  await h.restore();
+  await h.authenticate();
   h.prepare(4);
   await h.click('handleContinue');
   assert.equal(h.slots[0], 4);
@@ -306,7 +345,7 @@ test('missing fields are identified individually, focused and scrolled into view
 
 test('terms rejection focuses the checkbox and does not create a draft or payment', async () => {
   const h = formHarness();
-  await h.restore();
+  await h.authenticate();
   h.prepare(5, { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
     nif: 'B12345674', location: { latitude: 41.38, longitude: 2.17 } });
   await h.click('handleSubmit');
@@ -316,7 +355,7 @@ test('terms rejection focuses the checkbox and does not create a draft or paymen
 
 test('search offers a working way back to the account without losing local draft fields', async () => {
   const h = formHarness();
-  await h.restore();
+  await h.authenticate();
   h.prepare(3, { businessName: 'El meu bar', description: 'Ambient de partit' });
   await h.click('handleBackToAccount');
   assert.equal(h.slots[0], 1);
@@ -347,17 +386,17 @@ const validDraft = { businessName: 'Bar Beta', address: 'Carrer 1', city: 'Barce
 async function savedDraft(options = {}) {
   const h = formHarness({ checkoutError: true, ...options });
   h.location.origin = 'https://www.trobar.cat';
-  await h.restore();
+  await h.authenticate();
   h.prepare(5, validDraft);
   await h.click('handleSubmit');
   h.calls.length = 0;
   return h;
 }
 
-test('reopening a pending registration connects to Stripe automatically exactly once', async () => {
+test('explicit credentials recover a pending registration and connect to Stripe exactly once', async () => {
   const h = await savedDraft();
   h.options.checkoutError = false;
-  await h.restore();
+  await h.resumeWithCredentials();
   await h.settle();
   await h.settle();
   assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
@@ -369,15 +408,15 @@ test('registrations saved before the pending status was introduced also connect 
   const h = await savedDraft();
   Object.assign(h.server.documents.get('bars/bar1'), { status: 'registered', isActive: true });
   h.options.checkoutError = false;
-  await h.restore();
+  await h.resumeWithCredentials();
   await h.settle();
   assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
   assert.equal(h.calls.filter(call => call[0] === 'redirect').length, 1);
 });
 
-test('automatic Checkout failure shows a single retry without looping or losing the previous step', async () => {
+test('Checkout failure after credential recovery offers one retry without looping or losing details', async () => {
   const h = await savedDraft();
-  await h.restore();
+  await h.resumeWithCredentials();
   await h.settle();
   await h.settle();
   assert.equal(h.calls.filter(call => call[0] === 'createCheckoutSession').length, 1);
@@ -394,7 +433,7 @@ test('confirmed trials and unresolved subscriptions never trigger automatic repe
   for (const response of [{ active: true, status: 'trialing' }, { active: false, status: 'past_due' }]) {
     const h = await savedDraft({ subscriptionResponse: response });
     h.options.checkoutError = false;
-    await h.restore();
+    await h.resumeWithCredentials();
     await h.settle();
     assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false);
     if (response.active) {
@@ -409,7 +448,7 @@ test('confirmed trials and unresolved subscriptions never trigger automatic repe
 test('a pending Stripe success return waits for confirmation instead of opening Checkout again', async () => {
   const h = await savedDraft({ searchParams: '?checkout=success' });
   h.options.checkoutError = false;
-  await h.restore();
+  await h.resumeWithCredentials();
   await h.settle();
   assert.equal(h.calls.some(call => call[0] === 'createCheckoutSession'), false);
   assert.doesNotMatch(h.text(), /ja està activat/);
@@ -427,7 +466,7 @@ test('a success query parameter and unknown subscription state cannot claim acti
 
 test('invalid NIF is rejected before submit and cannot advance business details', async () => {
   const h = formHarness();
-  await h.restore();
+  await h.authenticate();
   h.prepare(4, { businessName: 'Bar de prova', address: 'Carrer 1', city: 'Barcelona', postalCode: '08001',
     nif: 'B12345678', location: { latitude: 41.38, longitude: 2.17 }, acceptTerms: true });
   await h.click('handleContinue');
@@ -448,7 +487,7 @@ const placeServer = () => ({ fetch: async url => ({ ok: true, json: async () => 
 
 test('typing shows debounced suggestions without a search button and selection preserves coordinates', async () => {
   const h = formHarness({ server: placeServer() });
-  await h.restore();
+  await h.authenticate();
   h.change('Ex.: Zurito, Terrassa', 'Bar Beta');
   assert.equal(h.calls.some(call => call[0] === 'searchRegistrationLocations'), false);
   assert.equal(h.elements(node => node.type === 'button' && node.props.children === 'Cercar').length, 0);
@@ -465,7 +504,7 @@ test('typing shows debounced suggestions without a search button and selection p
 
 test('manual address lookup confirms a location without replacing the business name', async () => {
   const h = formHarness({ server: placeServer() });
-  await h.restore();
+  await h.authenticate();
   h.prepare(4, { businessName: 'Bar manual', address: 'Carrer 2', city: 'Barcelona', postalCode: '08001', nif: ' ES b-12345674 ' });
   await h.click('handleContinue');
   assert.equal(h.slots[0], 4);
@@ -597,7 +636,7 @@ test('arrows from subscription and business details go to the previous step and 
 test('short queries do not search and late responses cannot replace newer suggestions', async () => {
   const pending = new Map();
   const h = formHarness({ search: data => new Promise(resolve => pending.set(data.query, resolve)) });
-  await h.restore();
+  await h.authenticate();
   h.change('Ex.: Zurito, Terrassa', 'zu');
   await h.debounce();
   assert.equal(h.calls.some(call => call[0] === 'searchRegistrationLocations'), false);
@@ -615,7 +654,7 @@ test('short queries do not search and late responses cannot replace newer sugges
 
 test('keyboard navigation selects a suggestion and empty lists do not gain a phantom active option', async () => {
   const h = formHarness({ server: placeServer() });
-  await h.restore();
+  await h.authenticate();
   await h.key('Ex.: Zurito, Terrassa', 'ArrowDown');
   assert.equal(h.elements(node => node.props?.role === 'combobox')[0].props['aria-activedescendant'], undefined);
   h.change('Ex.: Zurito, Terrassa', 'Bar Beta');
@@ -629,7 +668,7 @@ test('keyboard navigation selects a suggestion and empty lists do not gain a pha
 
 test('changing queries cancels the previous debounce and Escape cancels a queued search', async () => {
   const h = formHarness({ server: placeServer() });
-  await h.restore();
+  await h.authenticate();
   h.change('Ex.: Zurito, Terrassa', 'Old query');
   h.change('Ex.: Zurito, Terrassa', 'New query');
   await h.debounce();

@@ -45,7 +45,7 @@ test('privacy and service help use support; billing and general enquiries use th
   const { PRIVACY, TERMS } = legal();
   assert.equal(PRIVACY.contactEmail, contactEmails.support);
   assert.equal(TERMS.contactEmail, contactEmails.support);
-  assert.equal(PRIVACY.lastUpdated, '10 de novembre de 2026');
+  assert.equal(PRIVACY.lastUpdated, '24 de novembre de 2026');
   assert.equal(TERMS.lastUpdated, '10 de novembre de 2026');
   const privacy = JSON.stringify(PRIVACY);
   assert.ok(privacy.includes(contactEmails.support));
@@ -68,21 +68,34 @@ test('desktop and mobile footer labels and mailto destinations both use the gene
   }
 });
 
-test('the web contact directory labels and links each mailbox by its actual purpose', () => {
-  const Contact = load(['web-app', 'pages', 'contacte.tsx']).default;
-  const rendered = nodes(Contact());
-  for (const [label, email] of [
-    ['Consultes generals i col·laboracions', contactEmails.general],
-    ['Suport, incidències i privacitat', contactEmails.support],
-    ['Factures, cobraments i subscripcions', contactEmails.billing],
+test('the web contact form selects the right mailbox without repeating the full directory', () => {
+  const states = [];
+  let cursor;
+  const Contact = load(['web-app', 'pages', 'contacte.tsx'], {
+    'firebase/functions': { httpsCallable: () => { throw new Error('No submission expected'); } },
+    '../lib/firebase': { functions: {} },
+    '../styles/Contact.module.css': {},
+    react: {
+      useState: initial => { const i = cursor++; if (!(i in states)) states[i] = initial; return [states[i], value => { states[i] = value; }]; },
+      useRef: initial => ({ current: initial }),
+    },
+  }).default;
+  const render = () => { cursor = 0; return nodes(Contact()); };
+  for (const [kind, label, email] of [
+    ['general', /Consultes/, contactEmails.general],
+    ['support', /Suport/, contactEmails.support],
+    ['billing', /Factures/, contactEmails.billing],
   ]) {
-    const row = rendered.find(node => node.type === 'p' && text(node).includes(label));
-    assert.ok(row, label);
-    const link = nodes(row).find(node => node.type === 'a');
+    let rendered = render();
+    assert.match(text(rendered.find(node => node.type === 'option' && node.props.value === kind)), label);
+    rendered.find(node => node.type === 'select').props.onChange({ target: { value: kind } });
+    rendered = render();
+    const links = rendered.filter(node => node.props.href?.startsWith('mailto:'));
+    assert.equal(links.length, 1);
+    const link = links[0];
     assert.equal(link.props.href, `mailto:${email}`);
     assert.equal(text(link), email);
   }
-  assert.equal(rendered.filter(node => node.props.href?.startsWith('mailto:')).length, 3);
 });
 
 test('web and mobile legal renderers expose matching working mailto links from the canonical documents', async () => {

@@ -27,7 +27,7 @@ export interface LegalDoc {
     contactEmail: string;
 }
 
-export const LEGAL_VERSIONS = { terms: '2026-11-10', privacy: '2026-11-10' } as const;
+export const LEGAL_VERSIONS = { terms: '2026-11-10', privacy: '2026-11-24' } as const;
 export const CREATOR_URL = 'https://frolesti.cat';
 
 const p = (text: string): LegalBlock => ({ kind: 'p', text });
@@ -36,7 +36,7 @@ const ul = (items: string[]): LegalBlock => ({ kind: 'ul', items });
 export const PRIVACY: LegalDoc = {
     title: 'Política de',
     titleAccent: 'Privacitat',
-    lastUpdated: '10 de novembre de 2026',
+    lastUpdated: '24 de novembre de 2026',
     contactEmail: contactEmails.support,
     sections: [
         { title: '1. Introducció', blocks: [
@@ -50,7 +50,8 @@ export const PRIVACY: LegalDoc = {
                 'Activitat: estadístiques d\'ús anònimes per millorar l\'experiència.',
                 'Dades de negoci: si registres un bar, guardem el nom del local, NIF, adreça, telèfon, email i dades de pagament.',
                 'Dades del dispositiu: informació bàsica com el sistema operatiu i la versió de l\'aplicació, per garantir la compatibilitat.',
-                'Consultes de suport: si envies el formulari de contacte, guardem el tipus, assumpte i missatge, el teu identificador de compte i correu, la plataforma, la versió de l’aplicació i la data d’enviament. La bústia és privada i només hi pot accedir l’equip administrador.',
+                'Consultes de suport a l’app: guardem el tipus, assumpte i missatge, el teu identificador de compte i correu, la plataforma, la versió de l’aplicació i la data d’enviament. La bústia és privada i només hi pot accedir l’equip administrador.',
+                'Consultes des del web: guardem el nom, correu, motiu, missatge, acceptació de la política de privacitat i data d’enviament per atendre’t. No cal tenir un compte. Fem servir una empremta de l’adreça IP, sense desar-la en clar, per limitar enviaments abusius.',
             ])
         ]},
         { title: '3. Base Legal del Tractament', blocks: [
@@ -74,7 +75,7 @@ export const PRIVACY: LegalDoc = {
         { title: '5. Compartició de Dades', blocks: [
             p('No venem ni compartim les teves dades personals amb tercers per a fins publicitaris. Podem compartir dades amb:'),
             ul([
-                'Proveïdors de serveis (Stripe per a pagaments, Firebase per a autenticació) que tracten les dades en nom nostre.',
+                'Proveïdors de serveis que tracten les dades en nom nostre: Stripe per a pagaments, Firebase per a autenticació i emmagatzematge, i Resend per a l’enviament de correus, incloses les consultes del web a la nostra bústia.',
                 'Dades agregades i anònimes amb socis per a anàlisi de mercat.',
                 'Autoritats competents si ho requereix la llei.',
             ])

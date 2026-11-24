@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, fetchSignInMethodsForEmail, onAuthStateChanged } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, fetchSignInMethodsForEmail, onAuthStateChanged, setPersistence, browserSessionPersistence } from 'firebase/auth'
 import { httpsCallable } from 'firebase/functions'
 import { doc, getDocFromServer } from 'firebase/firestore'
 import { stdnum } from 'stdnum'
@@ -190,14 +190,14 @@ const buttonPrimary: React.CSSProperties = {
   width: '100%', padding: 16, borderRadius: 14,
   background: 'var(--brand-accent)', color: 'var(--brand-cream)',
   fontWeight: 'bold', fontSize: 16, border: 'none',
-  cursor: 'pointer', transition: 'all 0.2s',
+  cursor: 'pointer', transition: 'background 0.2s, color 0.2s',
 }
 
 const buttonSecondary: React.CSSProperties = {
   width: '100%', padding: 14, borderRadius: 14,
   background: 'transparent', color: 'var(--muted)',
   fontWeight: 600, fontSize: 14, border: '2px solid var(--border)',
-  cursor: 'pointer', transition: 'all 0.2s', marginTop: 12,
+  cursor: 'pointer', transition: 'background 0.2s, color 0.2s, border-color 0.2s', marginTop: 12,
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -206,6 +206,8 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
   const [step, setStep] = useState(1)
   const [email, setEmail] = useState('')
   const [state, setState] = useState<FormState>(initialState)
+  const [authReady, setAuthReady] = useState(false)
+  const [authAttempt, setAuthAttempt] = useState(0)
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [cooldown, setCooldown] = useState(0)
@@ -327,23 +329,42 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     if (Object.keys(CYCLES).includes(billing)) setState(s => ({ ...s, billing }))
   }, [])
 
-  useEffect(() => onAuthStateChanged(auth, async user => {
-    if (!user) return
-    try {
-      await user.reload()
-      await user.getIdToken(true)
-      setEmail(user.email || '')
-      const owner = await getDocFromServer(doc(db, 'barOwners', user.uid))
-      if (owner.exists()) {
-        await restoreOwnerDetails(owner.data(), user.uid)
-      } else {
-        setState(s => ({ ...s, contactName: user.displayName || s.contactName }))
-        setStep(user.emailVerified ? 3 : 2)
+  useEffect(() => {
+    let active = true
+    let initialized = false
+    const unsubscribe = onAuthStateChanged(auth, async user => {
+      if (initialized) return
+      initialized = true
+      try {
+        const checkout = new URLSearchParams(window.location.search).get('checkout')
+        const hasReturn = checkout === 'success' || checkout === 'cancelled'
+        const returning = hasReturn && user && window.sessionStorage.getItem('trobar.checkout.owner') === user.uid
+        if (!returning) {
+          window.sessionStorage.removeItem('trobar.checkout.owner')
+          if (user) await auth.signOut()
+        }
+        await setPersistence(auth, browserSessionPersistence)
+        if (!active) return
+        if (returning && user) {
+          await user.reload()
+          await user.getIdToken(true)
+          if (!active) return
+          setEmail(user.email || '')
+          const owner = await getDocFromServer(doc(db, 'barOwners', user.uid))
+          if (!active) return
+          if (owner.exists()) await restoreOwnerDetails(owner.data(), user.uid)
+          else setStep(user.emailVerified ? 3 : 2)
+        } else if (hasReturn) {
+          setStatus("Introdueix el correu i la contrasenya de l’alta per continuar.")
+        }
+        if (active) setAuthReady(true)
+      } catch (error) {
+        console.error('[Registration] Could not prepare onboarding', error instanceof Error ? error.name : 'unknown')
+        if (active) setStatus("No hem pogut preparar el registre. Comprova la connexió i torna-ho a provar.")
       }
-    } catch {
-      setStatus("No s'ha pogut recuperar el registre. Torna a iniciar sessió o reintenta la connexió.")
-    }
-  }), [])
+    })
+    return () => { active = false; unsubscribe() }
+  }, [authAttempt])
 
   useEffect(() => {
     if (step !== 6) return
@@ -463,6 +484,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
 
   /* ── PAS 1: Crear compte Firebase Auth + enviar verificació ──────────── */
   const handleCreateAccount = async () => {
+    if (!authReady) return
     const normalizedEmail = email.trim().toLowerCase()
     const name = state.contactName.trim()
     const pwd = state.password
@@ -727,6 +749,8 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
   }
 
   const openCheckout = async () => {
+    const user = auth.currentUser
+    if (!user) throw new Error("Torna a introduir les dades del compte per continuar.")
     const checkout = httpsCallable<Record<string, unknown>, { url?: string }>(functions, 'createCheckoutSession')
     const origin = window.location.origin
     const result = await checkout({
@@ -737,6 +761,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
     if (!result.data.url || !/^https:\/\/checkout\.stripe\.com\//.test(result.data.url)) {
       throw new Error("No s'ha pogut obrir el pagament.")
     }
+    window.sessionStorage.setItem('trobar.checkout.owner', user.uid)
     window.location.assign(result.data.url)
     checkoutRedirecting.current = true
   }
@@ -823,6 +848,9 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
           </p>
         </div>
         <p className="registration-field-guide">Els camps amb * són obligatoris.</p>
+        {!authReady && (!status
+          ? <p role="status">Preparant el registre…</p>
+          : <button type="button" onClick={() => { setStatus(null); setAuthAttempt(value => value + 1) }} style={buttonSecondary}>Tornar-ho a provar</button>)}
 
         <div style={{ display: 'grid', gap: 14 }}>
           <label style={labelStyle}>
@@ -933,7 +961,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
               width: '100%',
               height: 8,
               borderRadius: 999,
-              background: 'rgba(255,255,255,0.08)',
+              background: 'var(--brand-rule)',
               overflow: 'hidden',
               border: '1px solid var(--hairline)',
               cursor: 'help',
@@ -993,12 +1021,12 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
 
         <button
           onClick={handleCreateAccount}
-          disabled={loading || !canSubmit}
+          disabled={loading || !canSubmit || !authReady}
           style={{
             ...buttonPrimary,
             marginTop: 24,
-            opacity: loading || !canSubmit ? 0.5 : 1,
-            cursor: loading || !canSubmit ? 'not-allowed' : 'pointer',
+            opacity: loading || !canSubmit || !authReady ? 0.5 : 1,
+            cursor: loading || !canSubmit || !authReady ? 'not-allowed' : 'pointer',
           }}
         >
           {loading ? 'Connectant…' : 'Continuar'}

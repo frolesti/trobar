@@ -8,6 +8,7 @@ import { persistBarRegistration } from "./barRegistration";
 import { planSubscriptionEmails, planRefundEmail } from "./emailDelivery";
 export { recordFirstLogin, processEmailQueue } from "./emailDelivery";
 export { searchRegistrationLocations, getRegistrationLocationDetails } from "./registrationLocations";
+export { submitWebContact } from "./webContact";
 export {
   onBarWelcomeEmail, onContactEmail, replyToContact, onSupportReplyEmail, onAccountDeletedEmail,
   recordAccountSecurity, onAccountSecurityEmail, getBarEmailTips, setBarEmailTips,

@@ -62,6 +62,27 @@ separadament: els canvis del web es publiquen des de `main`. La paleta prové
 de `brand/palette.json` i `app/src/theme/brandColors.json`; els titulars usen
 Lora i la marca Oi, amb fonts locals i llicències a `assets/web/fonts`.
 La capçalera conserva el logo animat amb alternativa estàtica per a moviment reduït.
+Les superfícies del web són crema: `--brand-paper` usa `palette.cream` només
+al web, sense modificar el color dels correus. Els preus usen llistes de punts.
+
+El web és una entrada d'alta per a l'app, no un portal de comptes.
+Una visita normal a `/registra-bar` tanca la sessió heretada i comença de zero.
+L'autenticació de l'alta dura només la sessió de la pestanya; un retorn de
+Stripe només recupera automàticament el compte si coincideix amb el marcador
+de Checkout d'aquella pestanya. Sense aquest marcador cal tornar a introduir
+les credencials. L'estat real de la subscripció continua sent l'autoritat
+abans d'obrir un altre pagament o mostrar l'activació.
+
+`/contacte` envia consultes públiques amb `submitWebContact` (europe-west1).
+No crea usuaris ni requereix iniciar sessió. Desa el missatge a la col·lecció
+privada `webContactMessages` i només confirma l'enviament quan Resend accepta
+el correu intern a la bústia corporativa seleccionada. No envia res a
+l'adreça del visitant ni activa els correus de clients. Requereix el secret
+existent `RESEND_API_KEY`; les destinacions provenen de `contactEmails.json`.
+Inclou consentiment, honeypot, límits d'un missatge per minut i deu per dia
+per IP pseudonimitzada, i reintents idempotents durant menys de 23 hores.
+Un desplegament del formulari requereix publicar primer aquesta funció:
+`firebase deploy --only functions:submitWebContact`.
 
 Els blocs «L'app» i «Comunitat» alternen vídeo esquerra/dreta en escriptori.
 Fins a 600 px s'apilen, amb el vídeo abans del text en tots dos blocs.
@@ -69,7 +90,8 @@ Els vídeos tenen posters locals i conserven la marca d'aigua existent.
 El propietari ha confirmat permís de publicació del material d'Artlist.
 
 ```powershell
-node --test tests\testWebVisuals.cjs
+node --test tests\testWebVisuals.cjs tests\testWebBarSignup.cjs tests\testWebContact.cjs functions\test\webContact.test.cjs
+npm --prefix functions run build
 npm --prefix web-app run build
 npm --prefix web-app run dev
 ```

@@ -146,6 +146,7 @@ function harness(options = {}) {
         if (name.endsWith('/scheduler')) return { onSchedule: (...args) => args.at(-1) };
         if (name.endsWith('/params')) return { defineSecret: () => ({ value: () => 'sk_test_mock' }) };
         if (name.startsWith('./emails/')) return require(path.resolve(__dirname, '..', '..', 'emails', path.basename(name)));
+        if (name === './app/src/data/contactEmails.json') return require('../../app/src/data/contactEmails.json');
         if (name.startsWith('./')) return load(path.resolve(path.dirname(filename), `${name}.ts`));
         throw new Error(`Unexpected import: ${name}`);
       },
@@ -155,6 +156,7 @@ function harness(options = {}) {
   }
   return { api: load(path.resolve(__dirname, '..', 'src', 'index.ts')),
     email: load(path.resolve(__dirname, '..', 'src', 'emailDelivery.ts')),
+    webContact: load(path.resolve(__dirname, '..', 'src', 'webContact.ts')),
     database, ref, documents, updates, calls, claims };
 }
 

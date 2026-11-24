@@ -12,6 +12,7 @@ const variables = {
   '--brand-grana': colors.background,
   '--brand-accent': colors.primary,
   ...Object.fromEntries(Object.entries(palette).map(([name, value]) => [`--brand-${name}`, value])),
+  '--brand-paper': palette.cream,
 }
 
 export default function App({ Component, pageProps }: AppProps) {

@@ -19,10 +19,6 @@ const features = [
   'Suport prioritari per email',
 ]
 
-/**
- * Pricing editorial. Sense gradients durs ni caixes blaves: el degradat
- * del body es veu a través d'una superfície gairebé transparent amb hairlines.
- */
 export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>('quarterly')
 
@@ -68,6 +64,8 @@ export default function Pricing() {
           return (
             <button
               key={key}
+              type="button"
+              aria-pressed={active}
               onClick={() => setCycle(key)}
               style={{
                 flex: 1, padding: '20px 8px',
@@ -81,7 +79,7 @@ export default function Pricing() {
                 cursor: 'pointer',
                 borderBottom: active ? '2px solid var(--gold)' : '2px solid transparent',
                 marginBottom: -1,
-                transition: 'all 0.25s',
+                transition: 'color 0.25s, border-color 0.25s',
               }}
             >
               {c.label}
@@ -115,7 +113,7 @@ export default function Pricing() {
             fontSize: 13, color: 'var(--gold)',
             letterSpacing: 1,
           }}>
-            −{sel.savePct}
+            Estalvia {sel.savePct}
           </span>
         )}
 
@@ -156,7 +154,7 @@ export default function Pricing() {
           )}
         </div>
 
-        <ul className="legal" style={{ marginBottom: 40 }}>
+        <ul className="pricing-features">
           {features.map((feat, i) => (
             <li key={i} style={{ fontSize: 15, color: 'var(--paper)' }}>{feat}</li>
           ))}
