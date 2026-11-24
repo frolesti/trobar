@@ -501,10 +501,16 @@ node scripts/expoUpdates.js --check-only
 ### Preparació per a App Store
 
 La configuració de compilació no equival a una app aprovada ni preparada per
-enviar a revisió pública. La versió iOS `1.0.0 (1)` s'ha compilat amb EAS i
-l'enviament a App Store Connect ha finalitzat correctament. L'app registrada
-és `6838633050`; la disponibilitat a TestFlight depèn del processament d'Apple
-i, per a proves externes, de la revisió beta que correspongui.
+enviar a revisió pública. La versió iOS `1.0.0 (1)` està disponible per a
+proves internes a TestFlight després de la compilació amb EAS i l'enviament
+a App Store Connect. L'app registrada és `6838633050`; les proves externes
+requereixen la configuració de testers i la revisió beta que correspongui.
+
+Per instal·lar-la, cal instal·lar TestFlight des de l'App Store de l'iPhone,
+obrir-hi el correu d'invitació i prémer «View in TestFlight», «Accept» i
+«Install». No necessita Expo Go ni Metro. Les noves compilacions apareixen
+com a actualitzacions dins de TestFlight; cada compilació caduca als 90 dies
+de la pujada. La beta no equival a una publicació pública a l'App Store.
 
 Preparació tècnica inclosa:
 
@@ -512,6 +518,11 @@ Preparació tècnica inclosa:
   dispositiu físic, sense development client i numeració incremental remota.
 - Bundle ID `com.trobar.app` i versió comercial `1.0.0`.
 - Icona iOS de 1024 × 1024, PNG RGB opac, derivada del recurs corporatiu existent.
+  Usa `assets/app/img/logo/mascot-open-cloche.png`, amb la pilota visible i el
+  personatge complet: alçada de 864 px, centrat amb 80 px de marge vertical,
+  crema corporatiu sobre fons grana. iOS aplica les cantonades arrodonides.
+  Canviar aquesta icona requereix una nova compilació i enviament a TestFlight;
+  no s'actualitza desplegant el web ni amb una actualització JavaScript.
 - Plugin natiu de Sign in with Apple.
 - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` configura tant el client Google de l'app
   com el seu esquema de retorn natiu. Ha de ser un client OAuth **iOS**
