@@ -37,7 +37,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(13,27,42,0.78)',
+        background: 'rgba(41,18,28,0.65)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -58,7 +58,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
           maxHeight: '88vh',
           overflowY: 'auto',
           padding: '56px 48px 48px',
-          background: 'linear-gradient(180deg, rgba(13,27,42,0.55), rgba(13,27,42,0.85))',
+          background: 'var(--brand-paper)',
           border: '1px solid var(--hairline)',
           color: 'var(--paper)',
           animation: 'lmSlideUp 0.3s ease-out',

@@ -8,6 +8,7 @@ export default function Header() {
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60)
+    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
@@ -30,10 +31,8 @@ export default function Header() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      background: scrolled ? 'rgba(12,12,12,0.9)' : 'linear-gradient(180deg, rgba(8,8,8,0.88) 0%, rgba(8,8,8,0.58) 62%, rgba(8,8,8,0) 100%)',
-      backdropFilter: scrolled ? 'blur(14px)' : 'none',
-      WebkitBackdropFilter: scrolled ? 'blur(14px)' : 'none',
-      borderBottom: scrolled ? '1px solid var(--hairline)' : '1px solid transparent',
+      background: 'var(--brand-cream)',
+      borderBottom: scrolled ? '1px solid var(--brand-rule)' : '1px solid transparent',
       transition: 'background .4s ease, border-color .4s ease',
     }}>
       <Link href="/" aria-label="troBar — inici" className="site-header-brand">
@@ -46,6 +45,7 @@ export default function Header() {
         className="site-header-burger"
         aria-label={menuOpen ? 'Tancar menú' : 'Obrir menú'}
         aria-expanded={menuOpen}
+        aria-controls="site-navigation"
         onClick={() => setMenuOpen(v => !v)}
       >
         <span />
@@ -53,7 +53,7 @@ export default function Header() {
         <span />
       </button>
 
-      <nav className={`site-header-nav ${menuOpen ? 'open' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <nav id="site-navigation" className={`site-header-nav ${menuOpen ? 'open' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <Link href="/#qui-som" onClick={() => setMenuOpen(false)} style={{
           color: 'var(--cream-70)',
           fontFamily: 'var(--font-body)',
@@ -73,16 +73,6 @@ export default function Header() {
           textTransform: 'uppercase',
         }}>
           Com funciona
-        </Link>
-        <Link href="/#caracteristiques" onClick={() => setMenuOpen(false)} style={{
-          color: 'var(--cream-70)',
-          fontFamily: 'var(--font-body)',
-          fontSize: 10,
-          fontWeight: 500,
-          letterSpacing: '3px',
-          textTransform: 'uppercase',
-        }}>
-          Funcions
         </Link>
         <Link href="/#descarrega" onClick={() => setMenuOpen(false)} style={{
           color: 'var(--cream-70)',

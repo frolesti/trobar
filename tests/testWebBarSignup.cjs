@@ -488,7 +488,7 @@ test('email format feedback appears only after blur and disappears while correct
   assert.doesNotMatch(h.text(), /Introdueix un email vàlid/);
 });
 
-test('editable steps have an accessible icon-only left arrow instead of a text back button', () => {
+test('editable steps retain an accessible text back action without directional icons', () => {
   const h = formHarness();
   assert.doesNotMatch(h.text(), /Hauràs de clicar|enllaç de verificació/);
   for (const step of [1, 2, 3, 4, 5]) {
@@ -497,9 +497,9 @@ test('editable steps have an accessible icon-only left arrow instead of a text b
     assert.doesNotMatch(h.text(), /[←→↗]/);
     const back = h.elements(node => node.type === 'button' && node.props['aria-label']?.startsWith('Tornar'));
     assert.equal(back.length, 1);
-    assert.equal(back[0].props.children.type, 'svg');
-    assert.equal(back[0].props.children.props['aria-hidden'], 'true');
-    assert.doesNotMatch(h.text(), /Enrere|Canviar el correu/);
+    assert.equal(back[0].props.children, 'Enrere');
+    assert.equal(back[0].props.style.minHeight, 44);
+    assert.doesNotMatch(h.text(), /Canviar el correu/);
   }
 });
 

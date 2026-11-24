@@ -52,6 +52,7 @@ export default function Subscripcio() {
     <Header />
     <main style={{ maxWidth: 520, margin: '0 auto', padding: '112px 24px 48px' }}>
       <h1>La teva <em>subscripció</em></h1>
+      <p role="note">Estem en fase beta. Els imports i pagaments de Stripe són de prova.</p>
       <p>Revisa les factures, actualitza el mètode de pagament o cancel·la la renovació a Stripe, la passarel·la segura de pagament.</p>
       {!ready ? <p role="status">Comprovant el compte…</p> : <form onSubmit={manage} style={{ display: 'grid', gap: 16 }}>
         {!user && <>

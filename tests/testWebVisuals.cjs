@@ -39,6 +39,10 @@ function loadSource(filename) {
     require: name => {
       if (!name.startsWith('.')) return webRequire(name);
       const resolved = path.resolve(path.dirname(filename), name);
+      if (name.endsWith('.module.css')) {
+        const css = fs.readFileSync(resolved, 'utf8');
+        return Object.fromEntries([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(([, key]) => [key, key]));
+      }
       return name.endsWith('.json') ? JSON.parse(fs.readFileSync(resolved, 'utf8')) : loadSource(`${resolved}.tsx`);
     },
     console,
@@ -54,15 +58,15 @@ test('home alternates media columns on desktop while preserving media-first stac
   const html = renderToStaticMarkup(main);
   const app = html.match(/<section id="app"[\s\S]*?<\/section>/)[0];
   const community = html.match(/<section id="comunitat"[\s\S]*?<\/section>/)[0];
-  assert.doesNotMatch(app, /split-grid--reverse/);
-  assert.match(community, /class="split-grid split-grid--reverse"/);
-  for (const section of [app, community]) {
-    assert(section.indexOf('class="split-media"') < section.indexOf('class="split-copy"'));
-  }
-  const css = fs.readFileSync(path.join(webRoot, 'styles', 'globals.css'), 'utf8');
-  assert.match(css, /\.split-grid--reverse \.split-media \{ grid-column: 2; grid-row: 1; \}/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.split-grid--reverse \.split-media \{ grid-column: 1; grid-row: 1; \}/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.split-grid--reverse \.split-copy \{ grid-column: 1; grid-row: 2; \}/);
+  assert(app.indexOf('class="media"') < app.indexOf('class="copy"'));
+  assert(community.indexOf('class="copy"') < community.indexOf('class="media"'));
+  assert.deepEqual([...html.matchAll(/<section id="([^"]+)"/g)].map(([, id]) => id), [
+    'intro', 'qui-som', 'app', 'comunitat', 'com-funciona', 'descarrega', 'per-a-bars',
+  ]);
+  const css = fs.readFileSync(path.join(webRoot, 'styles', 'Home.module.css'), 'utf8');
+  assert.match(css, /\.split \{[^}]*grid-template-columns: 1fr 1fr/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.split \{ grid-template-columns: 1fr/);
+  assert.match(css, /\.community \.media \{ grid-row: 1; \}/);
 });
 
 test('all background videos keep playback attributes and a real poster when playback is unavailable', () => {
@@ -87,18 +91,49 @@ test('header displays the full official icon and a readable wordmark, without th
   const html = renderToStaticMarkup(webRequire('react').createElement(Header));
   assert.match(html, /aria-label="troBar — inici"/);
   assert.match(html, /class="site-header-wordmark"[^>]*>troBar</);
-  assert.match(html, /src="\/assets\/logos\/logo-red\.png"/);
+  assert.match(html, /src="\/assets\/logos\/mascot-ball-grana\.png"/);
   assert.match(html, /transform:scale\(1\)/);
   assert.match(html, /width="40" height="40"/);
   assert.doesNotMatch(html, /scale\(1\.42\)/);
 });
 
-test('feature headings inherit readable typography rather than forcing heavy Oi lettering', () => {
+test('hero preserves the animated logo and provides its static fallback for reduced motion', () => {
+  const Hero = loadComponent('Hero').default;
+  const html = renderToStaticMarkup(webRequire('react').createElement(Hero));
+  assert.match(html, /<picture class="heroLogo">/);
+  assert.match(html, /<source media="\(prefers-reduced-motion: reduce\)" srcSet="\/assets\/logos\/mascot-ball-cream.png"/);
+  assert.match(html, /<img src="\/assets\/gif\/trobar.gif"/);
+  for (const file of ['mascot-ball-cream.png', 'mascot-ball-grana.png']) {
+    const png = fs.readFileSync(path.join(webRoot, '..', 'assets', 'web', 'logos', file));
+    assert.equal(png.readUInt32BE(12), 0x49484452);
+    assert(png.readUInt32BE(20) > png.readUInt32BE(16));
+  }
+});
+
+test('simplified landing has no broken feature navigation and retains rounded accessible actions', () => {
+  const Home = loadSource(path.join(webRoot, 'pages', 'index.tsx')).default;
+  const main = Home().props.children.find(child => child?.type === 'main');
+  assert.doesNotMatch(renderToStaticMarkup(main), /caracteristiques|Per què troBar|Tot el que/);
+  const Header = loadComponent('Header').default;
+  assert.doesNotMatch(renderToStaticMarkup(webRequire('react').createElement(Header)), /#caracteristiques|>Funcions</);
+  const PerABars = loadSource(path.join(webRoot, 'pages', 'per-a-bars.tsx')).default;
+  assert.doesNotMatch(renderToStaticMarkup(webRequire('react').createElement(PerABars)), /per-a-bars-benefits|Tot per fer créixer/);
+  const css = fs.readFileSync(path.join(webRoot, 'styles', 'globals.css'), 'utf8');
+  assert.match(css, /\.btn, \.btn-slab, \.btn-ghost\s*\{[^}]*border-radius: 999px;[^}]*min-height: 44px;/);
+});
+
+test('web headings share the corporate Lora typography and light palette', () => {
   const Features = loadComponent('Features').default;
   const html = renderToStaticMarkup(webRequire('react').createElement(Features));
   assert.equal((html.match(/<h3\b/g) || []).length, 4);
   assert.doesNotMatch(html, /font-display|font-weight:700/);
   const css = fs.readFileSync(path.join(webRoot, 'styles', 'globals.css'), 'utf8');
-  assert.match(css, /h1, h2, h3, h4\s*\{[^}]*font-family:\s*var\(--font-body\)/);
+  const homeCss = fs.readFileSync(path.join(webRoot, 'styles', 'Home.module.css'), 'utf8');
+  assert.match(homeCss, /\.home h1, \.home h2, \.home h3\s*\{[^}]*font-family:\s*var\(--font-heading\)/);
+  assert.match(css, /body\s*\{[^}]*background:\s*var\(--brand-cream\)/);
+  assert.match(css, /--font-heading: 'Lora', Georgia/);
+  const app = fs.readFileSync(path.join(webRoot, 'pages', '_app.tsx'), 'utf8');
+  assert.match(app, /brand\/palette\.json/);
+  assert.match(app, /app\/src\/theme\/brandColors\.json/);
   assert.match(css, /\.background-video\s*\{[^}]*position:\s*absolute;[^}]*object-fit:\s*cover;/);
 });

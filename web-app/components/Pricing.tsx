@@ -44,12 +44,14 @@ export default function Pricing() {
   return (
     <section id="preus" className="pricing-section">
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <span className="eyebrow">Preus</span>
         <h2 style={{ marginBottom: 14 }}>
           Un sol pla, <em style={{ color: 'var(--gold)', fontWeight: 500 }}>sense sorpreses</em>
         </h2>
         <p style={{ maxWidth: 500, margin: '0 auto', fontSize: 17 }}>
           Tot inclòs per fer créixer el teu negoci cada dia de partit. Prova 14 dies gratis.
+        </p>
+        <p role="note" style={{ maxWidth: 500, margin: '16px auto 0', fontSize: 14 }}>
+          Tarifes previstes. Durant la beta, Stripe funciona en mode de proves i no es cobren diners reals.
         </p>
       </div>
 
@@ -103,8 +105,7 @@ export default function Pricing() {
         maxWidth: 560, margin: '0 auto',
         padding: '56px 44px',
         border: '1px solid var(--hairline)',
-        background: 'rgba(13,27,42,0.25)',
-        backdropFilter: 'blur(8px)',
+        background: 'var(--brand-paper)',
         position: 'relative',
       }}>
         {sel.savePct && (
@@ -185,7 +186,7 @@ export default function Pricing() {
           textAlign: 'center', marginBottom: 28,
           fontWeight: 500, fontSize: 18,
         }}>
-          Compensa des del primer dia de partit
+          Un exemple per fer números
         </h4>
 
         <div className="pricing-roi-row" style={{ display: 'flex', gap: 32, marginBottom: 24, textAlign: 'center' }}>
@@ -202,13 +203,13 @@ export default function Pricing() {
           </div>
           <div style={{ flex: 1, borderLeft: '1px solid var(--hairline)' }}>
             <span className="eyebrow" style={{ fontSize: 11, marginBottom: 8 }}>
-              Potencial per partit
+              Si vinguessin {extraFans} clients més
             </span>
             <div style={{ fontFamily: 'var(--font-ui)', fontWeight: 700, fontSize: 32, color: 'var(--gold)' }}>
               +{potentialPerMatch}€
             </div>
             <p style={{ fontSize: 12, color: 'var(--paper-faint)', marginTop: 4 }}>
-              amb {extraFans} culers extres
+              amb una despesa de {avgTicket}€ per persona
             </p>
           </div>
         </div>
@@ -216,7 +217,7 @@ export default function Pricing() {
         <p style={{ fontSize: 14, textAlign: 'center', lineHeight: 1.7, margin: 0, color: 'var(--paper-mute)' }}>
           Amb una despesa mitjana de <strong style={{ color: 'var(--paper)' }}>{avgTicket}€ per client</strong>,
           només necessites <strong style={{ color: 'var(--paper)' }}>{clientsToBreakEven} clients nous al mes</strong>
-          per cobrir la subscripció.
+          per cobrir la subscripció. És un exemple de càlcul, no una previsió de clients ni d’ingressos.
         </p>
       </div>
     </section>

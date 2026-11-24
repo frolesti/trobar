@@ -9,6 +9,9 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env'
 const path = require('path')
 
 const nextConfig = {
+  experimental: {
+    externalDir: true,
+  },
   turbopack: {
     // Pugem el root un nivell: necessitem importar app/src/data/legalContent.ts
     // que viu fora del web-app per compartir la dada amb l'app mòbil.

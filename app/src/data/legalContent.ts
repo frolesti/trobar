@@ -95,7 +95,7 @@ export const PRIVACY: LegalDoc = {
                 'Sol·licitar la portabilitat de les teves dades en un format estructurat.',
                 'Retirar el teu consentiment en qualsevol moment.',
             ]),
-            p(`Pots eliminar el teu compte directament des de l'aplicació ("Perfil" → "Eliminar Compte"). Per exercir qualsevol d'aquests drets, contacta amb nosaltres a ${contactEmails.support}.`)
+            p(`Pots eliminar el teu compte directament des de l'aplicació, a "Perfil", opció "Eliminar Compte". Per exercir qualsevol d'aquests drets, contacta amb nosaltres a ${contactEmails.support}.`)
         ]},
         { title: '9. Menors', blocks: [
             p('troBar no està dirigida a menors de 16 anys. No recollim conscientment dades de menors d\'aquesta edat. Si descobrim que hem recopilat dades d\'un menor sense el consentiment adequat, les suprimirem el més aviat possible.')

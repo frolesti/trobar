@@ -1,9 +1,18 @@
 import type { AppProps } from 'next/app'
+import Head from 'next/head'
 import { useEffect } from 'react'
 import { onIdTokenChanged } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { recordFirstWebLogin, recordWebAccountSecurity } from '../lib/lifecycleEmail'
+import colors from '../../app/src/theme/brandColors.json'
+import palette from '../../brand/palette.json'
 import '../styles/globals.css'
+
+const variables = {
+  '--brand-grana': colors.background,
+  '--brand-accent': colors.primary,
+  ...Object.fromEntries(Object.entries(palette).map(([name, value]) => [`--brand-${name}`, value])),
+}
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => onIdTokenChanged(auth, user => {
@@ -15,5 +24,8 @@ export default function App({ Component, pageProps }: AppProps) {
       console.error('[Email] No s’ha pogut registrar la benvinguda', error instanceof Error ? error.name : 'unknown')
     })
   }), [])
-  return <Component {...pageProps} />
+  return <>
+    <Head><style key="brand-palette">{`:root{${Object.entries(variables).map(([key, value]) => `${key}:${value}`).join(';')}}`}</style></Head>
+    <Component {...pageProps} />
+  </>
 }

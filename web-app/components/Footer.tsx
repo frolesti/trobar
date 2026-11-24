@@ -7,18 +7,11 @@ export default function Footer() {
 
   const toggleSection = (key: string) => setOpenSection(prev => prev === key ? null : key)
 
-  const chevron = (expanded: boolean) => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"
-      style={{ transform: expanded ? 'rotate(180deg)' : undefined }}>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  )
-
   return (
-    <footer style={{
+    <footer className="site-footer" style={{
       borderTop: '1px solid var(--hairline)',
       padding: '36px 32px 24px',
-      background: 'var(--black)',
+      background: 'var(--brand-grana)',
     }}>
       <div className="footer-top footer-desktop" style={{
         maxWidth: 1160,
@@ -90,7 +83,7 @@ export default function Footer() {
             onClick={() => toggleSection('producte')}
           >
             Producte
-            {chevron(openSection === 'producte')}
+            <span>{openSection === 'producte' ? 'Amagar' : 'Veure'}</span>
           </button>
             <ul id="footer-producte-links" className="footer-mobile-list" hidden={openSection !== 'producte'}>
               <li><Link href="/#com-funciona">Com funciona</Link></li>
@@ -108,7 +101,7 @@ export default function Footer() {
             onClick={() => toggleSection('contacte')}
           >
             Contacte
-            {chevron(openSection === 'contacte')}
+            <span>{openSection === 'contacte' ? 'Amagar' : 'Veure'}</span>
           </button>
             <ul id="footer-contacte-links" className="footer-mobile-list" hidden={openSection !== 'contacte'}>
               <li><a href={`mailto:${contactEmails.general}`}>{contactEmails.general}</a></li>
@@ -126,7 +119,7 @@ export default function Footer() {
             onClick={() => toggleSection('legal')}
           >
             Legal
-            {chevron(openSection === 'legal')}
+            <span>{openSection === 'legal' ? 'Amagar' : 'Veure'}</span>
           </button>
             <ul id="footer-legal-links" className="footer-mobile-list" hidden={openSection !== 'legal'}>
               <li><Link href="/termes-condicions">Termes del servei</Link></li>

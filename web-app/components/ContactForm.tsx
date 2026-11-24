@@ -166,15 +166,15 @@ function getFriendlyFunctionError(error: unknown, checkout = false): string {
 }
 
 /* ── Estils constants ─────────────────────────────────────────────────── */
-const formAccent = 'var(--gold)'
-const formAccentSoft = 'rgba(201,171,114,0.10)'
-const formAccentBorder = 'rgba(201,171,114,0.28)'
+const formAccent = 'var(--brand-grana)'
+const formAccentSoft = 'var(--brand-cream)'
+const formAccentBorder = 'var(--brand-rule)'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '12px 14px', marginTop: 6, borderRadius: 12,
-  border: '2px solid var(--border)', fontSize: 16, fontFamily: 'inherit',
+  border: '1px solid var(--brand-muted)', fontSize: 16, fontFamily: 'inherit',
   transition: 'border-color 0.2s, box-shadow 0.2s',
-  boxSizing: 'border-box', background: '#fff', color: '#24211d',
+  boxSizing: 'border-box', background: 'var(--brand-paper)', color: 'var(--brand-ink)',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -188,10 +188,9 @@ const sectionTitleStyle: React.CSSProperties = {
 
 const buttonPrimary: React.CSSProperties = {
   width: '100%', padding: 16, borderRadius: 14,
-  background: formAccent, color: 'var(--black)',
+  background: 'var(--brand-accent)', color: 'var(--brand-cream)',
   fontWeight: 'bold', fontSize: 16, border: 'none',
   cursor: 'pointer', transition: 'all 0.2s',
-  boxShadow: '0 8px 24px rgba(201,171,114,0.15)',
 }
 
 const buttonSecondary: React.CSSProperties = {
@@ -769,13 +768,11 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
   const backButton = (onClick: () => void, label: string, disabled = loading) => disabled ? null : (
     <button type="button" onClick={onClick} aria-label={label} title={label} disabled={disabled} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: 44, height: 44, marginBottom: 16, padding: 0, borderRadius: '50%',
+      minHeight: 44, marginBottom: 16, padding: '8px 12px', borderRadius: 4,
       background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)',
       cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
     }}>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M19 12H5M12 19l-7-7 7-7" />
-      </svg>
+      Enrere
     </button>
   )
 
@@ -804,7 +801,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
   const isError = status !== null && !loading
   const statusMessage = status && (
     <div role={isError ? 'alert' : 'status'} tabIndex={-1} aria-live={isError ? 'assertive' : 'polite'} style={{
-      color: isError ? '#d97a7a' : formAccent,
+      color: formAccent,
       fontWeight: 600, marginTop: 16, textAlign: 'center', fontSize: 14,
     }}>
       {status}
@@ -858,7 +855,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
               onBlur={() => { setEmailTouched(true); checkEmailExists(email) }}
               style={{
                 ...inputStyle,
-                borderColor: (emailError || existingAccount) ? '#d97a7a' : 'var(--border)',
+                borderColor: (emailError || existingAccount) ? 'var(--brand-grana)' : 'var(--brand-muted)',
                 boxShadow: (emailError || existingAccount) ? '0 0 0 3px rgba(217,122,122,0.12)' : undefined,
               }}
               placeholder="joan@barcanpunyetes.cat"
@@ -866,7 +863,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
             />
             {fieldError('email')}
             {emailError && (
-              <span style={{ fontSize: 12, color: '#d97a7a', marginTop: 6, display: 'block' }}>
+              <span style={{ fontSize: 12, color: formAccent, marginTop: 6, display: 'block' }}>
                 Introdueix un email vàlid (p. ex. nom@domini.cat)
               </span>
             )}
@@ -876,7 +873,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
               </span>
             )}
             {!emailError && existingAccountMessage && (
-              <span style={{ fontSize: 12, color: '#d97a7a', marginTop: 6, display: 'block', lineHeight: 1.4 }}>
+              <span style={{ fontSize: 12, color: formAccent, marginTop: 6, display: 'block', lineHeight: 1.4 }}>
                 {existingAccountMessage}
               </span>
             )}
@@ -952,7 +949,7 @@ export default function ContactForm({ onOpenLegal, onStepChange }: ContactFormPr
                   width: `${(passwordStrength.score / 5) * 100}%`,
                   height: '100%',
                   transition: 'width 0.25s ease',
-                  background: 'linear-gradient(90deg, #5f5336 0%, #9e8754 55%, #c9ab72 100%)',
+                  background: formAccent,
                 }}
               />
             </div>

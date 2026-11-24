@@ -1,26 +1,18 @@
-/**
- * Component d'imatge per al logo oficial de troBar (PNG branding).
- * Usa el mateix asset que la build d'Android/iOS perquè la identitat
- * sigui idèntica a tot arreu.
- */
 interface LogoProps {
   size?: number;
   visualScale?: number;
   variant?: 'red' | 'white';
   maskCircle?: boolean;
-  animated?: boolean;
 }
 
 export default function Logo({
   size = 56,
-  visualScale = 1.42,
+  visualScale = 1,
   variant = 'red',
   maskCircle,
-  animated = false,
 }: LogoProps) {
-  const src = variant === 'white' ? '/assets/logos/logo-white.png' : '/assets/logos/logo-red.png'
-  const animatedSrc = '/assets/gif/trobar.gif'
-  const useMask = maskCircle ?? (variant === 'red')
+  const src = variant === 'white' ? '/assets/logos/mascot-ball-cream.png' : '/assets/logos/mascot-ball-grana.png'
+  const useMask = maskCircle ?? false
 
   return (
     <span
@@ -35,7 +27,7 @@ export default function Logo({
       }}
     >
       <img
-        src={animated ? animatedSrc : src}
+        src={src}
         alt="troBar"
         width={size}
         height={size}

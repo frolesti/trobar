@@ -56,8 +56,15 @@ El web públic es construeix des de `web-app`, no des de l'export d'Expo.
 d'`assets/web` a `web-app/public/assets`, fins i tot amb `next build` directe.
 Els directoris generats no es versionen; els originals sí.
 
+El disseny final del web està integrat a `main`, recuperat de la revisió del
+16 de novembre de `design/unified-brand`. No cal desplegar aquell worktree
+separadament: els canvis del web es publiquen des de `main`. La paleta prové
+de `brand/palette.json` i `app/src/theme/brandColors.json`; els titulars usen
+Lora i la marca Oi, amb fonts locals i llicències a `assets/web/fonts`.
+La capçalera conserva el logo animat amb alternativa estàtica per a moviment reduït.
+
 Els blocs «L'app» i «Comunitat» alternen vídeo esquerra/dreta en escriptori.
-Fins a 900 px s'apilen, amb el vídeo abans del text en tots dos blocs.
+Fins a 600 px s'apilen, amb el vídeo abans del text en tots dos blocs.
 Els vídeos tenen posters locals i conserven la marca d'aigua existent.
 El propietari ha confirmat permís de publicació del material d'Artlist.
 
