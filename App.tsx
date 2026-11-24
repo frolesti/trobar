@@ -5,7 +5,6 @@ import { LogBox, Platform, Text, Image as NativeImage, View, TouchableOpacity } 
 import { Image as CachedImage } from 'expo-image';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import { Oi_400Regular } from '@expo-google-fonts/oi';
 import { Barlow_400Regular, Barlow_600SemiBold, Barlow_400Regular_Italic } from '@expo-google-fonts/barlow';
 import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed';
 import AppNavigator from './app/src/navigation/AppNavigator';
@@ -126,7 +125,7 @@ export default function App() {
     Lora_700Bold: Barlow_600SemiBold,
     Lora_400Regular_Italic: Barlow_400Regular_Italic,
     Lora: Barlow_400Regular,
-    Oi_400Regular,
+    Monofett: require('./assets/web/fonts/Monofett-Regular.ttf'),
     Barlow_400Regular,
     Barlow_600SemiBold,
     Barlow_400Regular_Italic,

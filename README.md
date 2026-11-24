@@ -49,6 +49,23 @@ Les migracions són explícites: `npm run db:migrate:status`,
 migracions. Aquestes ordres consulten la base configurada a l'entorn i
 `db:migrate` hi escriu; revisa el projecte abans d'executar-les.
 
+### Mapa i guies de l'app
+
+El mapa permet girar i inclinar la vista. La brúixola torna al nord sense
+canviar el centre ni el zoom; el botó d'ubicació conserva el nivell de zoom.
+Arrossegar el mapa cancel·la els moviments automàtics pendents i el retorn
+a la vista anterior d'una fitxa. Esborrar una cerca no recentra el mapa.
+Els crèdits dels proveïdors de cerca són al desplegable mentre la cerca és
+oberta; no substitueixen els crèdits propis del mapa base.
+
+La primera visita mostra quatre passos sobre els controls del mapa. Els
+comptes de culers i propietaris tenen guies diferents. El progrés es desa
+localment amb AsyncStorage: la guia bàsica per dispositiu i les de compte
+per identificador i rol. Completar o saltar una guia evita repetir-la;
+es poden reobrir amb l'ajuda del mapa o des de la configuració del compte.
+Les guies esperen el consentiment legal i els controls disponibles, i no
+creen locals ni dades de demostració.
+
 ## Web Next.js de trobar.cat
 
 El web públic es construeix des de `web-app`, no des de l'export d'Expo.

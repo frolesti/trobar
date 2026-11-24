@@ -56,6 +56,8 @@ const MapView = forwardRef<any, any>((props, ref) => {
         onMapReady,
         maxZoomLevel,
         minZoomLevel,
+        onPanDrag,
+        onTouchStart,
     } = props;
 
     const { isLoaded, loadError } = useJsApiLoader({
@@ -67,6 +69,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
 
     const mapRef = useRef<google.maps.Map | null>(null);
     const containerRef = useRef<HTMLElement | null>(null);
+    const manualInteraction = useRef(false);
     const [mapReady, setMapReady] = useState(false);
 
     const initialCenter = useMemo(() => {
@@ -126,6 +129,28 @@ const MapView = forwardRef<any, any>((props, ref) => {
         setMapReady(false);
     }, []);
 
+    useEffect(() => {
+        const element = containerRef.current;
+        if (!mapReady || !element) return;
+        const pointerDown = () => { manualInteraction.current = true; onTouchStart?.(); };
+        const wheel = () => { manualInteraction.current = true; onPanDrag?.(); };
+        const keyDown = (event: KeyboardEvent) => {
+            if (['Enter', ' ', '+', '-', '='].includes(event.key)) pointerDown();
+        };
+        element.addEventListener('pointerdown', pointerDown, true);
+        element.addEventListener('wheel', wheel, { capture: true, passive: true });
+        element.addEventListener('keydown', keyDown, true);
+        return () => {
+            element.removeEventListener('pointerdown', pointerDown, true);
+            element.removeEventListener('wheel', wheel, true);
+            element.removeEventListener('keydown', keyDown, true);
+        };
+    }, [mapReady, onTouchStart, onPanDrag]);
+
+    const handleZoomChanged = useCallback(() => {
+        if (manualInteraction.current) onPanDrag?.();
+    }, [onPanDrag]);
+
     const handleIdle = useCallback(() => {
         const map = mapRef.current;
         if (!map) return;
@@ -152,6 +177,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
             animateToRegion: (r: RegionLike) => {
                 const map = mapRef.current;
                 if (!map) return;
+                manualInteraction.current = false;
                 map.panTo({ lat: r.latitude, lng: r.longitude });
                 const width = map.getDiv().clientWidth;
                 const zoom = r.longitudeDelta && width
@@ -162,6 +188,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
             animateCamera: (cam: any) => {
                 const map = mapRef.current;
                 if (!map) return;
+                manualInteraction.current = false;
                 if (cam?.center) map.panTo({ lat: cam.center.latitude, lng: cam.center.longitude });
                 if (typeof cam?.zoom === 'number') map.setZoom(cam.zoom);
                 if (typeof cam?.heading === 'number') map.setHeading(cam.heading);
@@ -170,6 +197,7 @@ const MapView = forwardRef<any, any>((props, ref) => {
             fitToCoordinates: (coords: LatLng[]) => {
                 const map = mapRef.current;
                 if (!map || !coords?.length || !window.google) return;
+                manualInteraction.current = false;
                 const bounds = new window.google.maps.LatLngBounds();
                 coords.forEach((c) => bounds.extend({ lat: c.latitude, lng: c.longitude }));
                 map.fitBounds(bounds);
@@ -241,14 +269,11 @@ const MapView = forwardRef<any, any>((props, ref) => {
 
     const flatStyle = StyleSheet.flatten(style) || {};
 
-    // Quan el contenidor obt\u00e9 mida (fonts/layouts tard\u00e0ns), refor\u00e7em
-    // un resize + recenter perqu\u00e8 les rajoles apareguin sense interacci\u00f3.
     const handleWrapperLayout = useCallback(() => {
         const map = mapRef.current;
         if (!map || !window.google?.maps?.event) return;
         window.google.maps.event.trigger(map, 'resize');
-        map.setCenter({ lat: initialCenter.lat, lng: initialCenter.lng });
-    }, [initialCenter]);
+    }, []);
 
     if (loadError) {
         return (
@@ -281,6 +306,8 @@ const MapView = forwardRef<any, any>((props, ref) => {
                 onUnmount={onUnmount}
                 onIdle={handleIdle}
                 onClick={handleClick}
+                onDragStart={onPanDrag}
+                onZoomChanged={handleZoomChanged}
                 options={mapOptions}
             >
                 <MapContext.Provider value={mapRef.current}>

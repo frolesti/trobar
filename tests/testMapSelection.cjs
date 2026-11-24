@@ -3,12 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+const React = require('react');
 
 const geometry = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/utils/mapSelection.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: geometry.exports });
-const { selectionRegion, mapBubbleLayout, mapMarkerSize } = geometry.exports;
+const { selectionRegion, mapBubbleLayout, mapMarkerSize, cameraForRegion, isValidMapRegion } = geometry.exports;
 const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
 const parsed = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function implementation(name, declaration = false) {
@@ -77,9 +78,12 @@ function selectionHarness() {
         preSelectionCameraRef: { current: null }, selectionCameraRequestRef: { current: 0 },
         anchorRequestRef: { current: 0 }, lastMarkerPressRef: { current: 0 }, searchRequestRef: { current: 0 },
         searchTimerRef: { current: null }, routeRequestId: { current: 0 },
+        positionedVenueRef: { current: null }, selectedVenueId: 'registered:test',
+        mapInteractedRef: { current: false }, pendingInitialRegionRef: { current: null },
+        searchInputRef: { current: null }, Keyboard: { dismiss() {} },
         centerLocation: null, searchRadiusKm: 5, useCallback: callback => callback, clearTimeout,
         cameras: [], points: [], alerts: [], console,
-        setGeoSuggestions() {}, setRouteInfo() {}, setRouteCoords() {}, setShowBarProfile() {}, setBubbleReady() {}, setShowFiltersPanel() {},
+        setGeoSuggestions() {}, setRouteInfo() {}, setRouteCoords() {}, setShowBarProfile() {}, setBubbleReady() {}, setShowFiltersPanel() {}, setSearchFocused() {},
     };
     Object.assign(state, {
         setSelectedBar: bar => { state.selectedBar = bar; },
@@ -92,7 +96,7 @@ function selectionHarness() {
     vm.createContext(state);
     vm.runInContext(ts.transpileModule([
         implementation('restoreMapViewport', true),
-        ...['beginBarSelection', 'handleSelectBar', 'navigateToReportBar', 'closeBarBubble', 'updateBarCardAnchor'].map(name => `globalThis.${name} = ${implementation(name)};`),
+        ...['handleMapGesture', 'beginBarSelection', 'handleSelectBar', 'navigateToReportBar', 'closeBarBubble', 'updateBarCardAnchor', 'centerMapToGPS'].map(name => `globalThis.${name} = ${implementation(name)};`),
     ].join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, state);
     return state;
 }
@@ -150,6 +154,108 @@ test('late native camera lookups cannot move the map or overwrite the saved came
     assert.equal(state.cameras.length, 0);
     assert.equal(state.preSelectionCameraRef.current, null);
     assert.equal(state.timers.length, 0);
+});
+
+test('a manual map gesture cancels pending automatic moves and prevents closing a card from undoing exploration', () => {
+    const state = selectionHarness();
+    state.handleSelectBar({ id: 'venue', latitude: 41.41, longitude: 2.11 });
+    state.preSelectionCameraRef.current = { center: { latitude: 41.4, longitude: 2.1 }, heading: 37 };
+    state.pendingInitialRegionRef.current = { ...state.lastRegionRef.current };
+    const request = state.selectionCameraRequestRef.current;
+    state.handleMapGesture();
+    state.lastRegionRef.current = { latitude: 42, longitude: 3, latitudeDelta: 0.003, longitudeDelta: 0.002 };
+    state.closeBarBubble();
+    assert.equal(state.mapInteractedRef.current, true);
+    assert.equal(state.pendingInitialRegionRef.current, null);
+    assert(state.selectionCameraRequestRef.current > request);
+    assert.equal(state.cameras.length, 0);
+    assert.equal(state.lastRegionRef.current.latitude, 42);
+});
+
+test('layout changes and late manual gestures do not re-pan an already positioned venue', async () => {
+    const { state } = cameraHarness();
+    state.positionEffect();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.cameras.length, 1);
+    state.handleMapGesture();
+    state.selectedPinY = 500;
+    state.positionEffect();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.cameras.length, 1);
+});
+
+test('explicit GPS closes search, preserves the camera scale and ignores late fixes after another gesture', async () => {
+    for (const gesture of [true, false]) {
+        const state = selectionHarness();
+        let release, blurred = 0;
+        Object.assign(state, {
+            ownerEntryHandledRef: { current: false }, userLocation: null, Platform: { OS: 'ios' }, searchFocused: true,
+            setSearchFocused: value => { state.searchFocused = value; }, setSearchQuery() {},
+            setCenterLocation: value => { state.centerLocation = value; },
+            setUserLocation: value => { state.userLocation = value; },
+            Location: {
+                requestForegroundPermissionsAsync: async () => ({ status: 'granted' }),
+                getCurrentPositionAsync: () => new Promise(resolve => { release = resolve; }),
+            },
+        });
+        state.searchInputRef.current = { blur() { blurred++; } };
+        const pending = state.centerMapToGPS();
+        await new Promise(resolve => setImmediate(resolve));
+        if (gesture) state.handleMapGesture();
+        release({ coords: { latitude: 41.5, longitude: 2.2 } });
+        await pending;
+        assert.equal(state.searchFocused, false);
+        assert.equal(blurred, 1);
+        assert.equal(state.cameras.length, gesture ? 0 : 1);
+        if (!gesture) assert.deepEqual(JSON.parse(JSON.stringify(state.cameras[0])), { center: { latitude: 41.5, longitude: 2.2 } });
+        else assert.equal(state.userLocation, null);
+    }
+});
+
+test('north control never overlaps GPS/discovery and resets only heading and pitch', () => {
+    let button;
+    function find(node) {
+        if (ts.isJsxElement(node) && node.openingElement.attributes.properties.some(attribute =>
+            attribute.name?.getText(parsed) === 'testID' && attribute.initializer?.text === 'map-reset-north')) button = node.getText(parsed);
+        ts.forEachChild(node, find);
+    }
+    find(parsed);
+    assert(button);
+    for (const [isDesktop, mapControlsInline] of [[true, false], [false, false], [false, true]]) {
+        const state = selectionHarness();
+        Object.assign(state, { React, TouchableOpacity: 'Button', View: 'View', Feather: 'Icon', compassTarget() {},
+            isDesktop, mapControlsInline, mapControlsBottom: 40, styles: { fabGps: { width: 48, height: 48 } }, EDITORIAL: {} });
+        const control = vm.runInContext(ts.transpileModule(`(${button})`, {
+            compilerOptions: { jsx: ts.JsxEmit.React },
+        }).outputText, state);
+        const style = Object.assign({}, ...control.props.style);
+        const others = [{ bottom: 40, right: 20 }];
+        others.push({ bottom: mapControlsInline ? 40 : 96, right: mapControlsInline ? 76 : 20 });
+        for (const other of others) assert(Math.abs(style.bottom - other.bottom) >= 48 || Math.abs(style.right - other.right) >= 48);
+        control.props.onPress();
+        assert.deepEqual({ ...state.cameras[0] }, { heading: 0, pitch: 0 });
+    }
+});
+
+test('relative range changes preserve rotation and pitch on native and web cameras without mutating the snapshot', () => {
+    const region = { latitude: 41.4, longitude: 2.1, latitudeDelta: 0.1, longitudeDelta: 0.06 };
+    for (const native of [true, false]) {
+        const camera = { center: { latitude: 41.4, longitude: 2.1 }, heading: 37, pitch: 42,
+            ...(native ? { altitude: 240 } : { zoom: 16 }) };
+        const closer = { ...region, latitude: 41.5, longitudeDelta: 0.03, latitudeDelta: 0.05 };
+        const moved = cameraForRegion(camera, region, closer);
+        assert.equal(moved.heading, 37);
+        assert.equal(moved.pitch, 42);
+        assert.equal(moved.center.latitude, 41.5);
+        assert.equal(native ? moved.altitude : moved.zoom, native ? 120 : 17);
+        assert.equal(native ? camera.altitude : camera.zoom, native ? 240 : 16);
+        const back = cameraForRegion(moved, closer, region);
+        assert.equal(native ? back.altitude : back.zoom, native ? 240 : 16);
+    }
+    for (const invalid of [{ ...region, latitude: NaN }, { ...region, longitudeDelta: 0 }, { ...region, latitude: 91 }]) {
+        assert.equal(isValidMapRegion(invalid), false);
+        assert.throws(() => cameraForRegion({}, region, invalid), /Invalid map region/);
+    }
 });
 
 test('closing either kind restores the exact original viewport, including after switching between venues', () => {

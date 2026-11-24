@@ -40,7 +40,7 @@ Els blocs destacats es reserven per a imports i dades que cal comprovar:
 la benvinguda no inclou un informe d'estat del compte. No es mostra
 «Correu automàtic» ni un segon enllaç que repeteixi el botó en HTML;
 el text pla conserva la destinació de l'acció.
-La marca fa servir **Oi**, rasteritzada perquè Gmail no carrega fonts web;
+La marca està rasteritzada perquè Gmail no carrega fonts web;
 els títols fan servir **Barlow Condensed Bold**, amb Avenir Next Condensed,
 Arial Narrow i Arial com a alternatives. Font allotjada al domini propi amb
 CORS públic; fonts originals i llicències OFL a `assets/web/fonts/`.

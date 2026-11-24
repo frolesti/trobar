@@ -288,7 +288,7 @@ cobrament, desplegament, migració ni recurs extern modificat.
   `clientWidth=480/scrollWidth=703`; «Disponible a iOS i Android»
   `640/677`; h1 `/per-a-bars` `720/1202`, 129,6 px;
   `/registra-bar` `720/830`, 129,6 px. A 360 px, h1 bars `309/434`
-  i registre `313/333`. S'han reduït els límits de la font Oi, eliminat
+  i registre `313/333`. S'han reduït els límits de la font de marca, eliminat
   l'override gran del hero, habilitat wrap i mantingut focus visible i zoom.
 - **Registre**: abans s'assignaven claims abans dels documents, les escriptures
   eren separades, faltava `users/{uid}` amb `ownedBars`, i el bar naixia premium
@@ -389,9 +389,9 @@ d'aquesta revisió.
 
 ### Revisió visual posterior (1 de novembre de 2026)
 
-- Els títols i subtítols informatius utilitzen Inter en lloc d'Oi. La font
+- Els títols i subtítols informatius utilitzen Inter en lloc de la font de marca. La font
   decorativa es conserva només per a la marca del footer, sense negreta
-  artificial. Les característiques ja no imposen Oi a 22 px i pes 700.
+  artificial. Les característiques ja no imposen la font de marca a 22 px i pes 700.
 - El header mostra la icona oficial completa, sense ampliar-la ni retallar-la,
   i el nom troBar llegible. El menú compacte s'activa fins a 900 px.
 - Els tres vídeos comparteixen posicionament absolut dins dels seus

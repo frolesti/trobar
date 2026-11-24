@@ -37,6 +37,7 @@ function ownerMapHarness() {
         setCenterLocation: value => { context.centerLocation = value; }, setVisibleBounds() {}, setCurrentZoom() {}, setSearchQuery() {},
         setShowBarProfile: value => { context.expanded = value; }, handleSelectBar: bar => selections.push(bar),
         setOwnerBar: value => { context.ownerBar = value; },
+        setLocationResolved: value => { context.locationResolved = value; },
         getOwnedBar: () => new Promise(resolve => requests.push(resolve)),
         showAlert: value => notices.push(value), console: { info() {} },
         Location: { requestForegroundPermissionsAsync() { throw new Error('owner entry must not request GPS'); } },
@@ -90,6 +91,52 @@ test('late owner lookup cannot override explicit GPS choice, blurred screens or 
     }
 });
 
+test('initial GPS waits for map readiness, applies once, and never overrides manual exploration or an unmounted screen', async () => {
+    const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let flush;
+    function find(node) {
+        if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+            && node.arguments[0]?.getText(ast).includes('!pendingInitialRegionRef.current')) flush = node.arguments[0].getText(ast);
+        ts.forEachChild(node, find);
+    }
+    find(ast);
+    assert(flush);
+    for (const scenario of ['ready-first', 'position-first', 'gesture', 'unmount', 'denied']) {
+        const { context, cameras } = ownerMapHarness();
+        let release;
+        Object.assign(context, {
+            user: null, mapReady: scenario === 'ready-first',
+            mapReadyRef: { current: scenario === 'ready-first' },
+            mapInteractedRef: { current: false }, initialLocationAppliedRef: { current: false },
+            pendingInitialRegionRef: { current: null }, searchRadiusRef: { current: 5 },
+            radiusToLatDelta: km => km * 0.012, CAMP_NOU_FALLBACK: { latitude: 41.38, longitude: 2.12 },
+            Platform: { OS: 'ios' }, setUserLocation: value => { context.userLocation = value; },
+            console: { info() {}, log() {} },
+            Location: {
+                requestForegroundPermissionsAsync: async () => ({ status: scenario === 'denied' ? 'denied' : 'granted' }),
+                getCurrentPositionAsync: () => new Promise(resolve => { release = resolve; }),
+            },
+        });
+        vm.runInNewContext(compile(`globalThis.flushInitial = ${flush};`), context);
+        const cleanup = context.gps();
+        await new Promise(resolve => setImmediate(resolve));
+        if (scenario === 'gesture') context.mapInteractedRef.current = true;
+        if (scenario === 'unmount') cleanup();
+        if (release) release({ coords: { latitude: 41.5, longitude: 2.2 } });
+        await new Promise(resolve => setImmediate(resolve));
+        context.flushInitial();
+        if (scenario !== 'ready-first') assert.equal(cameras.length, 0);
+        context.mapReady = true;
+        context.mapReadyRef.current = true;
+        context.flushInitial();
+        context.flushInitial();
+        assert.equal(cameras.length, ['gesture', 'unmount'].includes(scenario) ? 0 : 1, scenario);
+        if (scenario === 'denied') assert.equal(context.userLocation, null, 'fallback map position must not masquerade as real GPS');
+        cleanup();
+    }
+});
+
 test('web Google map initializes with supported stable options, without resetting pan/zoom on parent renders', () => {
     const source = fs.readFileSync(require.resolve('../app/src/shims/react-native-maps.web.tsx'), 'utf8');
     let index = 0;
@@ -105,9 +152,10 @@ test('web Google map initializes with supported stable options, without resettin
         },
     };
     const module = { exports: {} };
+    const centers = [], resizes = [];
     vm.runInNewContext(compile(source), {
         exports: module.exports, process: { env: { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: 'test-key' } },
-        window: { google: { maps: { ControlPosition: { LEFT_BOTTOM: 6 } } } },
+        window: { google: { maps: { ControlPosition: { LEFT_BOTTOM: 6 }, event: { trigger: (_map, event) => resizes.push(event) } } } },
         require(name) {
             if (name === 'react') return hooks;
             if (name === 'react-native') return { View: 'View', StyleSheet: require('react-native-web').StyleSheet };
@@ -115,8 +163,14 @@ test('web Google map initializes with supported stable options, without resettin
             return { __esModule: true, default: 'Component' };
         },
     });
-    const render = props => { index = 0; return module.exports.default.render(props, null).props.children; };
-    const first = render({ initialRegion: { latitude: 41.38, longitude: 2.17, latitudeDelta: 0.05 } });
+    const render = props => { index = 0; return module.exports.default.render(props, null); };
+    const wrapper = render({ initialRegion: { latitude: 41.38, longitude: 2.17, latitudeDelta: 0.05 } });
+    const first = wrapper.props.children;
+    first.props.onLoad({ getDiv: () => ({}), setCenter: center => centers.push(center) });
+    wrapper.props.onLayout();
+    wrapper.props.onLayout();
+    assert.deepEqual(resizes, ['resize', 'resize']);
+    assert.equal(centers.length, 0, 'resizing after font loads or keyboard changes must not reset the map center');
     assert.equal(first.props.options.center.lat, 41.38);
     assert.equal(first.props.options.center.lng, 2.17);
     assert.equal(first.props.options.zoom, 13);
@@ -124,16 +178,23 @@ test('web Google map initializes with supported stable options, without resettin
     assert.equal(first.props.defaultZoom, undefined);
     assert.equal(first.props.center, undefined);
     assert.equal(first.props.zoom, undefined);
-    const next = render({ initialRegion: { latitude: 42, longitude: 3, latitudeDelta: 1 } });
+    const next = render({ initialRegion: { latitude: 42, longitude: 3, latitudeDelta: 1 } }).props.children;
     assert.equal(next.props.options, first.props.options, 'stable options do not reset user pan/zoom on idle-driven parent renders');
     assert(!source.includes('setTimeout(recenter'), 'do not repeatedly recenter on artificial timers');
 });
 
 test('web map projects real pin coordinates and preserves or restores the exact viewport zoom', async () => {
     let api;
+    const effects = [], listeners = new Map();
+    let gestures = 0, touches = 0;
+    const container = {
+        clientWidth: 390, clientHeight: 844,
+        addEventListener: (name, callback) => listeners.set(name, callback),
+        removeEventListener: name => listeners.delete(name),
+    };
     const hooks = { ...React,
-        useEffect() {}, useImperativeHandle(_ref, factory) { api = factory(); },
-        useRef: value => ({ current: value }), useState: initial => [initial, () => {}],
+        useEffect: effect => effects.push(effect), useImperativeHandle(_ref, factory) { api = factory(); },
+        useRef: value => ({ current: value }), useState: () => [true, () => {}],
         useCallback: callback => callback, useMemo: factory => factory(), useContext: () => ({}),
     };
     class LatLng {
@@ -152,19 +213,20 @@ test('web map projects real pin coordinates and preserves or restores the exact 
             return { __esModule: true, default: 'Component' };
         },
     });
-    const mapElement = module.exports.default.render({}, null).props.children;
+    const mapElement = module.exports.default.render({ onPanDrag: () => gestures++, onTouchStart: () => touches++ }, null).props.children;
     await assert.rejects(api.pointForCoordinate({ latitude: 0, longitude: 0 }), /not ready/);
     let zoom = 14;
     const zooms = [], pans = [];
     mapElement.props.onLoad({
-        getDiv: () => ({ clientWidth: 390, clientHeight: 844 }),
+        getDiv: () => container,
         getCenter: () => new LatLng(0, 0), getZoom: () => zoom,
-        setZoom: value => { zooms.push(value); zoom = value; }, panTo: value => pans.push(value),
+        setZoom: value => { zooms.push(value); zoom = value; mapElement.props.onZoomChanged(); }, panTo: value => pans.push(value),
         getProjection: () => ({
             fromLatLngToPoint: point => ({ x: point.lng() + 128, y: 128 - point.lat() }),
             fromPointToLatLng: point => new LatLng(128 - point.y, point.x - 128),
         }),
     });
+    const cleanups = effects.map(effect => effect()).filter(Boolean);
     const center = await api.pointForCoordinate({ latitude: 0, longitude: 0 });
     assert.deepEqual({ ...center }, { x: 195, y: 422 });
     const nearby = await api.pointForCoordinate({ latitude: 1 / 2 ** zoom, longitude: 1 / 2 ** zoom });
@@ -178,6 +240,20 @@ test('web map projects real pin coordinates and preserves or restores the exact 
     zoom = 16;
     api.animateToRegion(region);
     assert.equal(zoom, 14, 'closing restores the previous zoom even after the user zoomed while the card was open');
+    assert.equal(gestures, 0, 'programmatic region changes must not count as user gestures');
+    listeners.get('pointerdown')();
+    assert.equal(touches, 1, 'a pending initial location must be cancelled before the map handles a click');
+    mapElement.props.onZoomChanged();
+    assert.equal(gestures, 1, 'native web zoom controls must invalidate the pre-selection viewport');
+    api.animateCamera({ zoom: 13 });
+    assert.equal(gestures, 1);
+    listeners.get('wheel')();
+    assert.equal(gestures, 2, 'wheel zoom is a manual gesture even without dragging');
+    listeners.get('keydown')({ key: 'Enter' });
+    mapElement.props.onZoomChanged();
+    assert.equal(gestures, 3, 'keyboard-operated map controls are manual gestures too');
+    cleanups.forEach(cleanup => cleanup());
+    assert.equal(listeners.size, 0);
     const marker = module.exports.Marker({ coordinate: { latitude: 0, longitude: 0 }, anchor: { x: 0.5, y: 1 }, children: 'pin' });
     assert.equal(marker.props.getPixelPositionOffset, undefined, 'an early zero-size overlay measurement must not misplace loaded images');
     assert.equal(marker.props.children.props.style.transform, 'translate(-50%, -100%)');

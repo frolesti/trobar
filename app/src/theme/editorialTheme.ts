@@ -39,7 +39,7 @@ export const EDITORIAL = {
     fontBold: 'Barlow_600SemiBold',
     fontItalic: 'Barlow_400Regular_Italic',
     fontSport: 'BarlowCondensed_700Bold',
-    fontDisplay: 'Oi_400Regular',
+    fontDisplay: 'Monofett',
 
     // Spacing
     space: {

@@ -50,8 +50,9 @@ test('menu routes explicitly enable horizontal animation on web and preserve bac
     vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/navigation/AppNavigator.tsx'), 'utf8'), {
         compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
     }).outputText, { module: moduleStub, exports: moduleStub.exports, require(name) {
-        if (name === 'react') return React;
-        if (name === '@react-navigation/native') return { NavigationContainer: 'NavigationContainer', DefaultTheme: { colors: {} } };
+        if (name === 'react') return { ...React, useState: () => [undefined, () => {}] };
+        if (name === '@react-navigation/native') return { NavigationContainer: 'NavigationContainer', DefaultTheme: { colors: {} }, useNavigationContainerRef: () => ({}) };
+        if (name.includes('TutorialContext')) return { TutorialProvider: 'TutorialProvider' };
         if (name === '@react-navigation/stack') return {
             createStackNavigator: () => ({ Navigator: 'Navigator', Screen: 'Screen' }),
             CardStyleInterpolators: { forHorizontalIOS: 'horizontal' },
@@ -59,7 +60,7 @@ test('menu routes explicitly enable horizontal animation on web and preserve bac
         if (name.includes('editorialTheme')) return { EDITORIAL: {} };
         return { __esModule: true, default: 'Component' };
     } });
-    const navigator = moduleStub.exports.default().props.children;
+    const navigator = moduleStub.exports.default().props.children.props.children;
     assert.equal(navigator.props.screenOptions.animation, 'slide_from_right');
     const map = navigator.props.children.find(node => node.props.name === 'Map');
     assert.equal(map.props.options.animation, undefined, 'the map inherits the same horizontal stack transition as the merchant menu');

@@ -457,7 +457,7 @@ El destinatari ha indicat que utilitza **Gmail a l'iPhone**. Referències:
 [Litmus: compatibilitat de mode fosc](https://www.litmus.com/blog/the-ultimate-guide-to-dark-mode-for-email-marketers)
 i [Rémi Parmentier: inversió de Gmail iOS i blend modes](https://www.hteumeuleu.com/2021/fixing-gmail-dark-mode-css-blend-modes/).
 
-- Logo al capdamunt. Marca **Oi** en PNG complet, amb fons crema preservat;
+- Logo al capdamunt. Marca en PNG complet, amb fons crema preservat;
   URL nova `wordmark-email-oi.png` per evitar la imatge anterior a la memòria
   cau de Gmail. Els títols fan servir Barlow Condensed Bold, amb alternatives
   del sistema quan el client no admet fonts web. Gmail no admet `@font-face`.

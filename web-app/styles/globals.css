@@ -1,6 +1,6 @@
 @font-face {
-  font-family: 'Oi';
-  src: url('/assets/fonts/Oi-Regular.ttf') format('truetype');
+  font-family: 'Monofett';
+  src: url('/assets/fonts/Monofett-Regular.ttf') format('truetype');
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -26,7 +26,7 @@
   --grana:      var(--brand-accent);
   --hairline:   var(--brand-rule);
 
-  --font-display: 'Oi', Georgia, 'Times New Roman', serif;
+  --font-display: 'Monofett', Georgia, 'Times New Roman', serif;
   --font-heading: 'Lora', Georgia, 'Times New Roman', serif;
   --font-body:    Arial, Helvetica, sans-serif;
 

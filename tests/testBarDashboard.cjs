@@ -119,6 +119,7 @@ test('merchant overview exposes real match and review data, focused shortcuts an
     const match = { id: 'match' };
     const globals = editorGlobals({
         nextOwnerMatch: match, MatchCard: 'MatchCard',
+        overviewScrollRef: { current: null }, editTarget() {}, ownerMatchesTarget() {}, reservationsTarget() {},
         reviewStats: { totalReviews: 12, averageRating: 4.5 },
         openEditor: section => calls.push(section || 'edit'),
         setShowBarProfile: value => calls.push(`preview:${value}`),
@@ -191,7 +192,7 @@ test('owner map action opens the real shared map, without a placeholder or owner
     const calls = [];
     const button = find(dashboard, node => ts.isJsxSelfClosingElement(node) && node.tagName.getText(dashboard) === 'OwnerBottomNav');
     const component = evaluate(`export const Button = () => (${button.getText(dashboard)});`, {
-        React, OwnerBottomNav: 'OwnerBottomNav', activeTab: 'profile', setActiveTab() {},
+        React, OwnerBottomNav: 'OwnerBottomNav', activeTab: 'profile', setActiveTab() {}, ownerSettingsTarget() {},
         styles: themed.default, SKETCH_THEME: { colors: {} },
         setShowNotifications: value => calls.push(value),
         requestLeave: action => action(),

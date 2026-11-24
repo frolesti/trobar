@@ -19,6 +19,7 @@ import {
     getUserPreferences, updateUserPreferences,
 } from '../../services/userService';
 import styles from './SettingsModal.styles';
+import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
 
 // ── Tipus ──────────────────────────────────────────────
 
@@ -27,6 +28,8 @@ interface SettingsModalProps {
     onClose?: () => void;
     onLogout?: () => void;
     accountBusy?: boolean;
+    onTutorialSection?: (y: number) => void;
+    tutorialBusy?: boolean;
 }
 
 // Mapeig editorial: icones ink, switch tracks grana, borders hairline, textMuted inkMuted.
@@ -67,7 +70,7 @@ const RADIUS_OPTIONS: { label: string; value: DisplayPreferences['searchRadius']
 
 // ── Component ──────────────────────────────────────────
 
-const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLogout, accountBusy = false }) => {
+const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLogout, accountBusy = false, onTutorialSection, tutorialBusy = false }) => {
     const { user, deleteAccount } = useAuth();
     const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
@@ -79,6 +82,13 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
     const [busy, setBusy] = useState(false);
     const pending = useRef(false);
     const [radiusIndex, setRadiusIndex] = useState(2);
+    const { start: startTutorial } = useTutorial();
+    const notificationTop = useRef(0);
+    const displayTop = useRef(0);
+    const notificationTarget = useTutorialTarget('profile-notifications', visible && (loaded || loadError) && !accountBusy && !tutorialBusy,
+        () => onTutorialSection?.(notificationTop.current));
+    const displayTarget = useTutorialTarget('profile-display', visible && (loaded || loadError) && !accountBusy && !tutorialBusy,
+        () => onTutorialSection?.(displayTop.current));
 
     // ── Carregar preferències ──
     useEffect(() => {
@@ -225,12 +235,17 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
 
     return (
         <View>
+                    <View style={styles.section}>
+                        <Text accessibilityRole="header" style={styles.sectionTitle}>Guies de troBar</Text>
+                        <TouchableOpacity accessibilityRole="button" disabled={accountBusy || tutorialBusy} style={styles.legalRow} onPress={() => startTutorial('basic')}><Text style={styles.legalText}>Tornar a veure la guia del mapa</Text></TouchableOpacity>
+                        <TouchableOpacity accessibilityRole="button" disabled={accountBusy || tutorialBusy} style={styles.legalRow} onPress={() => startTutorial('account')}><Text style={styles.legalText}>Tornar a veure la guia del compte</Text></TouchableOpacity>
+                    </View>
                     {!loaded && <View style={styles.section}>
                         {loadError ? <TouchableOpacity accessibilityRole="button" style={styles.legalRow} onPress={() => setLoadAttempt(value => value + 1)}><Text style={styles.legalText}>Tornar a carregar les preferències</Text></TouchableOpacity> : <ActivityIndicator accessibilityLabel="Carregant preferències" color="#FFFFFF" />}
                     </View>}
                     {/* ═══════════ NOTIFICACIONS ═══════════ */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Notificacions</Text>
+                    <View style={styles.section} onLayout={event => { notificationTop.current = event.nativeEvent.layout.y; }}>
+                        <View ref={notificationTarget} collapsable={false}><Text style={styles.sectionTitle}>Notificacions</Text></View>
 
                         {/* Recordatori de partit */}
                         <View style={styles.selectorRow}>
@@ -307,8 +322,8 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
                     </View>
 
                     {/* ═══════════ VISUALITZACIÓ ═══════════ */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Visualització</Text>
+                    <View style={styles.section} onLayout={event => { displayTop.current = event.nativeEvent.layout.y; }}>
+                        <View ref={displayTarget} collapsable={false}><Text style={styles.sectionTitle}>Visualització</Text></View>
 
                         {/* Categoria per defecte */}
                         <View style={styles.selectorRow}>

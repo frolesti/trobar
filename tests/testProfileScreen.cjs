@@ -60,6 +60,7 @@ function profileHarness() {
                 if (name === '@react-navigation/native') return { useNavigation: () => navigation, useIsFocused: () => true, usePreventRemove: (enabled, callback) => { removeGuard = { enabled, callback }; } };
                 if (name === 'expo-status-bar') return { StatusBar: 'StatusBar' };
                 if (name.includes('AuthContext')) return { useAuth: () => ({ user, isLoading: false, logout: async () => {}, refreshProfile: async () => { await pendingRefresh; } }) };
+                if (name.includes('TutorialContext')) return { useTutorialTarget: () => () => {} };
                 if (name.includes('userService')) return { updateUserProfile: async (id, data) => { writes.push({ id, data }); await pendingWrite; if (rejectSave) throw new Error('Save failed'); user = { ...user, ...data }; } };
                 if (name.includes('errorHandler')) return { getUserFriendlyError: (_error, fallback) => fallback };
                 if (name.includes('editorialTheme')) return { EDITORIAL: theme };

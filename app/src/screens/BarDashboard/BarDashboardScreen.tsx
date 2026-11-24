@@ -44,6 +44,7 @@ import { reservationUrl } from '../../utils/barReservations';
 import OwnerBottomNav from '../../components/OwnerBottomNav';
 import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import MatchCard from '../../components/MatchCard';
+import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 const SOCIAL_NETWORKS = [
@@ -79,6 +80,7 @@ export default function BarDashboardScreen() {
     const [activeTab, setActiveTab] = useState<Tab>('profile');
     const [profileMode, setProfileMode] = useState<'overview' | 'edit'>('overview');
     const editorScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+    const overviewScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
     const pendingEditorSection = useRef<Section | null>(null);
     const contentSlide = useRef(new Animated.Value(0)).current;
     const previousView = useRef('profile:overview');
@@ -439,6 +441,19 @@ export default function BarDashboardScreen() {
     ═══════════════════════════════════════════════════════════════════════ */
     // Splash global: mantenim grana mentre carreguem el perfil del bar.
     useScreenLoading('BarDashboard', loading);
+    const { start: startTutorial } = useTutorial();
+    const tutorialReady = isFocused && !loading && !!bar && !hasChanges && !saving && !showUnsavedChanges
+        && !showBarProfile && !showDeleteModal && !showBillingConfirm && !showNotifications;
+    const prepareOverview = (end = false) => {
+        setActiveTab('profile');
+        setProfileMode('overview');
+        if (end) overviewScrollRef.current?.scrollToEnd({ animated: false });
+        else overviewScrollRef.current?.scrollTo({ y: 0, animated: false });
+    };
+    const editTarget = useTutorialTarget('owner-edit', tutorialReady, () => prepareOverview());
+    const ownerMatchesTarget = useTutorialTarget('owner-matches', tutorialReady, () => prepareOverview());
+    const reservationsTarget = useTutorialTarget('owner-reservations', tutorialReady, () => prepareOverview(true));
+    const ownerSettingsTarget = useTutorialTarget('owner-settings', tutorialReady);
 
     if (loading) {
         // No renderitzem res: el GlobalSplash cobreix la pantalla.
@@ -510,7 +525,7 @@ export default function BarDashboardScreen() {
 
     const nextOwnerMatch = upcomingMatches.find(match => broadcastingIds.has(match.id)) ?? upcomingMatches[0];
     const renderOverview = () => (
-        <ScrollView testID="bar-management-overview" style={[styles.managerPage, webScreenScroll]} contentContainerStyle={styles.managerContent} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={overviewScrollRef} testID="bar-management-overview" style={[styles.managerPage, webScreenScroll]} contentContainerStyle={styles.managerContent} showsVerticalScrollIndicator={false}>
             <View style={styles.managerIdentity}>
                 {bar.gallery?.[0] && <Image source={{ uri: bar.gallery[0] }} style={styles.managerCover} resizeMode="cover" />}
                 <View style={{ flex: 1, gap: 5 }}>
@@ -523,7 +538,7 @@ export default function BarDashboardScreen() {
                 <AppIcon name="edit-3" size={18} color="#A50044" /><Text style={styles.managerRowTitle}>Tens canvis sense desar</Text><AppIcon name="chevron-right" size={18} color="#A50044" />
             </TouchableOpacity>}
             <View style={styles.managerQuickActions}>
-                <TouchableOpacity testID="bar-management-edit" accessibilityRole="button" onPress={() => openEditor()} style={styles.managerPrimary}>
+                <TouchableOpacity ref={editTarget} testID="bar-management-edit" accessibilityRole="button" onPress={() => openEditor()} style={styles.managerPrimary}>
                     <AppIcon name="edit-3" size={19} color="#FFFFFF" /><Text style={styles.managerPrimaryText}>Editar el perfil</Text>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" onPress={() => setShowBarProfile(true)} style={styles.managerSecondary}>
@@ -532,7 +547,7 @@ export default function BarDashboardScreen() {
             </View>
             <View style={styles.managerSectionHeader}>
                 <Text accessibilityRole="header" style={styles.managerSectionTitle}>La pròxima jornada</Text>
-                <TouchableOpacity accessibilityRole="button" onPress={() => openEditor('matches')} style={styles.managerTextAction}><Text style={styles.managerSecondaryText}>Triar partits</Text><AppIcon name="chevron-right" size={17} color="#A50044" /></TouchableOpacity>
+                <TouchableOpacity ref={ownerMatchesTarget} accessibilityRole="button" onPress={() => openEditor('matches')} style={styles.managerTextAction}><Text style={styles.managerSecondaryText}>Triar partits</Text><AppIcon name="chevron-right" size={17} color="#A50044" /></TouchableOpacity>
             </View>
             {nextOwnerMatch ? <View style={styles.managerMatch}>
                 <Text style={styles.managerMatchStatus}>{broadcastingIds.has(nextOwnerMatch.id) ? 'HAS MARCAT QUE L’EMETS' : 'ENCARA NO HAS MARCAT SI L’EMETS'}</Text>
@@ -545,7 +560,7 @@ export default function BarDashboardScreen() {
                     { section: 'amenities', icon: 'coffee', title: 'Serveis i ambient', detail: bar.amenities?.length ? `${bar.amenities.length} serveis al perfil` : 'Pantalles, menjar, terrassa…' },
                     { section: 'promotions', icon: 'tag', title: 'La teva promoció', detail: bar.promotionalText?.trim() || 'Tens alguna proposta per al dia de partit?' },
                     { section: 'reservations', icon: 'calendar', title: 'Reserves i aforament', detail: bar.reservationUrl ? 'Gestiona l’enllaç i els partits complets' : 'Afegeix l’enllaç de reserves del bar' },
-                ] as const).map(item => <TouchableOpacity key={item.section} accessibilityRole="button" onPress={() => openEditor(item.section)} style={styles.managerRow}>
+                ] as const).map(item => <TouchableOpacity ref={item.section === 'reservations' ? reservationsTarget : undefined} key={item.section} accessibilityRole="button" onPress={() => openEditor(item.section)} style={styles.managerRow}>
                     <View style={styles.managerIcon}><AppIcon name={item.icon} size={21} color="#A50044" /></View>
                     <View style={{ flex: 1, gap: 4 }}><Text style={styles.managerRowTitle}>{item.title}</Text><Text numberOfLines={2} style={styles.managerMuted}>{item.detail}</Text></View>
                     <AppIcon name="chevron-right" size={18} color="#66707D" />
@@ -588,6 +603,10 @@ export default function BarDashboardScreen() {
     const renderSettingsTab = () => (
         <View style={[styles.managerPage, { flex: 1, justifyContent: 'space-between' }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
             <ScrollView contentContainerStyle={[styles.scrollContent, styles.settingsScrollContent]} showsVerticalScrollIndicator={false} style={webScreenScroll}>
+                <TouchableOpacity accessibilityRole="button" style={styles.managerTextAction} onPress={() => {
+                    if (hasChanges) { showToast('Desa els canvis del perfil abans d’obrir la guia.', 'error'); return; }
+                    startTutorial('owner');
+                }}><Text style={styles.managerSecondaryText}>Tornar a veure la guia del bar</Text></TouchableOpacity>
                 {/* Pla actual */}
                 <View style={styles.settingsIntro}>
                     <Text style={[styles.settingsHeadline, styles.managerTitle]}>El compte del local</Text>
@@ -1089,7 +1108,7 @@ export default function BarDashboardScreen() {
 
             {/* ── Barra de navegació inferior ─────────────────────── */}
             <OwnerBottomNav active={activeTab} onMap={() => requestLeave(() => { setShowNotifications(false); navigation.popTo('Map'); })}
-                onProfile={() => setActiveTab('profile')} onSettings={() => setActiveTab('settings')} />
+                onProfile={() => setActiveTab('profile')} onSettings={() => setActiveTab('settings')} settingsTarget={ownerSettingsTarget} />
             {showUnsavedChanges && (
                 <Modal transparent animationType="fade" onRequestClose={() => { if (!saving) { leaveAction.current = null; setShowUnsavedChanges(false); } }}>
                 <View style={styles.unsavedBackdrop} accessibilityViewIsModal>

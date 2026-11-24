@@ -6,8 +6,9 @@ import AppIcon from './AppIcon';
 import { EDITORIAL } from '../theme/editorialTheme';
 
 type Tab = 'map' | 'profile' | 'settings';
-export default function OwnerBottomNav({ active, onMap, onProfile, onSettings }: {
+export default function OwnerBottomNav({ active, onMap, onProfile, onSettings, settingsTarget }: {
     active: Tab; onMap: () => void; onProfile: () => void; onSettings: () => void;
+    settingsTarget?: React.Ref<React.ComponentRef<typeof TouchableOpacity>>;
 }) {
     const insets = useSafeAreaInsets();
     return (
@@ -17,7 +18,7 @@ export default function OwnerBottomNav({ active, onMap, onProfile, onSettings }:
                 { key: 'profile', label: 'Perfil', icon: 'home', action: onProfile },
                 { key: 'settings', label: 'Configuració', icon: 'settings', action: onSettings },
             ] as const).map(tab => (
-                <TouchableOpacity key={tab.key} accessibilityRole="tab" accessibilityLabel={tab.label}
+                <TouchableOpacity ref={tab.key === 'settings' ? settingsTarget : undefined} key={tab.key} accessibilityRole="tab" accessibilityLabel={tab.label}
                     accessibilityState={{ selected: active === tab.key }} onPress={tab.action} style={styles.item}>
                     <View style={[styles.icon, active === tab.key && styles.selected]}>
                         <AppIcon name={tab.icon} size={23} color={EDITORIAL.onBackground} />

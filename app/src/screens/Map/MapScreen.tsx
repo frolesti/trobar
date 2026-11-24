@@ -67,8 +67,9 @@ import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
 import { BarFilterKey, matchesBarFilters } from '../../utils/barFilters';
 import { alternativeMapMatch, isWomenMatch, upcomingMapMatches } from '../../utils/mapMatches';
-import { MapRegion, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
+import { MapRegion, cameraForRegion, isValidMapRegion, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
 import { ReportBarContent } from '../ReportBar/ReportBarScreen';
+import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
 import { getMapIcon } from '../../utils/mapIcons';
 
 
@@ -347,6 +348,8 @@ const MapScreen = () => {
     const [showBarProfile, setShowBarProfile] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchFocused, setSearchFocused] = useState(false);
+    const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
     // Suggeriments de geocodificació (Nominatim)
     const [geoSuggestions, setGeoSuggestions] = useState<MapSuggestion[]>([]);
@@ -529,7 +532,13 @@ const MapScreen = () => {
 
     // Refs (Natiu)
 
-    const mapRefNative = useRef<any>(null);
+    const mapRefNative = useRef<MapView | null>(null);
+    const mapInteractedRef = useRef(false);
+    const pendingInitialRegionRef = useRef<MapRegion | null>(null);
+    const initialLocationAppliedRef = useRef(false);
+    const [locationResolved, setLocationResolved] = useState(false);
+    const searchRadiusRef = useRef(searchRadiusKm);
+    searchRadiusRef.current = searchRadiusKm;
 
     
 
@@ -537,6 +546,32 @@ const MapScreen = () => {
     const preSelectionCameraRef = useRef<Camera | null>(null);
     const selectionCameraRequestRef = useRef(0);
     const anchorRequestRef = useRef(0);
+    const positionedVenueRef = useRef<string | null>(null);
+    const mapReadyRef = useRef(mapReady);
+    mapReadyRef.current = mapReady;
+
+    const handleMapGesture = useCallback(() => {
+        mapInteractedRef.current = true;
+        pendingInitialRegionRef.current = null;
+        selectionCameraRequestRef.current++;
+        preSelectionRegionRef.current = null;
+        preSelectionCameraRef.current = null;
+    }, []);
+
+    const moveMapToRegion = useCallback(async (region: MapRegion, duration = 350) => {
+        const request = ++selectionCameraRequestRef.current;
+        const map = mapRefNative.current;
+        if (!map) return;
+        try {
+            const camera = await map.getCamera();
+            if (request !== selectionCameraRequestRef.current) return;
+            map.animateCamera(cameraForRegion(camera, lastRegionRef.current ?? region, region), { duration });
+        } catch (error) {
+            if (request !== selectionCameraRequestRef.current) return;
+            console.info('[MapScreen] Camera movement failed', error);
+            showAlert({ tone: 'error', message: 'No hem pogut moure el mapa. Torna-ho a provar.' });
+        }
+    }, []);
 
     // Animació d'instruccions
 
@@ -586,6 +621,17 @@ const MapScreen = () => {
     const mapNoticeLeft = mapNoticeRight;
     const [transientAlertVisible, setTransientAlertVisible] = useState(false);
     const isFocused = useIsFocused();
+    const { start: startTutorial } = useTutorial();
+    const tutorialReady = isFocused && mapReady && locationResolved && !searchFocused && !showFiltersPanel && !showBarProfile && !isReporting && !selectedBar && !selectedDiscoveredBar;
+    const searchTarget = useTutorialTarget('map-search', tutorialReady);
+    const compassTarget = useTutorialTarget('map-compass', tutorialReady);
+    const mapTarget = useTutorialTarget('map-area', tutorialReady);
+    const matchesTarget = useTutorialTarget('map-matches', tutorialReady);
+    useEffect(() => {
+        if (isFocused) return;
+        setSearchFocused(false);
+        searchInputRef.current?.blur();
+    }, [isFocused]);
     const needsLiveReservations = activeFilters.has('hide_full') || activeFilters.has('online_reservations') || activeFilters.has('reservations');
     useEffect(() => {
         if (!isFocused || !needsLiveReservations) return;
@@ -630,9 +676,11 @@ const MapScreen = () => {
     // 0. Carregar radi de cerca i categoria des de preferències d'usuari
     useEffect(() => {
         if (!user) return;
+        let active = true;
         (async () => {
             try {
                 const prefs = await getUserPreferences(user.id);
+                if (!active) return;
                 // El model guarda en metres (500, 1000, 2000, 5000), OSM necessita km
                 setSearchRadiusKm(prefs.display.searchRadius / 1000);
                 if (prefs.display.defaultCategory) {
@@ -642,11 +690,12 @@ const MapScreen = () => {
                 console.info('No s\'han pogut carregar les preferències de radi:', e);
             }
         })();
-    }, [user]);
+        return () => { active = false; };
+    }, [user?.id]);
 
     // 0b. Quan canvia el radi de cerca, ajustar el zoom del mapa
     useEffect(() => {
-        if (!centerLocation) return;
+        if (!centerLocation || mapInteractedRef.current) return;
         if (mapRefNative.current) {
             const delta = radiusToLatDelta(searchRadiusKm);
             mapRefNative.current.animateToRegion({
@@ -657,6 +706,13 @@ const MapScreen = () => {
             }, 500);
         }
     }, [searchRadiusKm]);
+
+    useEffect(() => {
+        if (!mapReady || mapInteractedRef.current || !pendingInitialRegionRef.current) return;
+        const region = pendingInitialRegionRef.current;
+        pendingInitialRegionRef.current = null;
+        mapRefNative.current?.animateToRegion(region, 0);
+    }, [mapReady, locationResolved]);
 
     // 0c. Sembrar `visibleBounds` i `currentZoom` tan bon punt tinguem
     // ubicació + radi. Sense això, el primer render no té bounds, el hook
@@ -680,14 +736,15 @@ const MapScreen = () => {
     // 1. Localització GPS
 
     useEffect(() => {
-        if (user?.role === 'bar_owner') return;
+        if (user?.role === 'bar_owner') { setLocationResolved(true); return; }
         let active = true;
 
         (async () => {
             const applyInitialRegion = (loc: { latitude: number; longitude: number }) => {
-                if (!active) return;
+                if (!active || mapInteractedRef.current || initialLocationAppliedRef.current) return;
+                initialLocationAppliedRef.current = true;
                 console.log('[MapScreen GPS] applyInitialRegion called with:', loc);
-                const delta = radiusToLatDelta(searchRadiusKm);
+                const delta = radiusToLatDelta(searchRadiusRef.current);
                 setCenterLocation(loc);
                 setVisibleBounds({
                     minLat: loc.latitude - delta / 2,
@@ -698,24 +755,14 @@ const MapScreen = () => {
                 console.log('[MapScreen GPS] visibleBounds set, delta:', delta);
                 setCurrentZoom(Math.log2(360 / delta));
 
-                // A web, el ref del mapa pot no estar llest exactament en aquest tick.
                 const region = {
                     latitude: loc.latitude,
                     longitude: loc.longitude,
                     latitudeDelta: delta,
                     longitudeDelta: delta,
                 };
-                if (Platform.OS === 'web') {
-                    [0, 220, 500].forEach((ms) => {
-                        setTimeout(() => {
-                            if (active) mapRefNative.current?.animateToRegion(region, 0);
-                        }, ms);
-                    });
-                } else {
-                    setTimeout(() => {
-                        if (active) mapRefNative.current?.animateToRegion(region, 0);
-                    }, 0);
-                }
+                if (mapReadyRef.current && mapRefNative.current) mapRefNative.current.animateToRegion(region, 0);
+                else pendingInitialRegionRef.current = region;
             };
 
             try {
@@ -729,14 +776,10 @@ const MapScreen = () => {
                     showAlert({
                         tone: 'info',
                         eyebrow: 'Ubicacio no disponible',
-                        message: 'Sense permisos de localitzacio. Et situem al Camp Nou.',
+                        message: 'Sense permisos de localització. Pots cercar locals al mapa.',
                         duration: 4500,
                     });
                     const fallback = CAMP_NOU_FALLBACK;
-                    setUserLocation({
-                        coords: { ...fallback, altitude: 0, accuracy: 0, altitudeAccuracy: 0, heading: 0, speed: 0 },
-                        timestamp: Date.now(),
-                    });
                     applyInitialRegion(fallback);
                     return;
                 }
@@ -773,10 +816,12 @@ const MapScreen = () => {
                 showAlert({
                     tone: 'info',
                     eyebrow: 'GPS no disponible',
-                    message: 'No hem pogut obtenir la ubicacio. Et situem al Camp Nou.',
+                    message: 'No hem pogut obtenir la ubicació. Pots continuar cercant al mapa.',
                     duration: 5000,
                 });
                 applyInitialRegion(CAMP_NOU_FALLBACK);
+            } finally {
+                if (active) setLocationResolved(true);
             }
 
         })();
@@ -855,8 +900,6 @@ const MapScreen = () => {
         const camera = preSelectionCameraRef.current;
         preSelectionRegionRef.current = null;
         preSelectionCameraRef.current = null;
-        selectionCameraRequestRef.current++;
-        preSelectionCameraRef.current = null;
         if (saved) {
             lastRegionRef.current = saved;
             if (camera) mapRefNative.current?.animateCamera(camera, { duration: 350 });
@@ -865,6 +908,8 @@ const MapScreen = () => {
     }
 
     const beginBarSelection = useCallback(() => {
+        mapInteractedRef.current = true;
+        pendingInitialRegionRef.current = null;
         selectionCameraRequestRef.current++;
         if (!preSelectionRegionRef.current) {
             preSelectionRegionRef.current = { ...(lastRegionRef.current ?? {
@@ -1328,7 +1373,8 @@ const MapScreen = () => {
     const selectedLocation = useMemo(() => selectedBar
         ? { latitude: selectedBar.latitude, longitude: selectedBar.longitude }
         : selectedDiscoveredBar ? { latitude: selectedDiscoveredBar.lat, longitude: selectedDiscoveredBar.lon } : null,
-    [selectedBar, selectedDiscoveredBar]);
+    [selectedBar?.id, selectedBar?.latitude, selectedBar?.longitude,
+        selectedDiscoveredBar?.id, selectedDiscoveredBar?.lat, selectedDiscoveredBar?.lon]);
     const updateBarCardAnchor = useCallback(async () => {
         const request = ++anchorRequestRef.current;
         if (!selectedLocation || !mapRefNative.current?.pointForCoordinate) {
@@ -1356,9 +1402,14 @@ const MapScreen = () => {
 
     useEffect(() => {
         if (!selectedLocation) {
+            positionedVenueRef.current = null;
             anchorRequestRef.current++;
             setBarCardAnchorX(null);
             setBarCardAnchorY(null);
+            return;
+        }
+        if (positionedVenueRef.current === selectedVenueId) {
+            void updateBarCardAnchor();
             return;
         }
         const request = ++selectionCameraRequestRef.current;
@@ -1377,6 +1428,7 @@ const MapScreen = () => {
                     // Copy heading, pitch and zoom/altitude; region animations can reset MapKit's orientation.
                     map.animateCamera({ ...camera, center }, { duration: 350 });
                 }
+                positionedVenueRef.current = selectedVenueId;
                 timer = setTimeout(() => { void updateBarCardAnchor(); }, 380);
             } catch (error) {
                 if (request !== selectionCameraRequestRef.current) return;
@@ -1390,7 +1442,7 @@ const MapScreen = () => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         void positionVenue();
         return () => { clearTimeout(timer); selectionCameraRequestRef.current++; anchorRequestRef.current++; };
-    }, [selectedLocation, isDesktop, height, selectedPinY, updateBarCardAnchor]);
+    }, [selectedLocation, selectedVenueId, isDesktop, height, selectedPinY, updateBarCardAnchor]);
 
 
 
@@ -1596,6 +1648,10 @@ const MapScreen = () => {
     }, [searchNominatim]);
 
     const selectGeoSuggestion = useCallback((s: MapSuggestion) => {
+        handleMapGesture();
+        setSearchFocused(false);
+        searchInputRef.current?.blur();
+        Keyboard.dismiss();
         searchRequestRef.current++;
         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
         const newLocation = { latitude: Number(s.lat), longitude: Number(s.lon) };
@@ -1614,14 +1670,14 @@ const MapScreen = () => {
             }
         }
         if (mapRefNative.current) {
-            mapRefNative.current.animateToRegion({
+            void moveMapToRegion({
                 latitude: newLocation.latitude,
                 longitude: newLocation.longitude,
                 latitudeDelta: 0.01,
                 longitudeDelta: 0.01,
             }, 500);
         }
-    }, [bars, navigateToReportBar, handleSelectBar]);
+    }, [bars, navigateToReportBar, handleSelectBar, handleMapGesture, moveMapToRegion]);
 
 
 
@@ -1716,6 +1772,13 @@ const MapScreen = () => {
 
     const centerMapToGPS = async () => {
          ownerEntryHandledRef.current = true;
+         handleMapGesture();
+         const request = selectionCameraRequestRef.current;
+         searchRequestRef.current++;
+         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+         setSearchFocused(false);
+         searchInputRef.current?.blur();
+         Keyboard.dismiss();
 
          let target = userLocation ? {
             latitude: userLocation.coords.latitude,
@@ -1724,11 +1787,13 @@ const MapScreen = () => {
 
          try {
             const permission = await Location.requestForegroundPermissionsAsync();
+            if (request !== selectionCameraRequestRef.current) return;
             if (permission.status !== 'granted') {
                 showAlert({ tone: 'info', message: 'Activa el permís d’ubicació per situar-te al mapa. El teu bar continua disponible.' });
                 return;
             }
             const fresh = await Location.getCurrentPositionAsync({});
+            if (request !== selectionCameraRequestRef.current) return;
             const freshLat = fresh.coords.latitude;
             const freshLng = fresh.coords.longitude;
             const useFallback = Platform.OS === 'android' && isLikelyEmulatorDefaultLocation(freshLat, freshLng);
@@ -1742,11 +1807,13 @@ const MapScreen = () => {
                 },
             });
          } catch (error) {
+            if (request !== selectionCameraRequestRef.current) return;
             console.info('[MapScreen] Current location unavailable', error);
             showAlert({ tone: 'error', message: target ? 'No hem pogut actualitzar la ubicació. Mostrem l’última posició coneguda.' : 'No hem pogut obtenir la ubicació. Torna-ho a provar.' });
          }
 
          if (!target) return;
+         if (request !== selectionCameraRequestRef.current) return;
 
          setCenterLocation(target);
          setSelectedBar(null);
@@ -1757,12 +1824,7 @@ const MapScreen = () => {
          setSearchQuery('');
          setGeoSuggestions([]);
 
-         if (mapRefNative.current) {
-             mapRefNative.current.animateToRegion({
-                latitude: target.latitude, longitude: target.longitude,
-                latitudeDelta: 0.01, longitudeDelta: 0.01,
-             }, 500);
-         }
+         mapRefNative.current?.animateCamera({ center: target }, { duration: 500 });
 
     };
 
@@ -1790,6 +1852,9 @@ const MapScreen = () => {
         // Tancar desplegables de cerca/filtres
         setShowFiltersPanel(false);
         setGeoSuggestions([]);
+        setSearchFocused(false);
+        searchInputRef.current?.blur();
+        Keyboard.dismiss();
 
     };
 
@@ -2105,6 +2170,11 @@ const MapScreen = () => {
                 accessibilityState={{ expanded: showFiltersPanel }}
                 aria-expanded={showFiltersPanel}
                 onPress={() => {
+                    searchRequestRef.current++;
+                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                    setSearchFocused(false);
+                    searchInputRef.current?.blur();
+                    Keyboard.dismiss();
                     setShowFiltersPanel(v => !v);
                     setGeoSuggestions([]); // Tancar suggeriments quan obrim filtres
                 }}
@@ -2131,83 +2201,52 @@ const MapScreen = () => {
 
         // Input natiu
         return (
-             <View testID="map-search-bar" style={[styles.searchBar, { flexDirection: 'column' }]}
+             <View ref={searchTarget} testID="map-search-bar" style={[styles.searchBar, { flexDirection: 'column' }]}
                 onLayout={event => setSearchBarHeight(event.nativeEvent.layout.height)}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
                 <Feather name="search" size={18} color={EDITORIAL.onBackgroundMuted} style={{marginRight: 10}} />
                 <TextInput 
+                    ref={searchInputRef}
                     accessibilityLabel="Cercar una ubicació"
                     placeholder={placeholderText} 
                     style={[styles.searchInput, { flex: 1 }]}
                     placeholderTextColor={EDITORIAL.onBackgroundMuted}
                     selectionColor={EDITORIAL.matchday}
                     value={searchQuery}
+                    onFocus={() => {
+                        handleMapGesture();
+                        routeRequestId.current++;
+                        setRouteInfo(null);
+                        setRouteCoords(null);
+                        setSelectedBar(null);
+                        setSelectedDiscoveredBar(null);
+                        setShowBarProfile(false);
+                        setSearchFocused(true);
+                        setShowFiltersPanel(false);
+                    }}
                     onChangeText={handleSearchInput}
+                    onKeyPress={event => { if (event.nativeEvent.key === 'Escape') closeBarBubble(); }}
                     onSubmitEditing={() => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); void searchNominatim(searchQuery); }}
                 />
                 {searchQuery !== '' && (
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Esborrar la cerca" onPress={() => { searchRequestRef.current++; if (searchTimerRef.current) clearTimeout(searchTimerRef.current); setSearchQuery(''); setGeoSuggestions([]); centerMapToGPS(); }} style={{ width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Esborrar la cerca" onPress={() => { searchRequestRef.current++; if (searchTimerRef.current) clearTimeout(searchTimerRef.current); setSearchQuery(''); setGeoSuggestions([]); searchInputRef.current?.focus(); }} style={{ width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
                         <Feather name="x" size={16} color={EDITORIAL.onBackground} />
                     </TouchableOpacity>
                 )}
                 {filterIconButton}
                 </View>
-                <MapDataAttribution
-                    venues={[...scannedBars, ...geoSuggestions.flatMap(suggestion => suggestion.venue ? [suggestion.venue] : [])]}
-                    googleDetails={!!placeDetails || discoveredGoogleDetails}
-                    osmGeocoding={geoSuggestions.some(suggestion => !suggestion.venue)}
-                    googleMapAttributed={Platform.OS === 'android' || Platform.OS === 'web'}
-                    style={{ paddingLeft: 28 }}
-                />
             </View>
         );
     };
 
     /** Overlay flotant per suggeriments i filtres — renderitzat al nivell superior de la pantalla */
     const renderSearchDropdownOverlay = () => {
-        const showSuggestions = geoSuggestions.length > 0 && !showFiltersPanel;
+        const showSuggestions = searchFocused && !showFiltersPanel;
         if (!showSuggestions && !showFiltersPanel) return null;
-
-        // Desktop: dins del sidebar, no necessita posicionament absolut
-        if (isDesktop) {
-            return (
-                <View style={{ zIndex: 9999 }}>
-                    {showSuggestions && (
-                        <View style={{
-                            backgroundColor: EDITORIAL.granaDeep,
-                            borderRadius: 8,
-                            borderWidth: 1, borderColor: EDITORIAL.borderOnBackground,
-                            overflow: 'hidden',
-                            ...Platform.select({ default: {} }),
-                        }}>
-                            {geoSuggestions.map((s, i) => (
-                                <TouchableOpacity
-                                    key={`${s.lat}-${s.lon}-${i}`}
-                                    accessibilityRole="button"
-                                    style={{
-                                        minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 14,
-                                        borderBottomWidth: i < geoSuggestions.length - 1 ? 1 : 0,
-                                        borderBottomColor: EDITORIAL.borderOnBackground,
-                                    }}
-                                    onPress={() => selectGeoSuggestion(s)}
-                                >
-                                    <Text numberOfLines={2} style={{ fontSize: 14, fontFamily: EDITORIAL.fontRegular, color: EDITORIAL.onBackground }}>
-                                        {s.display_name}
-                                    </Text>
-                                    <Text style={{ fontSize: 11, color: EDITORIAL.onBackgroundMuted }}>{s.venue ? 'Google Maps' : 'OpenStreetMap'}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                    {showFiltersPanel && renderFiltersPanel()}
-                </View>
-            );
-        }
-
-        // Mòbil: posicionament absolut sobre el mapa
         return (
             <View
-                style={{
+                testID="map-search-dropdown"
+                style={isDesktop ? { zIndex: 9999 } : {
                     position: 'absolute',
                     left: 12, right: 12,
                     zIndex: 9999,
@@ -2231,6 +2270,8 @@ const MapScreen = () => {
                             default: {},
                         }),
                     }}>
+                        <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: Math.max(100, height * 0.3) }}>
+                        {geoSuggestions.length === 0 && <Text style={{ color: EDITORIAL.onBackgroundMuted, padding: 14 }}>Cerca un local o una adreça.</Text>}
                         {geoSuggestions.map((s, i) => (
                             <TouchableOpacity
                                 key={`${s.lat}-${s.lon}-${i}`}
@@ -2248,6 +2289,24 @@ const MapScreen = () => {
                                 <Text style={{ fontSize: 11, color: EDITORIAL.onBackgroundMuted }}>{s.venue ? 'Google Maps' : 'OpenStreetMap'}</Text>
                             </TouchableOpacity>
                         ))}
+                        </ScrollView>
+                        <MapDataAttribution
+                            venues={[...scannedBars, ...geoSuggestions.flatMap(suggestion => suggestion.venue ? [suggestion.venue] : [])]}
+                            googleDetails={!!placeDetails || discoveredGoogleDetails}
+                            osmGeocoding={geoSuggestions.some(suggestion => !suggestion.venue)}
+                            googleMapAttributed={Platform.OS === 'android' || Platform.OS === 'web'}
+                            style={{ paddingHorizontal: 14, paddingVertical: 8 }}
+                        />
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tancar la cerca"
+                            onPress={() => {
+                                searchRequestRef.current++;
+                                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                                setSearchFocused(false);
+                                searchInputRef.current?.blur();
+                                Keyboard.dismiss();
+                            }} style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold }}>Tancar</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
                 {showFiltersPanel && renderFiltersPanel()}
@@ -2274,6 +2333,7 @@ const MapScreen = () => {
     const renderHeader = () => (
 
         <View
+            ref={matchesTarget}
             style={isDesktop ? styles.desktopSidebarContent : [styles.topBarContainer, { top: mobileHeaderTop }]}
             onLayout={event => {
                 if (!isDesktop) setMobileHeaderHeight(mobileHeaderTop + event.nativeEvent.layout.height);
@@ -2288,6 +2348,12 @@ const MapScreen = () => {
 
                  </View>
 
+                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Obrir la guia del mapa"
+                    disabled={isReporting}
+                    onPress={() => { closeBarBubble(); startTutorial('basic'); }}
+                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="help-circle" size={22} color={EDITORIAL.onBackground} />
+                 </TouchableOpacity>
                  {!user && (
 
                     <TouchableOpacity 
@@ -2408,7 +2474,7 @@ const MapScreen = () => {
 
              {/* ÀREA DEL MAPA */}
 
-             <View style={styles.mapContainer} collapsable={false}>
+             <View ref={mapTarget} style={styles.mapContainer} collapsable={false}>
                     {!mapReady && !mapLoadFailed && (
                         <ActivityIndicator accessibilityLabel="Carregant el mapa" color={EDITORIAL.grana} style={{ position: 'absolute', top: mobileHeaderHeight + 20, alignSelf: 'center', zIndex: 2 }} />
                     )}
@@ -2464,7 +2530,19 @@ const MapScreen = () => {
                             setMapLoadFailed(false);
                         }}
                         onPress={handleMapPress}
-                        onRegionChangeComplete={(region: any) => {
+                        onTouchStart={() => {
+                            mapInteractedRef.current = true;
+                            pendingInitialRegionRef.current = null;
+                            selectionCameraRequestRef.current++;
+                        }}
+                        onTouchMove={handleMapGesture}
+                        onPanDrag={handleMapGesture}
+                        onRegionChangeComplete={(region, details) => {
+                            if (!isValidMapRegion(region)) {
+                                console.info('[MapScreen] Ignoring invalid map region', region);
+                                return;
+                            }
+                            if (details?.isGesture) handleMapGesture();
                             const previous = lastRegionRef.current;
                             const changeThreshold = 0.000001;
                             if (
@@ -2529,9 +2607,9 @@ const MapScreen = () => {
                                                  latitudeDelta: newDelta,
                                                  longitudeDelta: newDelta,
                                              };
-                                             if (mapRefNative.current?.animateToRegion) {
-                                                 mapRefNative.current.animateToRegion(region, 350);
-                                             }
+                                             lastMarkerPressRef.current = Date.now();
+                                             handleMapGesture();
+                                             void moveMapToRegion(region);
                                          }}
                                      />
                                  );
@@ -2580,6 +2658,21 @@ const MapScreen = () => {
                         )}
 
                     </MapView>
+                    <TouchableOpacity
+                        testID="map-reset-north"
+                        accessibilityRole="button"
+                        accessibilityLabel="Orientar el mapa al nord"
+                        style={[styles.fabGps, {
+                            bottom: mapControlsBottom + (mapControlsInline ? 0 : 112),
+                            right: mapControlsInline ? 132 : 20,
+                        }]}
+                        onPress={() => {
+                            handleMapGesture();
+                            mapRefNative.current?.animateCamera({ heading: 0, pitch: 0 }, { duration: 350 });
+                        }}
+                    >
+                        <View ref={compassTarget} collapsable={false}><Feather name="compass" size={26} color={EDITORIAL.grana} /></View>
+                    </TouchableOpacity>
                     <AlertBannerHost
                        active={isFocused}
                        bottomOffset={mapNoticeBottom}

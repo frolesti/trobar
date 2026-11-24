@@ -1,9 +1,28 @@
+import type { Camera } from 'react-native-maps';
+
 export type MapRegion = {
     latitude: number;
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
 };
+
+export function isValidMapRegion(region: MapRegion): boolean {
+    return [region.latitude, region.longitude, region.latitudeDelta, region.longitudeDelta].every(Number.isFinite)
+        && Math.abs(region.latitude) <= 90 && Math.abs(region.longitude) <= 180
+        && region.latitudeDelta > 0 && region.longitudeDelta > 0;
+}
+
+export function cameraForRegion(camera: Camera, previous: MapRegion, next: MapRegion): Camera {
+    if (!isValidMapRegion(previous) || !isValidMapRegion(next)) throw new Error('Invalid map region');
+    const scale = next.longitudeDelta / previous.longitudeDelta;
+    return {
+        ...camera,
+        center: { latitude: next.latitude, longitude: next.longitude },
+        ...(typeof camera.zoom === 'number' && Number.isFinite(camera.zoom) ? { zoom: camera.zoom - Math.log2(scale) } : {}),
+        ...(typeof camera.altitude === 'number' && Number.isFinite(camera.altitude) ? { altitude: camera.altitude * scale } : {}),
+    };
+}
 
 export function selectionRegion(region: MapRegion, coordinate: { latitude: number; longitude: number }, pinY: number, height: number): MapRegion {
     return {

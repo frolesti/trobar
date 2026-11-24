@@ -1,5 +1,6 @@
 import React from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from '@react-navigation/native';
+import { TutorialProvider } from '../context/TutorialContext';
 import { EDITORIAL } from '../theme/editorialTheme';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import StartupScreen from '../screens/Startup/StartupScreen';
@@ -59,8 +60,13 @@ const linking = {
 };
 
 export default function AppNavigator() {
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [currentRoute, setCurrentRoute] = React.useState<string>();
   return (
-    <NavigationContainer linking={linking} theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: EDITORIAL.grana, background: EDITORIAL.background, card: EDITORIAL.background, text: EDITORIAL.onBackground, border: EDITORIAL.borderOnBackground, notification: EDITORIAL.grana } }}>
+    <NavigationContainer ref={navigationRef} onReady={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
+      onStateChange={() => setCurrentRoute(navigationRef.getCurrentRoute()?.name)}
+      linking={linking} theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, primary: EDITORIAL.grana, background: EDITORIAL.background, card: EDITORIAL.background, text: EDITORIAL.onBackground, border: EDITORIAL.borderOnBackground, notification: EDITORIAL.grana } }}>
+      <TutorialProvider navigation={navigationRef} route={currentRoute}>
       <Stack.Navigator 
         initialRouteName="Startup"
         screenOptions={{
@@ -121,6 +127,7 @@ export default function AppNavigator() {
           options={{ title: 'troBar' }}
         />
       </Stack.Navigator>
+      </TutorialProvider>
     </NavigationContainer>
   );
 }

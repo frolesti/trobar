@@ -16,6 +16,7 @@ import { getUserFriendlyError } from '../../utils/errorHandler';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import ProfileSettings from './SettingsModal';
 import styles from './ProfileScreen.styles';
+import { useTutorialTarget } from '../../context/TutorialContext';
 
 export default function ProfileScreen() {
   const { user, logout, refreshProfile, isLoading: authLoading } = useAuth();
@@ -31,6 +32,8 @@ export default function ProfileScreen() {
   const mounted = useRef(true);
   const pendingNavigation = useRef<NavigationAction | null>(null);
   const isFocused = useIsFocused();
+  const tutorialScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const settingsTop = useRef(0);
 
   // Redirigir al login si no autenticat, PERÒ esperar que la comprovació d'auth acabi
   // Si és bar_owner, redirigir al panell del bar
@@ -68,6 +71,8 @@ export default function ProfileScreen() {
   }, [user?.id, user?.avatar]);
 
   const hasChanges = name.trim() !== saved.current.name || surname.trim() !== saved.current.surname;
+  const detailsTarget = useTutorialTarget('profile-details', isFocused && !authLoading && !!user && !hasChanges && !isLoading && !isSaving && !isLoggingOut,
+    () => tutorialScroll.current?.scrollTo({ y: 0, animated: false }));
   usePreventRemove((hasChanges || isSaving) && !!user && !isLoggingOut, ({ data }) => {
     pendingNavigation.current = data.action;
     void saveData().then(success => { if (!success) pendingNavigation.current = null; });
@@ -195,7 +200,7 @@ export default function ProfileScreen() {
       </View>
       {authLoading || !user ? <ActivityIndicator color="#FFFFFF" style={{ marginTop: 32 }} /> : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
+          <ScrollView ref={tutorialScroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
             <View style={styles.body}>
               <TouchableOpacity style={styles.avatarContainer} onPress={pickImage} disabled={isLoading || isSaving} accessibilityRole="button" accessibilityLabel="Canviar la foto de perfil" accessibilityState={{ busy: isLoading, disabled: isLoading || isSaving }} {...(Platform.OS === 'web' ? { title: 'Canviar la foto de perfil' } : {})}>
                 {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarPlaceholder]}><AppIcon name="user" size={40} color="#FFFFFF" /></View>}
@@ -203,7 +208,7 @@ export default function ProfileScreen() {
                   {isLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <AppIcon name="camera" size={20} color="#FFFFFF" />}
                 </View>
               </TouchableOpacity>
-              <View style={styles.formContainer}>
+              <View ref={detailsTarget} collapsable={false} style={styles.formContainer}>
                 <Text accessibilityRole="header" style={styles.sectionTitle}>Dades personals</Text>
                 <Text style={styles.label}>Nom</Text>
                 <TextInput accessibilityLabel="Nom" style={styles.input} value={name} editable={!isLoggingOut} onChangeText={value => changeField('name', value)} onEndEditing={() => { void saveData(); }} placeholder="El teu nom" placeholderTextColor="rgba(255,255,255,0.6)" autoCapitalize="words" autoComplete="given-name" textContentType="givenName" selectionColor={EDITORIAL.matchday} />
@@ -216,7 +221,11 @@ export default function ProfileScreen() {
                   {saveError && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Reintentar desar el perfil" onPress={() => { void saveData(); }} style={styles.retryButton}><AppIcon name="refresh-cw" size={18} color="#FFFFFF" /></TouchableOpacity>}
                 </View>}
               </View>
-              <ProfileSettings visible={isFocused} onLogout={() => { void handleLogout(); }} accountBusy={isLoading || isSaving || isLoggingOut} />
+              <View onLayout={event => { settingsTop.current = event.nativeEvent.layout.y; }}>
+                <ProfileSettings visible={isFocused} onLogout={() => { void handleLogout(); }} accountBusy={isLoading || isSaving || isLoggingOut}
+                  tutorialBusy={hasChanges}
+                  onTutorialSection={y => tutorialScroll.current?.scrollTo({ y: Math.max(0, settingsTop.current + y - 16), animated: false })} />
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

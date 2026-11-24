@@ -72,40 +72,57 @@ test('provider credits are retained, deduplicated and link failures are logged',
     assert(logs.some(args => args[0].includes('Attribution link failed')));
 });
 
-test('credits belong to the existing search bar, not a separate map overlay, and dropdowns follow its measured height', () => {
+test('provider credits appear only in an active search dropdown; clearing the query never changes the map', () => {
     const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
     const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-    let searchBar, dropdownTop, creditCount = 0;
+    let searchBar, dropdown, dropdownTop, creditCount = 0;
     function visit(node) {
         if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'renderSearchBarInput') searchBar = node.initializer.getText(ast);
+        if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'renderSearchDropdownOverlay') dropdown = node.initializer.getText(ast);
         if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'mobileDropdownTop') dropdownTop = node.initializer.getText(ast);
         if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === 'MapDataAttribution') creditCount++;
         ts.forEachChild(node, visit);
     }
     visit(ast);
-    let measuredHeight;
+    let measuredHeight, gpsCalls = 0, focusCalls = 0;
     const context = {
         React, View: 'View', Text: 'Text', TextInput: 'TextInput', Feather: 'Icon', TouchableOpacity: 'Button',
-        MapDataAttribution: moduleStub.exports.default, EDITORIAL: {}, styles: {}, Platform: { OS: 'ios' },
-        activeFilters: new Set(), showFiltersPanel: false, searchQuery: '', handleSearchInput() {},
+        MapDataAttribution: moduleStub.exports.default, EDITORIAL: {}, styles: {}, Platform: { OS: 'ios', select: options => options.ios },
+        ScrollView: 'ScrollView', searchTarget() {}, isDesktop: false, mobileDropdownTop: 115, height: 844,
+        searchInputRef: { current: { focus() { focusCalls++; } } }, searchTimerRef: { current: null }, searchRequestRef: { current: 0 },
+        activeFilters: new Set(), showFiltersPanel: false, searchFocused: false, searchQuery: 'Barcelona', handleSearchInput() {},
+        centerMapToGPS() { gpsCalls++; }, setSearchQuery: value => { context.searchQuery = value; }, setGeoSuggestions() {},
+        renderFiltersPanel: () => null,
         scannedBars: [{ source: 'google' }], geoSuggestions: [], placeDetails: null, discoveredGoogleDetails: false,
         setSearchBarHeight: height => { measuredHeight = height; },
     };
-    const renderSearchBar = vm.runInNewContext(ts.transpileModule(`(${searchBar})`, {
+    vm.createContext(context);
+    const renderFragment = fragment => vm.runInContext(ts.transpileModule(`(${fragment})`, {
         compilerOptions: { jsx: ts.JsxEmit.React },
     }).outputText, context);
+    const renderSearchBar = renderFragment(searchBar);
+    const renderDropdown = renderFragment(dropdown);
     const bar = renderSearchBar();
     assert.equal(bar.props.testID, 'map-search-bar');
     assert.equal(creditCount, 1, 'no second credit block may remain at the bottom of the map');
-    const credit = nodes(bar).find(node => node.type === moduleStub.exports.default);
-    assert(credit, 'credits must be contained in the search bar');
+    assert.equal(nodes(bar).find(node => node.type === moduleStub.exports.default), undefined);
+    assert.equal(renderDropdown(), null);
+    context.searchFocused = true;
+    const credit = nodes(renderDropdown()).find(node => node.type === moduleStub.exports.default);
+    assert(credit, 'credits must be inside the open search results');
     assert.equal(credit.props.style.position, undefined);
     assert.equal(credit.props.venues[0].source, 'google');
+    nodes(bar).find(node => node.props.accessibilityLabel === 'Esborrar la cerca').props.onPress();
+    assert.equal(context.searchQuery, '');
+    assert.equal(gpsCalls, 0);
+    assert.equal(focusCalls, 1);
+    context.showFiltersPanel = true;
+    assert.equal(nodes(renderDropdown()).find(node => node.type === moduleStub.exports.default), undefined);
     for (const height of [54, 78, 102, 150]) {
         bar.props.onLayout({ nativeEvent: { layout: { height } } });
         assert.equal(measuredHeight, height);
         const top = vm.runInNewContext(dropdownTop, { mobileHeaderTop: 55, searchBarHeight: measuredHeight });
-        assert.equal(top - 55 - height, 4, 'wrapped attribution must never sit under the dropdown');
+        assert.equal(top - 55 - height, 4, 'results must follow the actual input height');
     }
 });
 
