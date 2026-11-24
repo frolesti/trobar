@@ -472,9 +472,10 @@ node scripts/expoUpdates.js --check-only
 ### Preparació per a App Store
 
 La configuració de compilació no equival a una app aprovada ni preparada per
-enviar a revisió. No s'ha creat cap compte Apple, iniciat cap build de pagament
-ni enviat cap binari. El següent pas de distribució ha de ser TestFlight,
-abans de sol·licitar la publicació pública.
+enviar a revisió pública. La versió iOS `1.0.0 (1)` s'ha compilat amb EAS i
+l'enviament a App Store Connect ha finalitzat correctament. L'app registrada
+és `6838633050`; la disponibilitat a TestFlight depèn del processament d'Apple
+i, per a proves externes, de la revisió beta que correspongui.
 
 Preparació tècnica inclosa:
 
@@ -500,28 +501,32 @@ No valida restriccions de claus a Google Cloud, credencials Apple, variables
 remotes d'EAS, manifests del binari compilat ni el compliment de les normes.
 Si el terminal té l'entorn de desenvolupament actiu, el control falla expressament.
 No s'ha canviat automàticament l'entorn local: `.env.local` té prioritat sobre
-`.env.production`. Quan es prepari la versió de distribució, cal completar
-`.env.production`, executar `npm run env:prod` i reiniciar Metro si s'utilitza;
-després es pot tornar a desenvolupament amb `npm run env:dev`.
-Les mateixes variables públiques s'han de configurar a l'entorn `production`
-d'EAS; els fitxers `.env` locals no es versionen ni es donen per disponibles al núvol.
+`.env.production`. Les variables públiques verificades de Firebase, Maps i
+OAuth iOS ja estan configurades a l'entorn `production` d'EAS. Es pot executar
+el control amb aquest entorn sense modificar la configuració local:
+
+```powershell
+npx eas-cli@latest env:exec production "npm run ios:check"
+```
+
+Els fitxers `.env` locals no es versionen ni es donen per disponibles al núvol.
 No hi posis claus Stripe privades, comptes de servei o claus Apple.
 
-Pendents abans d'enviar a Apple:
+Comprovacions per a la publicació pública i la revisió beta que correspongui:
 
 1. **Alta a Apple Developer.** Cal un Apple Account amb doble factor i la
    subscripció de pagament. Si publica una entitat legal, valorar l'alta
    d'organització (amb D-U-N-S); amb alta individual el nom legal personal
    apareix com a venedor. No cal un compte per cada bar: els bars són comptes
    del nostre servei, no apps ni desenvolupadors Apple independents.
-2. **App Store Connect i signatura.** Registrar l'app amb el bundle ID indicat,
-   habilitar Sign in with Apple, configurar el proveïdor a Firebase Auth i
-   les credencials APNs a EAS. Afegir l'Apple ID numèric real de l'app com a
-   `submit.production.ios.ascAppId` quan existeixi; no inventar-ne un.
+2. **App Store Connect i signatura.** L'app i la signatura de distribució ja
+   estan configurades; `submit.production.ios.ascAppId` apunta a l'app real.
+   Verificar el proveïdor Sign in with Apple a Firebase Auth i les
+   credencials APNs a EAS amb proves natives.
    Gestionar totes les credencials amb Apple/EAS, mai al repositori ni al xat.
-3. **Google natiu.** Crear/configurar el client OAuth iOS, les restriccions de
-   Maps per bundle ID i provar el login real. La introspecció amb un identificador
-   fictici només valida l'estructura del plugin, no autentica.
+3. **Google natiu.** El client OAuth iOS s'ha recuperat de l'app Firebase
+   existent i s'ha configurat a EAS. Verificar les restriccions de Maps per
+   bundle ID i provar el login real: una compilació correcta no autentica.
 4. **Premium i pagaments.** L'app actual obre Stripe per comprar i gestionar
    funcions digitals Premium. Cal definir el flux iOS segons els països
    de distribució i les regles 3.1.1/3.1.3: no assumir que vendre a bars n'eximeix.
@@ -552,16 +557,22 @@ Pendents abans d'enviar a Apple:
    permisos i eliminació. Una exportació JS o Expo Go no substitueixen aquesta prova.
    Confirmar la imatge EAS amb Xcode/SDK admesos per Apple en el moment de construir.
 
-Només després de completar aquests punts i autoritzar el possible cost:
+Per a les següents compilacions beta, amb les credencials d'EAS preparades
+i després d'autoritzar qualsevol possible cost:
 
 ```powershell
-npm run ios:build:production
+npx eas-cli@latest env:exec production "npm run ios:build:production"
 npm run ios:submit:production
 ```
 
 L'ordre de build passa primer el control local, però no certifica compliment.
 La pujada arriba a App Store Connect/TestFlight; publicar exigeix una revisió
 posterior d'Apple. Windows permet EAS Build/Submit, però no compilar iOS localment.
+Per consultar el processament i la disponibilitat reals a Apple:
+
+```powershell
+npx eas-cli@latest submit:status --platform ios --non-interactive
+```
 
 Fonts: [alta Apple](https://developer.apple.com/programs/enroll/),
 [normes de revisió](https://developer.apple.com/app-store/review/guidelines/),
