@@ -19,7 +19,7 @@ import {
     getUserPreferences, updateUserPreferences,
 } from '../../services/userService';
 import styles from './SettingsModal.styles';
-import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
+import { useTutorialTarget } from '../../context/TutorialContext';
 
 // ── Tipus ──────────────────────────────────────────────
 
@@ -82,7 +82,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
     const [busy, setBusy] = useState(false);
     const pending = useRef(false);
     const [radiusIndex, setRadiusIndex] = useState(2);
-    const { start: startTutorial } = useTutorial();
     const notificationTop = useRef(0);
     const displayTop = useRef(0);
     const notificationTarget = useTutorialTarget('profile-notifications', visible && (loaded || loadError) && !accountBusy && !tutorialBusy,
@@ -235,11 +234,6 @@ const ProfileSettings: React.FC<SettingsModalProps> = ({ visible, onClose, onLog
 
     return (
         <View>
-                    <View style={styles.section}>
-                        <Text accessibilityRole="header" style={styles.sectionTitle}>Guies de troBar</Text>
-                        <TouchableOpacity accessibilityRole="button" disabled={accountBusy || tutorialBusy} style={styles.legalRow} onPress={() => startTutorial('basic')}><Text style={styles.legalText}>Tornar a veure la guia del mapa</Text></TouchableOpacity>
-                        <TouchableOpacity accessibilityRole="button" disabled={accountBusy || tutorialBusy} style={styles.legalRow} onPress={() => startTutorial('account')}><Text style={styles.legalText}>Tornar a veure la guia del compte</Text></TouchableOpacity>
-                    </View>
                     {!loaded && <View style={styles.section}>
                         {loadError ? <TouchableOpacity accessibilityRole="button" style={styles.legalRow} onPress={() => setLoadAttempt(value => value + 1)}><Text style={styles.legalText}>Tornar a carregar les preferències</Text></TouchableOpacity> : <ActivityIndicator accessibilityLabel="Carregant preferències" color="#FFFFFF" />}
                     </View>}

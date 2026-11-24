@@ -472,6 +472,10 @@ test('unregistered popup accepts zero coordinates, preserves Place ID and addres
     assert.deepEqual(detailCredits, [false, true], 'notify the shared map footer once Google details are visible');
     assert(tree.some(node => node.type === 'Text' && node.props.children === 'Google Maps'), 'standalone report retains Google credit');
     assert(!render({ attributionInMap: true }).some(node => node.type === 'Text' && node.props.children === 'Google Maps'), 'embedded map card does not duplicate the map footer');
+    const previewCard = render({ readOnly: true }).find(node => node.type === 'BarCard');
+    assert.equal(previewCard.props.confirmationDisabled, true);
+    await previewCard.props.onConfirm();
+    assert.equal(calls.filter(call => call[0] === 'report').length, 0, 'tutorial previews never register a real bar');
     const card = tree.find(node => node.type === 'BarCard');
     assert.equal(card.props.address, 'Major, Terrassa');
     const first = card.props.onConfirm();

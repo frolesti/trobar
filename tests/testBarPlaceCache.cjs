@@ -36,6 +36,39 @@ const periods = [{ openDay: 1, openHour: 10, openMinute: 0, closeDay: 1, closeHo
 const bar = { id: 'bar', name: 'Local', googlePlaceId: 'known', amenities: ['wifi'], openingPeriods: periods };
 const details = { placeId: 'known', types: [], openingPeriods: periods };
 
+test('viewing a community venue never writes enrichment as a guest or during a tutorial', () => {
+    const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let callback;
+    function visit(node) {
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+            && node.expression.name.text === 'then' && node.arguments[0]?.getText(ast).includes('cacheBarPlaceData')) {
+            callback = node.arguments[0].getText(ast);
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    assert(callback);
+    const compiled = ts.transpileModule(`(${callback})`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+    for (const [user, ownerId, tutorialKind, expected] of [
+        [null, undefined, null, 0],
+        [{ id: 'visitor' }, undefined, null, 0],
+        [{ id: 'owner' }, 'owner', null, 1],
+        [{ id: 'admin', role: 'admin' }, 'owner', null, 1],
+        [{ id: 'owner' }, 'owner', 'basic', 0],
+        [{ id: 'admin', role: 'admin' }, undefined, 'account', 0],
+    ]) {
+        const writes = [];
+        const apply = vm.runInNewContext(compiled, {
+            user, selectedBar: { ...bar, ownerId }, tutorialKind,
+            reviewRequestId: 1, selectedBarReviewRequestId: { current: 1 },
+            setPlaceDetails() {}, cacheBarPlaceData: (...args) => { writes.push(args); return Promise.resolve(); },
+        });
+        apply(details);
+        assert.equal(writes.length, expected);
+    }
+});
+
 test('identical enrichment writes nothing, including when period property order differs', async () => {
     const service = harness();
     const reordered = periods.map(period => Object.fromEntries(Object.entries(period).reverse()));

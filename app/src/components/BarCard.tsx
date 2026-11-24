@@ -36,6 +36,10 @@ export interface BarCardProps {
     reservationUrl?: string;
     fullMatchIds?: string[];
     matchId?: string;
+    tutorialNameRef?: React.Ref<React.ComponentRef<typeof View>>;
+    tutorialDirectionsRef?: React.Ref<React.ComponentRef<typeof TouchableOpacity>>;
+    tutorialConfirmRef?: React.Ref<React.ComponentRef<typeof TouchableOpacity>>;
+    confirmationDisabled?: boolean;
 }
 
 const BarCard: React.FC<BarCardProps> = ({
@@ -43,6 +47,7 @@ const BarCard: React.FC<BarCardProps> = ({
     fallbackIsOpen, distanceText, onNavigate, onClose, onConfirm, onCancel, isSubmitting,
     promotionalText, tier, onProfileOpen, profileHandleHidden, dense = false,
     reviewAvgRating, reviewCount, demo = false, reservationUrl, fullMatchIds, matchId,
+    tutorialNameRef, tutorialDirectionsRef, tutorialConfirmRef, confirmationDisabled = false,
 }) => {
     const displayName = name.replace(/\s+\d+$/, '');
     const displayAddress = pd?.formattedAddress || address || 'Adreça no disponible';
@@ -57,12 +62,13 @@ const BarCard: React.FC<BarCardProps> = ({
             {isPremium && onProfileOpen && !profileHandleHidden && (
                 <PremiumProfileSlider name={displayName} onOpen={onProfileOpen} />
             )}
-            <View testID="venue-card-header" style={{ minHeight: 32, justifyContent: 'center', marginBottom: dense ? 4 : 6, paddingRight: 36 }}>
+            <View ref={tutorialNameRef} collapsable={false} testID="venue-card-header" style={{ minHeight: 32, justifyContent: 'center', marginBottom: dense ? 4 : 6, paddingRight: 36 }}>
                 <Text numberOfLines={2} style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: dense ? 17 : 20, lineHeight: dense ? 20 : 24 }}>
                     {displayName}
                 </Text>
                 {close && (
                     <TouchableOpacity
+                        ref={tutorialDirectionsRef}
                         accessibilityRole="button"
                         accessibilityLabel={`Tancar la fitxa de ${displayName}`}
                         disabled={isSubmitting}
@@ -133,9 +139,11 @@ const BarCard: React.FC<BarCardProps> = ({
                     <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 14, lineHeight: 18, marginBottom: dense ? 6 : 8 }}>Es poden veure partits aquí?</Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity
+                            ref={tutorialConfirmRef}
                             accessibilityRole="button"
+                            accessibilityLabel="Sí, avisa tothom!"
                             onPress={onConfirm}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || confirmationDisabled}
                             style={{ flex: 1, minHeight: 48, borderRadius: 6, backgroundColor: EDITORIAL.onBackground, alignItems: 'center', justifyContent: 'center', padding: 8 }}
                         >
                             {isSubmitting ? <ActivityIndicator color={EDITORIAL.background} /> : <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 14, textAlign: 'center' }}>Sí, avisa tothom!</Text>}

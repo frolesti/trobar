@@ -114,7 +114,7 @@ test('filter panel renders every checkbox, active state, all groups and working 
             context.activeFilters = activeFilters;
         },
         setShowFiltersPanel: value => { visible = value; },
-        toggleFilter() {},
+        toggleFilter() {}, filtersTarget() {},
     };
     const panel = vm.runInNewContext(compile(
         `const FILTER_OPTIONS = ${declarations.FILTER_OPTIONS}; (${declarations.renderFiltersPanel})`,

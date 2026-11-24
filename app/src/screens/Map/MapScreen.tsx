@@ -101,6 +101,18 @@ const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon
 
 };
 
+export function nearestTutorialBar(bars: Bar[], origin: { latitude: number; longitude: number }): Bar | null {
+    let nearest: Bar | null = null;
+    let distance = Infinity;
+    for (const bar of bars) {
+        if (bar.isTestData || !Number.isFinite(bar.latitude) || !Number.isFinite(bar.longitude)
+            || Math.abs(bar.latitude) > 90 || Math.abs(bar.longitude) > 180) continue;
+        const next = getDistanceFromLatLonInKm(origin.latitude, origin.longitude, bar.latitude, bar.longitude);
+        if (next < distance) { nearest = bar; distance = next; }
+    }
+    return nearest;
+}
+
 
 
 const deg2rad = (deg: number) => {
@@ -621,12 +633,16 @@ const MapScreen = () => {
     const mapNoticeLeft = mapNoticeRight;
     const [transientAlertVisible, setTransientAlertVisible] = useState(false);
     const isFocused = useIsFocused();
-    const { start: startTutorial } = useTutorial();
-    const tutorialReady = isFocused && mapReady && locationResolved && !searchFocused && !showFiltersPanel && !showBarProfile && !isReporting && !selectedBar && !selectedDiscoveredBar;
-    const searchTarget = useTutorialTarget('map-search', tutorialReady);
-    const compassTarget = useTutorialTarget('map-compass', tutorialReady);
-    const mapTarget = useTutorialTarget('map-area', tutorialReady);
-    const matchesTarget = useTutorialTarget('map-matches', tutorialReady);
+    const { activeKind: tutorialKind } = useTutorial();
+    type TutorialSnapshot = {
+        region: MapRegion | null; camera: Camera | null; center: typeof centerLocation;
+        filters: typeof activeFilters; match: typeof selectedMatch; scanned: OSMBar[]; query: string;
+    };
+    const tutorialSnapshot = useRef<TutorialSnapshot | null>(null);
+    const tutorialBarRef = useRef<Bar | null>(null);
+    const tutorialDiscoveryRequest = useRef(0);
+    const [tutorialDiscovery, setTutorialDiscovery] = useState<'idle' | 'loading' | 'ready'>('idle');
+    const [tutorialDiscoveredBar, setTutorialDiscoveredBar] = useState<OSMBar | null>(null);
     useEffect(() => {
         if (isFocused) return;
         setSearchFocused(false);
@@ -1547,8 +1563,8 @@ const MapScreen = () => {
                      if (reviewRequestId !== selectedBarReviewRequestId.current) return;
                      setPlaceDetails(details);
                      // Cacheja placeId + períodes + amenitats a Firestore (0 crides API extra)
-                     if (details && (user?.id === selectedBar.ownerId || user?.role === 'admin')) {
-                         cacheBarPlaceData(selectedBar, details).catch(() => {});
+                     if (details && !tutorialKind && user?.id && (user.id === selectedBar.ownerId || user.role === 'admin')) {
+                         void cacheBarPlaceData(selectedBar, details);
                      }
                  })
 
@@ -1571,7 +1587,7 @@ const MapScreen = () => {
 
 
 
-    }, [selectedBar, isDesktop]);
+    }, [selectedBar, isDesktop, user?.id, user?.role, tutorialKind]);
 
 
 
@@ -1824,7 +1840,7 @@ const MapScreen = () => {
          setSearchQuery('');
          setGeoSuggestions([]);
 
-         mapRefNative.current?.animateCamera({ center: target }, { duration: 500 });
+         mapRefNative.current?.animateCamera({ center: target, heading: 0, pitch: 0 }, { duration: 500 });
 
     };
 
@@ -1870,6 +1886,129 @@ const MapScreen = () => {
         setRouteCoords(null);
     }, [closeBarBubble]);
 
+    const prepareMapTutorial = (target: string) => {
+        if (!tutorialSnapshot.current) {
+            const snapshot: TutorialSnapshot = {
+                region: lastRegionRef.current, camera: null, center: centerLocation,
+                filters: activeFilters, match: selectedMatch, scanned: scannedBars, query: searchQuery,
+            };
+            tutorialSnapshot.current = snapshot;
+            const origin = userLocation?.coords ?? centerLocation ?? CAMP_NOU_FALLBACK;
+            tutorialBarRef.current = nearestTutorialBar(bars, origin);
+            void mapRefNative.current?.getCamera().then(camera => {
+                if (tutorialSnapshot.current === snapshot) snapshot.camera = camera;
+            }).catch(error => console.info('[Tutorial] Could not snapshot map camera', error));
+        }
+        handleMapGesture();
+        searchRequestRef.current++;
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        Keyboard.dismiss();
+        searchInputRef.current?.blur();
+        setSearchFocused(false);
+        setShowFiltersPanel(target === 'map-filters');
+        setActiveFilters(new Set());
+        setSelectedMatch(null);
+        setSearchQuery('');
+        setShowBarProfile(false);
+        setSelectedDiscoveredBar(null);
+        setSelectedBar(null);
+        routeRequestId.current++;
+        setRouteInfo(null);
+        setRouteCoords(null);
+        if (['map-bar', 'map-directions', 'map-premium'].includes(target)) {
+            const bar = tutorialBarRef.current;
+            if (bar) {
+                if (selectedBar?.id !== bar.id) {
+                    positionedVenueRef.current = null;
+                    setBarCardAnchorX(null);
+                    setBarCardAnchorY(null);
+                    const region = { latitude: bar.latitude, longitude: bar.longitude, latitudeDelta: MAP_REGION_DELTA, longitudeDelta: MAP_REGION_DELTA };
+                    lastRegionRef.current = region;
+                    setCenterLocation({ latitude: bar.latitude, longitude: bar.longitude });
+                    mapRefNative.current?.animateToRegion(region, 0);
+                }
+                setSelectedBar(bar);
+            }
+        }
+        if (target === 'map-discovery') {
+            const origin = tutorialBarRef.current ?? tutorialSnapshot.current.center ?? CAMP_NOU_FALLBACK;
+            const region = { latitude: origin.latitude, longitude: origin.longitude, latitudeDelta: 0.008, longitudeDelta: 0.008 };
+            lastRegionRef.current = region;
+            setCenterLocation({ latitude: origin.latitude, longitude: origin.longitude });
+            mapRefNative.current?.animateToRegion(region, 0);
+            setVisibleBounds({ minLat: origin.latitude - 0.004, maxLat: origin.latitude + 0.004, minLng: origin.longitude - 0.004, maxLng: origin.longitude + 0.004 });
+            if (tutorialDiscovery === 'idle') {
+                const request = ++tutorialDiscoveryRequest.current;
+                setTutorialDiscovery('loading');
+                void discoverMapBars(origin.latitude, origin.longitude, 0.5, {
+                    south: origin.latitude - 0.004, north: origin.latitude + 0.004,
+                    west: origin.longitude - 0.004, east: origin.longitude + 0.004,
+                }).then(result => {
+                    if (request !== tutorialDiscoveryRequest.current) return;
+                    const venues = result.bars.filter(item => !bars.some(bar => isSameVenue(item, bar)));
+                    setScannedBars(previous => mergeDiscoveredBars(previous, venues));
+                    setTutorialDiscoveredBar(venues[0] ?? null);
+                }).catch(error => {
+                    if (request !== tutorialDiscoveryRequest.current) return;
+                    console.info('[Tutorial] Discovery unavailable', error);
+                    showAlert({ tone: 'info', message: 'No hem pogut carregar locals sense confirmar. Pots tornar a cercar-los amb la lupa.' });
+                }).finally(() => {
+                    if (request === tutorialDiscoveryRequest.current) setTutorialDiscovery('ready');
+                });
+            }
+        }
+        if (target === 'map-report' && tutorialDiscoveredBar) {
+            positionedVenueRef.current = null;
+            setBarCardAnchorX(null);
+            setBarCardAnchorY(null);
+            setSelectedDiscoveredBar(tutorialDiscoveredBar);
+        }
+    };
+    const mapTutorialReady = isFocused && mapReady && locationResolved && initialBarsLoaded && !isReporting;
+    const canStartMapTutorial = mapTutorialReady && (tutorialKind !== null || (!searchFocused && !showFiltersPanel && !showBarProfile && !selectedBar && !selectedDiscoveredBar));
+    const nearestBar = nearestTutorialBar(bars, userLocation?.coords ?? centerLocation ?? CAMP_NOU_FALLBACK);
+    const searchTarget = useTutorialTarget('map-search', canStartMapTutorial, () => prepareMapTutorial('map-search'));
+    const tutorialBarReady = mapTutorialReady && selectedBar?.id === tutorialBarRef.current?.id
+        && !!selectedBar && venueMeasurement?.id === selectedVenueId && (isDesktop || barCardAnchorY != null);
+    const filtersTarget = useTutorialTarget('map-filters', mapTutorialReady && showFiltersPanel, () => prepareMapTutorial('map-filters'));
+    const barTarget = useTutorialTarget('map-bar', tutorialBarReady, () => prepareMapTutorial('map-bar'), !!nearestBar);
+    const directionsTarget = useTutorialTarget('map-directions', tutorialBarReady, () => prepareMapTutorial('map-directions'), !!nearestBar);
+    const premiumTarget = useTutorialTarget('map-premium', tutorialBarReady, () => prepareMapTutorial('map-premium'), nearestBar?.tier === 'premium');
+    const matchesTarget = useTutorialTarget('map-matches', mapTutorialReady && !selectedBar && !selectedDiscoveredBar && !showFiltersPanel,
+        () => prepareMapTutorial('map-matches'), !!(nextMatch || selectedMatch));
+    const discoveryTarget = useTutorialTarget('map-discovery', mapTutorialReady && tutorialDiscovery === 'ready', () => prepareMapTutorial('map-discovery'));
+    const reportTarget = useTutorialTarget('map-report', mapTutorialReady && tutorialDiscovery === 'ready'
+        && (!tutorialDiscoveredBar || (selectedDiscoveredBar?.id === tutorialDiscoveredBar.id && venueMeasurement?.id === selectedVenueId && (isDesktop || barCardAnchorY != null))), () => prepareMapTutorial('map-report'));
+    const accountTarget = useTutorialTarget('map-account', mapTutorialReady, () => prepareMapTutorial('map-account'));
+    const mapTarget = useTutorialTarget('map-area', mapTutorialReady);
+
+    useEffect(() => {
+        if (tutorialKind) return;
+        tutorialDiscoveryRequest.current++;
+        const snapshot = tutorialSnapshot.current;
+        if (!snapshot) return;
+        tutorialSnapshot.current = null;
+        tutorialBarRef.current = null;
+        handleMapGesture();
+        setSelectedBar(null);
+        setSelectedDiscoveredBar(null);
+        setShowBarProfile(false);
+        setShowFiltersPanel(false);
+        setActiveFilters(snapshot.filters);
+        setSelectedMatch(snapshot.match);
+        setScannedBars(snapshot.scanned);
+        setSearchQuery(snapshot.query);
+        setCenterLocation(snapshot.center);
+        setTutorialDiscoveredBar(null);
+        setTutorialDiscovery('idle');
+        if (snapshot.region) {
+            lastRegionRef.current = snapshot.region;
+            if (snapshot.camera) mapRefNative.current?.animateCamera(snapshot.camera, { duration: 0 });
+            else mapRefNative.current?.animateToRegion(snapshot.region, 0);
+        }
+    }, [tutorialKind, handleMapGesture]);
+    useEffect(() => () => { tutorialDiscoveryRequest.current++; }, []);
+
 
 
     // --- RENDERITZATS ---
@@ -1879,6 +2018,7 @@ const MapScreen = () => {
     const renderContentPanel = (insidePremiumSheet = false) => {
         if (selectedDiscoveredBar) {
             return <ReportBarContent key={selectedDiscoveredBar.id} osmBar={selectedDiscoveredBar} onClose={closeBarBubble} onBusyChange={setIsReporting}
+                tutorialConfirmRef={reportTarget} readOnly={!!tutorialKind}
                 attributionInMap onGoogleDetailsChange={setDiscoveredGoogleDetails} onRegistered={() => {
                 closeBarBubble();
                 void loadBars();
@@ -1899,6 +2039,8 @@ const MapScreen = () => {
             return (
 
                 <BarCard
+                    tutorialNameRef={barTarget}
+                    tutorialDirectionsRef={directionsTarget}
 
                     name={selectedBar.name}
 
@@ -2129,7 +2271,7 @@ const MapScreen = () => {
                     showsVerticalScrollIndicator={true}
                 >
                     {grouped.map(cat => (
-                        <View key={cat.key}>
+                        <View key={cat.key} ref={cat.key === 'availability' ? filtersTarget : undefined} collapsable={false}>
                             <Text style={{
                                 fontSize: 12, fontFamily: EDITORIAL.fontBold,
                                 color: EDITORIAL.onBackgroundMuted,
@@ -2201,7 +2343,7 @@ const MapScreen = () => {
 
         // Input natiu
         return (
-             <View ref={searchTarget} testID="map-search-bar" style={[styles.searchBar, { flexDirection: 'column' }]}
+             <View ref={node => { searchTarget(node); if (user) accountTarget(node); }} testID="map-search-bar" style={[styles.searchBar, { flexDirection: 'column' }]}
                 onLayout={event => setSearchBarHeight(event.nativeEvent.layout.height)}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
                 <Feather name="search" size={18} color={EDITORIAL.onBackgroundMuted} style={{marginRight: 10}} />
@@ -2333,7 +2475,6 @@ const MapScreen = () => {
     const renderHeader = () => (
 
         <View
-            ref={matchesTarget}
             style={isDesktop ? styles.desktopSidebarContent : [styles.topBarContainer, { top: mobileHeaderTop }]}
             onLayout={event => {
                 if (!isDesktop) setMobileHeaderHeight(mobileHeaderTop + event.nativeEvent.layout.height);
@@ -2348,19 +2489,15 @@ const MapScreen = () => {
 
                  </View>
 
-                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Obrir la guia del mapa"
-                    disabled={isReporting}
-                    onPress={() => { closeBarBubble(); startTutorial('basic'); }}
-                    style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-                    <Feather name="help-circle" size={22} color={EDITORIAL.onBackground} />
-                 </TouchableOpacity>
                  {!user && (
 
-                    <TouchableOpacity 
+                    <TouchableOpacity ref={accountTarget}
+                        accessibilityRole="button"
+                        accessibilityLabel="Crear un compte o iniciar sessió"
 
                         style={{ marginLeft: 10, padding: 8 }}
 
-                        onPress={() => navigation.navigate('Login' as any)}
+                        onPress={() => navigation.navigate('Login')}
 
                     >
 
@@ -2378,7 +2515,7 @@ const MapScreen = () => {
 
              {(selectedMatch || nextMatch) && (isDesktop || (!selectedBar && !selectedDiscoveredBar)) && (
 
-                <View style={{ marginTop: 8, marginHorizontal: 4 }}>
+                <View ref={matchesTarget} collapsable={false} style={{ marginTop: 8, marginHorizontal: 4 }}>
 
                     {(selectedMatch || nextMatch) && (
                         <MatchCardStack
@@ -2658,21 +2795,6 @@ const MapScreen = () => {
                         )}
 
                     </MapView>
-                    <TouchableOpacity
-                        testID="map-reset-north"
-                        accessibilityRole="button"
-                        accessibilityLabel="Orientar el mapa al nord"
-                        style={[styles.fabGps, {
-                            bottom: mapControlsBottom + (mapControlsInline ? 0 : 112),
-                            right: mapControlsInline ? 132 : 20,
-                        }]}
-                        onPress={() => {
-                            handleMapGesture();
-                            mapRefNative.current?.animateCamera({ heading: 0, pitch: 0 }, { duration: 350 });
-                        }}
-                    >
-                        <View ref={compassTarget} collapsable={false}><Feather name="compass" size={26} color={EDITORIAL.grana} /></View>
-                    </TouchableOpacity>
                     <AlertBannerHost
                        active={isFocused}
                        bottomOffset={mapNoticeBottom}
@@ -2731,13 +2853,14 @@ const MapScreen = () => {
                     </TouchableOpacity>
 
                     {(() => {
-                        if (matchIdFromNav) return null;
+                        if (matchIdFromNav && !tutorialKind) return null;
                         const visibleWidthKm = visibleBounds
                             ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
                             : 0;
                         if (visibleBounds && visibleWidthKm > 2) return null;
                         return (
                             <TouchableOpacity
+                                ref={node => { discoveryTarget(node); if (!tutorialDiscoveredBar) reportTarget(node); }}
                                 style={[
                                     styles.fabGps,
                                     { bottom: mapSearchBottom, right: mapSearchRight },
@@ -2912,13 +3035,14 @@ const MapScreen = () => {
                     </TouchableOpacity>
 
                     {(() => {
-                        if (matchIdFromNav) return null;
+                        if (matchIdFromNav && !tutorialKind) return null;
                         const visibleWidthKm = visibleBounds
                             ? getDistanceFromLatLonInKm(visibleBounds.minLat, visibleBounds.minLng, visibleBounds.minLat, visibleBounds.maxLng)
                             : 0;
                         if (visibleBounds && visibleWidthKm > 2) return null;
                         return (
                             <TouchableOpacity
+                                ref={node => { discoveryTarget(node); if (!tutorialDiscoveredBar) reportTarget(node); }}
                                 style={[styles.fabGps, { right: mapSearchRight, bottom: mapSearchBottom }]}
                                 onPress={handleScanToggle}
                                 disabled={isScanning}
@@ -2964,6 +3088,7 @@ const MapScreen = () => {
 
             {selectedLocation && (isDesktop || barCardAnchorY != null) && (
                 <PremiumBarSheet
+                    tutorialProfileRef={premiumTarget}
                     key={selectedVenueId}
                     layoutReady={venueMeasurement?.id === selectedVenueId}
                     name={selectedBar?.name ?? selectedDiscoveredBar!.name}

@@ -51,20 +51,32 @@ migracions. Aquestes ordres consulten la base configurada a l'entorn i
 
 ### Mapa i guies de l'app
 
-El mapa permet girar i inclinar la vista. La brúixola torna al nord sense
-canviar el centre ni el zoom; el botó d'ubicació conserva el nivell de zoom.
+El mapa permet girar i inclinar la vista. El botó d'ubicació torna a situar
+la persona i orienta el mapa al nord sense canviar el nivell de zoom.
 Arrossegar el mapa cancel·la els moviments automàtics pendents i el retorn
 a la vista anterior d'una fitxa. Esborrar una cerca no recentra el mapa.
 Els crèdits dels proveïdors de cerca són al desplegable mentre la cerca és
 oberta; no substitueixen els crèdits propis del mapa base.
 
-La primera visita mostra quatre passos sobre els controls del mapa. Els
-comptes de culers i propietaris tenen guies diferents. El progrés es desa
+La primera visita mostra la cerca, els filtres, la fitxa del bar real més
+proper, les indicacions, els partits i la descoberta i confirmació de locals.
+La proximitat usa el GPS o, sense permisos, el centre original del mapa.
+Els passos de fitxa només apareixen si hi ha un local real disponible; no
+s'inventen locals. La descoberta consulta la zona i la confirmació es mostra
+en mode de lectura: la guia no registra cap bar. En acabar o ometre-la, es
+recuperen la vista i els filtres originals.
+Els comptes de culers i propietaris tenen guies diferents. El progrés es desa
 localment amb AsyncStorage: la guia bàsica per dispositiu i les de compte
-per identificador i rol. Completar o saltar una guia evita repetir-la;
-es poden reobrir amb l'ajuda del mapa o des de la configuració del compte.
+per identificador i rol. L'inici ja queda registrat perquè una guia no es
+repeteixi, encara que es tanqui l'app a mig procés. No hi ha botons de repetició.
 Les guies esperen el consentiment legal i els controls disponibles, i no
 creen locals ni dades de demostració.
+
+La confirmació de locals necessita les regles actuals de Firestore: admeten
+els identificadors de Google Places i d'OpenStreetMap sense atorgar propietat
+ni Premium. Publicar l'app o el web no publica aquestes regles.
+Després de validar-les amb `npm run test:firestore`, es despleguen explícitament
+amb `firebase deploy --only firestore:rules --project trobar-1123f`.
 
 ## Web Next.js de trobar.cat
 

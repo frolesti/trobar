@@ -54,7 +54,7 @@ function tutorialHarness({ storage = new Map(), failRead = false, failWrite = fa
         require(name) {
             if (name === 'react') return hooks;
             if (name === 'react-native') return {
-                View: 'View', Modal: 'Modal', ScrollView: 'ScrollView', TouchableOpacity: 'Button',
+                View: 'View', Modal: 'Modal', ScrollView: 'ScrollView', TouchableOpacity: 'Button', ActivityIndicator: 'Spinner',
                 StyleSheet: { create: value => value }, Keyboard: { dismiss() {} },
                 AccessibilityInfo: { announceForAccessibility() {} }, useWindowDimensions: () => ({ width: 390, height: 844 }),
             };
@@ -93,11 +93,10 @@ function tutorialHarness({ storage = new Map(), failRead = false, failWrite = fa
     render();
     return {
         ...module.exports, storage, writes, notices, navigations, prepared, flush,
-        register(id, ready = true, rect = [20, 100, 320, 48]) {
-            return tree.props.value.register(id, { ready, prepare: () => prepared.push(id),
+        register(id, ready = true, rect = [20, 100, 320, 48], available = true) {
+            return tree.props.value.register(id, { ready, available, prepare: () => prepared.push(id),
                 node: () => ({ measureInWindow: callback => callback(...(typeof rect === 'function' ? rect() : rect)) }) });
         },
-        start(kind) { tree.props.value.start(kind); render(); },
         auth(value, screen = route) { auth = value; route = screen; dirty = true; render(); },
         title() { return nodes(render()).find(node => node.props.accessibilityRole === 'header' && this.visible())?.props.children; },
         visible() { return nodes(render()).find(node => node.type === 'Modal').props.visible; },
@@ -109,7 +108,7 @@ function tutorialHarness({ storage = new Map(), failRead = false, failWrite = fa
     };
 }
 
-test('basic coachmarks wait for a ready control and legal consent; skip persists and manual replay remains available', async () => {
+test('basic coachmarks wait for a ready control and legal consent; skip persists with no replay action', async () => {
     const h = tutorialHarness();
     const unregister = h.register('map-search', false);
     await h.flush();
@@ -121,57 +120,63 @@ test('basic coachmarks wait for a ready control and legal consent; skip persists
     assert.equal(h.visible(), false);
     h.auth({ user: null, isLoading: false, requiresRegistrationConsent: false });
     await h.flush();
-    assert.equal(h.title(), 'Troba on veure el partit');
-    h.click('Saltar la guia');
-    h.click('Saltar la guia');
+    assert.equal(h.title(), 'Troba bar, sense crear un compte');
+    h.click('Omet');
+    h.click('Omet');
     await h.flush();
-    assert.equal(h.writes.length, 1, 'double taps must not persist twice');
+    assert.equal(h.writes.length, 2, 'one start and one completion, even after double taps');
     assert.equal(h.storage.get(h.tutorialKey('basic')), 'done');
     assert.equal(h.visible(), false);
-    h.start('basic');
-    await h.flush();
-    assert.equal(h.visible(), true);
+    const reopened = tutorialHarness({ storage: h.storage });
+    reopened.register('map-search');
+    await reopened.flush();
+    assert.equal(reopened.visible(), false);
+    assert.equal(reopened.writes.length, 0);
 });
 
 test('basic guide advances across actual targets, supports going back and persists only on completion', async () => {
     const h = tutorialHarness();
-    for (const id of ['map-search', 'map-compass', 'map-area', 'map-matches']) h.register(id);
+    const targets = ['map-search', 'map-filters', 'map-bar', 'map-directions', 'map-premium', 'map-matches', 'map-discovery', 'map-report', 'map-account'];
+    for (const id of targets) h.register(id);
     await h.flush();
     h.click('Següent'); await h.flush();
-    assert.equal(h.title(), 'Mou-te al teu ritme');
-    h.click('Anterior'); await h.flush();
-    assert.equal(h.title(), 'Troba on veure el partit');
-    for (let i = 0; i < 3; i++) { h.click('Següent'); await h.flush(); }
-    assert.equal(h.title(), 'Tria el partit');
-    assert.equal(h.writes.length, 0);
-    h.click('Entesos'); await h.flush();
+    assert.equal(h.title(), 'Tria l’ambient que busques');
+    h.click('Enrere'); await h.flush();
+    assert.equal(h.title(), 'Troba bar, sense crear un compte');
+    for (let i = 0; i < targets.length - 1; i++) { h.click('Següent'); await h.flush(); }
+    assert.equal(h.title(), 'Amb compte, hi guanyes més');
+    assert.equal(h.storage.get(h.tutorialKey('basic')), 'started');
+    h.click('Explorar el mapa'); await h.flush();
     assert.equal(h.visible(), false);
-    assert.equal(h.writes.length, 1);
+    assert.equal(h.writes.length, 2);
     assert(h.prepared.includes('map-matches'));
+    assert(h.prepared.includes('map-report'));
+    assert(h.prepared.includes('map-directions'));
+    assert.equal(h.navigations.includes('Login'), false, 'account creation is not required');
 });
 
 test('account onboarding navigates to an unmounted Profile; progress stays separate for each account and owner role', async () => {
     const h = tutorialHarness();
     h.register('map-search');
     await h.flush();
-    h.click('Saltar la guia'); await h.flush();
+    h.click('Omet'); await h.flush();
     h.auth({ user: { id: 'culer-a', role: 'user' }, isLoading: false }, 'Map');
     await h.flush();
     assert.equal(h.navigations.at(-1), 'Profile', 'do not require Profile to be mounted before starting the account guide');
     h.register('profile-details'); await h.flush();
     assert.equal(h.title(), 'El teu perfil');
-    h.click('Saltar la guia'); await h.flush();
+    h.click('Omet'); await h.flush();
     h.auth({ user: { id: 'culer-b', role: 'user' }, isLoading: false }, 'Map');
     await h.flush();
     assert.equal(h.title(), 'El teu perfil');
     assert.equal(h.storage.get(h.tutorialKey('account', 'culer-a')), 'done');
-    assert.equal(h.storage.has(h.tutorialKey('account', 'culer-b')), false);
-    h.click('Saltar la guia'); await h.flush();
+    assert.equal(h.storage.get(h.tutorialKey('account', 'culer-b')), 'started');
+    h.click('Omet'); await h.flush();
     h.register('owner-edit');
     h.auth({ user: { id: 'owner', role: 'bar_owner' }, isLoading: false }, 'BarDashboard');
     await h.flush();
     assert.equal(h.title(), 'Presenta el teu bar');
-    h.click('Saltar la guia'); await h.flush();
+    h.click('Omet'); await h.flush();
     assert.equal(h.storage.get(h.tutorialKey('owner', 'owner')), 'done');
     assert.equal(h.storage.has(h.tutorialKey('account', 'owner')), false);
 });
@@ -181,8 +186,8 @@ test('storage failures are reported without a false persisted completion or an a
         const h = tutorialHarness({ failRead: failure === 'read', failWrite: failure === 'write' });
         h.register('map-search');
         await h.flush();
-        if (failure === 'read') { assert.equal(h.visible(), false); h.start('basic'); await h.flush(); }
-        h.click('Saltar la guia'); await h.flush();
+        if (failure === 'read') assert.equal(h.visible(), false);
+        else { h.click('Omet'); await h.flush(); }
         assert.equal(h.visible(), false);
         assert(h.notices.some(notice => notice.tone === 'error'));
         if (failure === 'write') assert.equal(h.storage.has(h.tutorialKey('basic')), false);
@@ -207,9 +212,25 @@ test('coachmarks wait for a moving control to settle before placing the spotligh
     let moving = true, x = 100;
     h.register('map-search', true, () => [moving ? (x -= 5) : 20, 100, 240, 48]);
     await h.flush();
-    assert.equal(h.visible(), false);
+    assert.equal(h.title(), undefined);
     moving = false;
     await h.flush();
     assert.equal(h.visible(), true);
     assert.equal(h.notices.length, 0);
+});
+
+test('an interrupted guide is not replayed; only real available venue steps are included', async () => {
+    const h = tutorialHarness();
+    for (const id of ['map-search', 'map-filters', 'map-discovery', 'map-report', 'map-account']) h.register(id);
+    for (const id of ['map-bar', 'map-directions', 'map-premium', 'map-matches']) h.register(id, false, [0, 0, 0, 0], false);
+    await h.flush();
+    const restarted = tutorialHarness({ storage: h.storage });
+    restarted.register('map-search');
+    await restarted.flush();
+    assert.equal(restarted.visible(), false, 'starting once is enough to suppress future automatic replay');
+    for (let i = 0; i < 4; i++) { h.click('Següent'); await h.flush(); }
+    assert.equal(h.title(), 'Amb compte, hi guanyes més');
+    h.click('Crear un compte gratuït'); await h.flush();
+    assert.equal(h.navigations.at(-1), 'Login');
+    assert(!h.prepared.includes('map-bar'), 'never invent a venue when the catalogue is empty');
 });

@@ -17,13 +17,15 @@ type Props = {
     route: RouteProp<RootStackParamList, 'ReportBar'>;
 };
 
-export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, attributionInMap = false, onGoogleDetailsChange }: {
+export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, attributionInMap = false, onGoogleDetailsChange, tutorialConfirmRef, readOnly = false }: {
     osmBar: RootStackParamList['ReportBar']['osmBar'];
     onClose: () => void;
     onRegistered: () => void;
     onBusyChange?: (busy: boolean) => void;
     attributionInMap?: boolean;
     onGoogleDetailsChange?: (loaded: boolean) => void;
+    tutorialConfirmRef?: React.Ref<React.ComponentRef<typeof TouchableOpacity>>;
+    readOnly?: boolean;
 }) => {
     const { user } = useAuth();
     const { height } = useWindowDimensions();
@@ -86,7 +88,7 @@ export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, 
     };
 
     const handleConfirm = async () => {
-        if (busy.current || submitSuccess || closing.current) return;
+        if (readOnly || busy.current || submitSuccess || closing.current) return;
         busy.current = true;
         onBusyChange?.(true);
         setIsSubmitting(true);
@@ -127,6 +129,8 @@ export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, 
                             onConfirm={handleConfirm}
                             onCancel={closeScreen}
                             isSubmitting={isSubmitting}
+                            tutorialConfirmRef={tutorialConfirmRef}
+                            confirmationDisabled={readOnly}
                         />
                         )}
                         {!attributionInMap && (osmBar.googlePlaceId || osmBar.source === 'google' || placeDetails) && <View style={{ marginTop: 6 }}>

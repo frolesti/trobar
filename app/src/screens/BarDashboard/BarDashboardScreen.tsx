@@ -44,7 +44,7 @@ import { reservationUrl } from '../../utils/barReservations';
 import OwnerBottomNav from '../../components/OwnerBottomNav';
 import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import MatchCard from '../../components/MatchCard';
-import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
+import { useTutorialTarget } from '../../context/TutorialContext';
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 const SOCIAL_NETWORKS = [
@@ -441,7 +441,6 @@ export default function BarDashboardScreen() {
     ═══════════════════════════════════════════════════════════════════════ */
     // Splash global: mantenim grana mentre carreguem el perfil del bar.
     useScreenLoading('BarDashboard', loading);
-    const { start: startTutorial } = useTutorial();
     const tutorialReady = isFocused && !loading && !!bar && !hasChanges && !saving && !showUnsavedChanges
         && !showBarProfile && !showDeleteModal && !showBillingConfirm && !showNotifications;
     const prepareOverview = (end = false) => {
@@ -603,10 +602,6 @@ export default function BarDashboardScreen() {
     const renderSettingsTab = () => (
         <View style={[styles.managerPage, { flex: 1, justifyContent: 'space-between' }, Platform.OS === 'web' && ({ minHeight: 0 } as any)]}>
             <ScrollView contentContainerStyle={[styles.scrollContent, styles.settingsScrollContent]} showsVerticalScrollIndicator={false} style={webScreenScroll}>
-                <TouchableOpacity accessibilityRole="button" style={styles.managerTextAction} onPress={() => {
-                    if (hasChanges) { showToast('Desa els canvis del perfil abans d’obrir la guia.', 'error'); return; }
-                    startTutorial('owner');
-                }}><Text style={styles.managerSecondaryText}>Tornar a veure la guia del bar</Text></TouchableOpacity>
                 {/* Pla actual */}
                 <View style={styles.settingsIntro}>
                     <Text style={[styles.settingsHeadline, styles.managerTitle]}>El compte del local</Text>

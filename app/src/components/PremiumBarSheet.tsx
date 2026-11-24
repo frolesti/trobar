@@ -22,6 +22,7 @@ type Props = {
     triangleTop?: number;
     triangleBelow?: boolean;
     layoutReady?: boolean;
+    tutorialProfileRef?: React.Ref<React.ComponentRef<typeof View>>;
 };
 
 export function sheetProgress(start: number, dy: number, travel: number) {
@@ -38,7 +39,7 @@ export default function PremiumBarSheet({
     name, screenWidth, screenHeight, collapsedTop, collapsedLeft, collapsedWidth, collapsedHeight,
     expanded, onExpandedChange, onCollapsedHeightChange, compactContent, renderExpanded,
     expandable = true, triangleLeft, triangleTop, triangleBelow = false,
-    layoutReady = true,
+    layoutReady = true, tutorialProfileRef,
 }: Props) {
     const insets = useSafeAreaInsets();
     const progress = useRef(new Animated.Value(0)).current;
@@ -132,7 +133,7 @@ export default function PremiumBarSheet({
                     }),
                 }}
             >
-                {expandable ? <PremiumProfileSlider
+                {expandable ? <View ref={tutorialProfileRef} collapsable={false}><PremiumProfileSlider
                     name={name}
                     onOpen={() => settle(true)}
                     onCollapse={() => settle(false)}
@@ -149,7 +150,7 @@ export default function PremiumBarSheet({
                     }}
                     onDragEnd={(dy, vy) => settle(Math.abs(dy) < 4 ? desired.current : sheetDestination(value.current, vy))}
                     onDragCancel={() => settle(desired.current)}
-                /> : <View style={{ height: 12 }} />}
+                /></View> : <View style={{ height: 12 }} />}
                 <Animated.View
                     testID="static-premium-map-card"
                     pointerEvents={presenting ? 'none' : 'auto'}

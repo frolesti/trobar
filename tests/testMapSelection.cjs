@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-const React = require('react');
 
 const geometry = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/utils/mapSelection.ts'), 'utf8'), {
@@ -207,34 +206,98 @@ test('explicit GPS closes search, preserves the camera scale and ignores late fi
         assert.equal(state.searchFocused, false);
         assert.equal(blurred, 1);
         assert.equal(state.cameras.length, gesture ? 0 : 1);
-        if (!gesture) assert.deepEqual(JSON.parse(JSON.stringify(state.cameras[0])), { center: { latitude: 41.5, longitude: 2.2 } });
+        if (!gesture) assert.deepEqual(JSON.parse(JSON.stringify(state.cameras[0])), { center: { latitude: 41.5, longitude: 2.2 }, heading: 0, pitch: 0 });
         else assert.equal(state.userLocation, null);
     }
 });
 
-test('north control never overlaps GPS/discovery and resets only heading and pitch', () => {
-    let button;
-    function find(node) {
-        if (ts.isJsxElement(node) && node.openingElement.attributes.properties.some(attribute =>
-            attribute.name?.getText(parsed) === 'testID' && attribute.initializer?.text === 'map-reset-north')) button = node.getText(parsed);
-        ts.forEachChild(node, find);
+test('no compass or permanent tutorial replay control remains in the map or account settings', () => {
+    assert(!source.includes('map-reset-north'));
+    assert(!source.includes('Obrir la guia del mapa'));
+    for (const file of ['Profile/SettingsModal.tsx', 'BarDashboard/BarDashboardScreen.tsx']) {
+        const settings = fs.readFileSync(require.resolve(`../app/src/screens/${file}`), 'utf8');
+        assert(!settings.includes('Tornar a veure la guia'));
     }
-    find(parsed);
-    assert(button);
-    for (const [isDesktop, mapControlsInline] of [[true, false], [false, false], [false, true]]) {
-        const state = selectionHarness();
-        Object.assign(state, { React, TouchableOpacity: 'Button', View: 'View', Feather: 'Icon', compassTarget() {},
-            isDesktop, mapControlsInline, mapControlsBottom: 40, styles: { fabGps: { width: 48, height: 48 } }, EDITORIAL: {} });
-        const control = vm.runInContext(ts.transpileModule(`(${button})`, {
-            compilerOptions: { jsx: ts.JsxEmit.React },
-        }).outputText, state);
-        const style = Object.assign({}, ...control.props.style);
-        const others = [{ bottom: 40, right: 20 }];
-        others.push({ bottom: mapControlsInline ? 40 : 96, right: mapControlsInline ? 76 : 20 });
-        for (const other of others) assert(Math.abs(style.bottom - other.bottom) >= 48 || Math.abs(style.right - other.right) >= 48);
-        control.props.onPress();
-        assert.deepEqual({ ...state.cameras[0] }, { heading: 0, pitch: 0 });
-    }
+});
+
+function mapTutorialHarness() {
+    const state = selectionHarness();
+    Object.assign(state, {
+        tutorialSnapshot: { current: null }, tutorialBarRef: { current: null }, tutorialDiscoveryRequest: { current: 0 },
+        userLocation: { coords: { latitude: 41.5, longitude: 2.2 } }, centerLocation: { latitude: 40.4, longitude: -3.7 },
+        bars: [
+            { id: 'madrid', latitude: 40.4, longitude: -3.7 },
+            { id: 'barcelona', latitude: 41.5, longitude: 2.201, tier: 'premium' },
+        ],
+        activeFilters: new Set(['open_now']), selectedMatch: { id: 'match' }, scannedBars: [], searchQuery: 'Original',
+        MAP_REGION_DELTA: 0.008, CAMP_NOU_FALLBACK: { latitude: 41.38, longitude: 2.12 },
+        tutorialDiscovery: 'idle', tutorialDiscoveredBar: null,
+        setActiveFilters: value => { state.activeFilters = value; }, setSelectedMatch: value => { state.selectedMatch = value; },
+        setSearchQuery: value => { state.searchQuery = value; }, setCenterLocation: value => { state.centerLocation = value; },
+        setVisibleBounds: value => { state.visibleBounds = value; },
+        setTutorialDiscovery: value => { state.tutorialDiscovery = value; },
+        setTutorialDiscoveredBar: value => { state.tutorialDiscoveredBar = value; },
+        setScannedBars: update => { state.scannedBars = typeof update === 'function' ? update(state.scannedBars) : update; },
+        discoverMapBars: async () => ({ bars: [{ id: 'found', lat: 41.501, lon: 2.201, name: 'Local' }] }),
+        isSameVenue: (item, bar) => item.id === bar.id,
+        mergeDiscoveredBars: (before, next) => [...before, ...next],
+        setBarCardAnchorX() {}, setBarCardAnchorY() {},
+    });
+    state.mapRefNative.current.getCamera = async () => ({ center: { latitude: 40.4, longitude: -3.7 }, heading: 37, zoom: 15 });
+    vm.runInContext(ts.transpileModule([
+        `const deg2rad = ${implementation('deg2rad')};`,
+        `const getDistanceFromLatLonInKm = ${implementation('getDistanceFromLatLonInKm')};`,
+        implementation('nearestTutorialBar', true).replace('export ', ''),
+        `globalThis.nearestTutorialBar = nearestTutorialBar;`,
+        `globalThis.prepareMapTutorial = ${implementation('prepareMapTutorial')};`,
+    ].join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, state);
+    return state;
+}
+
+test('the tutorial selects the closest real saved venue from GPS, independent of filters or viewport, and locks it across steps', async () => {
+    const state = mapTutorialHarness();
+    state.prepareMapTutorial('map-search');
+    assert.equal(state.tutorialBarRef.current.id, 'barcelona', 'use GPS, not the current Madrid viewport');
+    assert.equal(state.activeFilters.size, 0);
+    state.prepareMapTutorial('map-bar');
+    assert.equal(state.selectedBar.id, 'barcelona');
+    assert.equal(state.cameras.at(-1).latitude, 41.5);
+    state.userLocation.coords = { latitude: 40.4, longitude: -3.7 };
+    state.prepareMapTutorial('map-directions');
+    assert.equal(state.selectedBar.id, 'barcelona', 'camera changes must not change the demonstration bar');
+    assert.equal(state.tutorialSnapshot.current.query, 'Original');
+    assert.equal(state.tutorialSnapshot.current.filters.has('open_now'), true);
+    const fallback = mapTutorialHarness();
+    fallback.userLocation = null;
+    fallback.prepareMapTutorial('map-bar');
+    assert.equal(fallback.selectedBar.id, 'madrid', 'without location use the original map center');
+    assert.equal(state.nearestTutorialBar([
+        { id: 'invalid', latitude: NaN, longitude: 0 },
+        { id: 'demo', latitude: 0, longitude: 0, isTestData: true },
+        { id: 'real', latitude: 0, longitude: 0.01 },
+    ], { latitude: 0, longitude: 0 }).id, 'real');
+    assert.equal(state.nearestTutorialBar([], { latitude: 0, longitude: 0 }), null);
+});
+
+test('discovery demonstrates a real unregistered card and discards late results after skipping', async () => {
+    const state = mapTutorialHarness();
+    state.prepareMapTutorial('map-discovery');
+    assert.equal(state.tutorialDiscovery, 'loading');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(state.tutorialDiscovery, 'ready');
+    assert.equal(state.tutorialDiscoveredBar.id, 'found');
+    state.prepareMapTutorial('map-report');
+    assert.equal(state.selectedDiscoveredBar.id, 'found');
+    assert.equal(state.selectedBar, null);
+    const late = mapTutorialHarness();
+    let release;
+    late.discoverMapBars = () => new Promise(resolve => { release = resolve; });
+    late.prepareMapTutorial('map-discovery');
+    late.tutorialDiscoveryRequest.current++;
+    release({ bars: [{ id: 'late' }] });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(late.scannedBars.length, 0);
+    assert.equal(late.tutorialDiscoveredBar, null);
 });
 
 test('relative range changes preserve rotation and pitch on native and web cameras without mutating the snapshot', () => {

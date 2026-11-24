@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const ts = require('typescript');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, getDoc, getDocs, collection, updateDoc, deleteDoc, serverTimestamp, getAggregateFromServer, average, count } = require('firebase/firestore');
 
@@ -167,6 +168,44 @@ test('Firestore authorizes premium reviews and subscriptions without trusting cl
             await assertSucceeds(updateDoc(doc(guest, 'bars', 'premium'), { usuallyShowsBarca: true }));
             await assertSucceeds(updateDoc(doc(alice, 'bars', 'osm_123'), { usuallyShowsBarca: true }));
             await assertFails(deleteDoc(doc(alice, 'bars', 'osm_123')));
+        });
+        await t.test('the app can transactionally save Google and OSM discoveries as a guest or account', async () => {
+            const source = fs.readFileSync(path.join(__dirname, '../app/src/services/barService.ts'), 'utf8');
+            const ast = ts.createSourceFile('barService.ts', source, ts.ScriptTarget.Latest, true);
+            const declaration = ast.statements.filter(ts.isVariableStatement)
+                .flatMap(statement => [...statement.declarationList.declarations])
+                .find(item => item.name.getText(ast) === 'addUserReportedBar');
+            assert(declaration);
+            const compiled = ts.transpileModule(`return (${declaration.initializer.getText(ast)});`, {
+                compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+            }).outputText;
+            for (const [client, userId, suffix] of [[guest, undefined, 'Guest'], [alice, 'alice', 'Account']]) {
+                const context = {
+                    ...require('firebase/firestore'), db: client,
+                    executeRequest: async operation => {
+                        try { return { success: true, data: await operation() }; }
+                        catch (error) { return { success: false, error: error.message }; }
+                    },
+                };
+                const addReport = new Function(...Object.keys(context), compiled)(...Object.values(context));
+                for (const id of [`google_ChIJ${suffix}`, `osm_node_${suffix === 'Guest' ? 991 : 992}`]) {
+                    const venue = {
+                        id, name: 'Discovered venue', lat: 41.56, lon: 2.01, amenities: ['wifi'],
+                        googlePlaceId: `ChIJ${suffix}`,
+                    };
+                    await addReport(venue, userId);
+                    await addReport({ ...venue, name: 'Do not overwrite existing details' }, userId);
+                    const saved = (await getDoc(doc(guest, 'bars', id))).data();
+                    assert.equal(saved.name, venue.name);
+                    assert.equal(saved.googlePlaceId, venue.googlePlaceId);
+                    assert.equal(saved.source, 'user_reported');
+                    assert.equal(saved.usuallyShowsBarca, true);
+                    assert.equal(saved.reportedBy, userId);
+                    assert.equal(saved.isActive, false);
+                    assert(!('ownerId' in saved));
+                    assert(!('tier' in saved));
+                }
+            }
         });
         await t.test('profiles and preferences remain editable without allowing roles or ownership to be self-assigned', async () => {
             const own = doc(alice, 'users', 'alice');
