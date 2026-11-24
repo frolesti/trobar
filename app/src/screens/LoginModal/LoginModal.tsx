@@ -349,7 +349,13 @@ const LoginModal = ({ navigation }: Props) => {
 
                     {!showEmailForm && (
                         <View style={styles.header}>
-                            <Text accessibilityRole="header" style={[styles.title, styles.wordmark]} numberOfLines={1}>troBar</Text>
+                            <Image
+                                source={require('../../../../assets/web/logos/wordmark-cream.png')}
+                                style={styles.wordmark}
+                                resizeMode="contain"
+                                accessibilityLabel="troBar"
+                                accessibilityRole="header"
+                            />
                             <Text style={styles.subtitle}>
                                 Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic. Si encara no tens compte, el crearem automàticament la primera vegada.
                             </Text>

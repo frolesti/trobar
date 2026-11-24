@@ -135,7 +135,11 @@ async function syncSubscriptionState(subscription: Stripe.Subscription, eventCre
     if (receipt && (await transaction.get(receipt)).exists) return;
     const owner = await transaction.get(ownerRef);
     const bar = await transaction.get(barRef);
-    if (!owner.exists || !bar.exists || owner.data()?.barId !== barId || bar.data()?.ownerId !== uid) {
+    if (!owner.exists || !bar.exists) {
+      console.info("[Billing] Ignoring subscription for a removed bar", barId);
+      return;
+    }
+    if (owner.data()?.barId !== barId || bar.data()?.ownerId !== uid) {
       throw new HttpsError("failed-precondition", "La subscripció no correspon al bar.");
     }
     if (bar.data()?.isTestData === true) {

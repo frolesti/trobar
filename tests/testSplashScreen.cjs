@@ -36,6 +36,7 @@ function harness(platform) {
       if (name === 'expo-image') return { Image: 'CachedImage' };
       if (name.endsWith('editorialTheme')) return { EDITORIAL: { background: '#7a0033' } };
       if (name.endsWith('.gif')) return 'logo.gif';
+      if (name.endsWith('wordmark-cream.png')) return 'wordmark.png';
       if (name.endsWith('.png')) return 'fallback.png';
       throw new Error(name);
     },
@@ -67,7 +68,7 @@ test('web splash is viewport-fixed and never shows the wordmark before the image
   assert.equal(tree.type, 'div');
   assert.equal(tree.props.style.position, 'fixed');
   assert.equal(tree.props.style.inset, 0);
-  assert.equal(nodes(tree, 'div').filter(node => node.props.dangerouslySetInnerHTML).length, 0);
+  assert.equal(nodes(tree, 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 0);
   const image = nodes(tree, 'CachedImage')[0];
   assert.equal(image.props.source, 'logo.gif');
   assert.equal(image.props.cachePolicy, 'memory-disk');
@@ -75,7 +76,7 @@ test('web splash is viewport-fixed and never shows the wordmark before the image
   assert.equal(image.props.autoplay, true);
   image.props.onDisplay();
   tree = app.render();
-  assert.equal(nodes(tree, 'div').filter(node => node.props.dangerouslySetInnerHTML).length, 1);
+  assert.equal(nodes(tree, 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 1);
 });
 
 test('native branding waits for both fonts and actual GIF display, on every appearance', () => {
@@ -84,14 +85,14 @@ test('native branding waits for both fonts and actual GIF display, on every appe
     let tree = app.render({ visible: true, fontReady: false });
     assert.equal(tree.type, 'NativeView');
     assert.equal(tree.props.style.position, 'absolute');
-    assert.equal(nodes(tree, 'NativeText').length, 0);
+    assert.equal(nodes(tree, 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 0);
     nodes(tree, 'CachedImage')[0].props.onDisplay();
-    assert.equal(nodes(app.render({ visible: true, fontReady: false }), 'NativeText').length, 0);
-    assert.equal(nodes(app.render(), 'NativeText').length, 6);
+    assert.equal(nodes(app.render({ visible: true, fontReady: false }), 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 0);
+    assert.equal(nodes(app.render(), 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 1);
     const previousDisplay = nodes(app.render(), 'CachedImage')[0].props.onDisplay;
     assert.equal(app.render({ visible: false }), null);
     previousDisplay();
-    assert.equal(nodes(app.render(), 'NativeText').length, 0, 'a previous display event must not expose title-only branding on the next appearance');
+    assert.equal(nodes(app.render(), 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 0, 'a previous display event must not expose title-only branding on the next appearance');
   }
 });
 
@@ -102,10 +103,10 @@ test('GIF failure is logged and a bundled fallback must display before the wordm
   failedImage.props.onDisplay();
   let tree = app.render();
   assert.equal(app.errors.length, 1);
-  assert.equal(nodes(tree, 'NativeText').length, 0);
+  assert.equal(nodes(tree, 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 0);
   assert.equal(nodes(tree, 'CachedImage')[0].props.source, 'fallback.png');
   nodes(tree, 'CachedImage')[0].props.onDisplay();
-  assert.equal(nodes(app.render(), 'NativeText').length, 6);
+  assert.equal(nodes(app.render(), 'CachedImage').filter(node => node.props.source === 'wordmark.png').length, 1);
 });
 
 test('bootstrap retains one global splash through font loading and static HTML never reveals a title before its GIF', () => {

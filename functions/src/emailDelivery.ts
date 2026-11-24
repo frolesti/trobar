@@ -20,6 +20,7 @@ type Mail = { from: string; replyTo: string; template: { id: string; variables: 
 type Sender = Resend["emails"]["send"];
 type Job = {
   uid: string; to: string; kind: Kind; input: Input; subscriptionId?: string; invoiceId?: string; refundId?: string;
+  sourceCreatedAt?: number;
   sourceId?: string; revision?: string; cancelAt?: number; deletionConfirmed?: boolean;
   state: string; nextAttemptAt: number; expiresAt: number; attempts: number; firstAttemptAt?: number; payload?: Mail;
 };
@@ -43,7 +44,24 @@ function publicWelcomeEnabled(): boolean {
   return process.env.EMAIL_DELIVERY_MODE === "public" && process.env.EMAIL_PUBLIC_WELCOME_READY === "true";
 }
 
+function transactionalSince(): number | null {
+  if (process.env.EMAIL_DELIVERY_MODE !== "transactional") return null;
+  const since = Date.parse(process.env.EMAIL_TRANSACTIONAL_SINCE || "");
+  return Number.isFinite(since) ? since : null;
+}
+
+export function passesDeliveryCutover(sourceCreatedAt: number | undefined): boolean {
+  if (process.env.EMAIL_DELIVERY_MODE !== "transactional") return true;
+  const since = transactionalSince();
+  return since !== null && typeof sourceCreatedAt === "number" && Number.isFinite(sourceCreatedAt) && sourceCreatedAt >= since;
+}
+
+function billingDeliveryEnabled(): boolean {
+  return process.env.EMAIL_DELIVERY_MODE === "internal" || transactionalSince() !== null;
+}
+
 export function emailEnabledFor(email: string, kind?: Kind): boolean {
+  if (transactionalSince() !== null) return kind !== "bar-onboarding";
   if (publicWelcomeEnabled() && kind === "welcome") return true;
   if (process.env.EMAIL_DELIVERY_MODE !== "internal") return false;
   const allowed = (process.env.EMAIL_INTERNAL_RECIPIENTS || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
@@ -55,7 +73,7 @@ function jobId(key: string): string {
 }
 
 export async function enqueueEmail(db: admin.firestore.Firestore, key: string, job: Omit<Job, "state" | "attempts" | "expiresAt">): Promise<void> {
-  if (!emailEnabledFor(job.to, job.kind)) {
+  if (!emailEnabledFor(job.to, job.kind) || !passesDeliveryCutover(job.sourceCreatedAt)) {
     console.info("[Email] Recipient suppressed by delivery policy", job.kind);
     return;
   }
@@ -78,12 +96,17 @@ async function recipient(db: admin.firestore.Firestore, uid: string, subscriptio
   if (!account.email || !account.emailVerified || account.disabled || !emailEnabledFor(account.email)) return null;
   const owner = (await db.collection("barOwners").doc(uid).get()).data();
   const barId = subscription.metadata.barId;
-  if (!owner || !barId || owner.barId !== barId || owner.stripeCustomerId !== id(subscription.customer)
+  if (!barId) throw new Error("Email subscription has no bar");
+  const bar = (await db.collection("bars").doc(barId).get()).data();
+  if (!owner || !bar) {
+    console.info("[Email] Subscription suppressed because the bar registration was removed");
+    return null;
+  }
+  if (owner.barId !== barId || owner.stripeCustomerId !== id(subscription.customer)
     || owner.stripeSubscriptionId !== subscription.id || subscription.metadata.firebaseUid !== uid) {
     throw new Error("Email subscription ownership mismatch");
   }
-  const bar = (await db.collection("bars").doc(barId).get()).data();
-  if (!bar || bar.ownerId !== uid || bar.isTestData === true) return null;
+  if (bar.ownerId !== uid || bar.isTestData === true) return null;
   return { to: account.email, displayName: account.displayName || owner.name || "", barName: bar.name };
 }
 
@@ -122,7 +145,7 @@ function planRevision(subscription: Pick<Stripe.Subscription, "items">): string 
 export async function planSubscriptionEmails(
   db: admin.firestore.Firestore, stripe: Stripe, event: Stripe.Event, subscription: Stripe.Subscription, now = Date.now(),
 ): Promise<void> {
-  if (process.env.EMAIL_DELIVERY_MODE !== "internal") return;
+  if (!billingDeliveryEnabled() || !passesDeliveryCutover(event.created * 1000)) return;
   if (process.env.EMAIL_PORTAL_READY !== "true") {
     console.info("[Email] Billing delivery waits for a verified cancellation portal");
     return;
@@ -139,7 +162,7 @@ export async function planSubscriptionEmails(
   if (!uid) return;
   const person = await recipient(db, uid, subscription);
   if (!person) { console.info("[Email] Subscription recipient is not eligible for internal delivery"); return; }
-  const basic = { uid, to: person.to, subscriptionId: subscription.id };
+  const basic = { uid, to: person.to, subscriptionId: subscription.id, sourceCreatedAt: event.created * 1000 };
   if (event.type === "customer.subscription.updated") {
     const previous = event.data.previous_attributes;
     const changed = event.data.object;
@@ -194,7 +217,7 @@ export async function planSubscriptionEmails(
 }
 
 export async function planRefundEmail(db: admin.firestore.Firestore, stripe: Stripe, event: Stripe.Event, now = Date.now()): Promise<void> {
-  if (process.env.EMAIL_PORTAL_READY !== "true" || process.env.EMAIL_DELIVERY_MODE !== "internal"
+  if (process.env.EMAIL_PORTAL_READY !== "true" || !billingDeliveryEnabled() || !passesDeliveryCutover(event.created * 1000)
     || now - event.created * 1000 > 23 * 60 * 60 * 1000) return;
   if (event.type !== "refund.created" && event.type !== "refund.updated") return;
   const refund = event.data.object;
@@ -216,7 +239,7 @@ export async function planRefundEmail(db: admin.firestore.Firestore, stripe: Str
   if (!person) return;
   await enqueueEmail(db, `refund-confirmed:${refund.id}`, {
     uid, to: person.to, kind: "refund-confirmed", input: person, subscriptionId, invoiceId: invoice.id,
-    refundId: refund.id, nextAttemptAt: now,
+    refundId: refund.id, sourceCreatedAt: event.created * 1000, nextAttemptAt: now,
   });
 }
 
@@ -225,10 +248,10 @@ export async function queueWelcome(uid: string): Promise<{ status: "unverified" 
   if (!account.emailVerified || !account.email || account.disabled) return { status: "unverified" };
   if (!emailEnabledFor(account.email, "welcome")) return { status: "suppressed" };
   const created = Date.parse(account.metadata.creationTime);
-  if (!Number.isFinite(created) || Date.now() - created > 7 * 86400000) return { status: "not-new" };
+  if (!Number.isFinite(created) || !passesDeliveryCutover(created) || Date.now() - created > 7 * 86400000) return { status: "not-new" };
   await enqueueEmail(admin.firestore(), `welcome:${account.uid}`, {
     uid: account.uid, to: account.email, kind: "welcome",
-    input: { displayName: account.displayName || "" }, nextAttemptAt: Date.now(),
+    input: { displayName: account.displayName || "" }, sourceCreatedAt: created, nextAttemptAt: Date.now(),
   });
   return { status: "queued" };
 }
@@ -347,11 +370,17 @@ export async function deliverEmailJob(
   db: admin.firestore.Firestore, stripe: Stripe, ref: admin.firestore.DocumentReference, apiKey: string,
   now = Date.now(), sender?: Sender,
 ): Promise<void> {
-  if (process.env.EMAIL_DELIVERY_MODE !== "internal" && !publicWelcomeEnabled()) return;
+  if (!billingDeliveryEnabled() && !publicWelcomeEnabled()) return;
   const job = await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() as Job | undefined;
     if (!data || !["pending", "processing"].includes(data.state) || data.nextAttemptAt > now) return null;
+    if (!passesDeliveryCutover(data.sourceCreatedAt)) {
+      transaction.update(ref, { state: "suppressed", nextAttemptAt: FieldValue.delete(), reason: "before-transactional-cutover",
+        to: FieldValue.delete(), input: FieldValue.delete(), payload: FieldValue.delete() });
+      console.info("[Email] Historical queued job suppressed", ref.id);
+      return null;
+    }
     if (data.expiresAt <= now || data.attempts >= 5 || (data.firstAttemptAt && now - data.firstAttemptAt >= 23 * 60 * 60 * 1000)) {
       transaction.update(ref, { state: "failed", nextAttemptAt: FieldValue.delete(), errorCode: "retry-window-exhausted",
         to: FieldValue.delete(), input: FieldValue.delete(), payload: FieldValue.delete() });
@@ -372,14 +401,14 @@ export async function deliverEmailJob(
     }
     if (!apiKey) throw new DeliveryError("missing-resend-configuration", false);
     if (job.payload && !job.payload.template) throw new DeliveryError("unsupported-cached-email-payload", false);
-    const render: (kind: Kind, input: object, options: { internalTest: boolean }) => Mail = require("./emails/resend.cjs").createHostedMessage;
+    const render: (kind: Kind, input: object, options: { internalTest: boolean; sandbox: boolean }) => Mail = require("./emails/resend.cjs").createHostedMessage;
     const payload = job.payload || render(job.kind, {
       ...input, logoUrl: `${origin}/assets/logos/logo-red.png`,
       allowedActionOrigins: [origin, "https://invoice.stripe.com"],
       appUrl: origin,
       manageUrl: job.kind === "payment-action-required" ? input.invoiceUrl : `${origin}/subscripcio`,
       profileUrl: `${origin}/consells-bar`, unsubscribeUrl: `${origin}/consells-bar`,
-    }, { internalTest: process.env.EMAIL_DELIVERY_MODE !== "public" });
+    }, { internalTest: process.env.EMAIL_DELIVERY_MODE === "internal", sandbox: !!job.subscriptionId });
     // A retry must reuse the exact payload inside Resend's 24-hour idempotency window.
     if (!job.payload) await ref.update({ payload });
     const client = new Resend(apiKey);
@@ -420,7 +449,7 @@ export const processEmailQueue = onSchedule({
   region, schedule: "every 5 minutes", timeZone: "Etc/UTC", maxInstances: 1, concurrency: 1,
   timeoutSeconds: 120, retryCount: 0, secrets: [stripeKey, resendKey],
 }, async () => {
-  if (process.env.EMAIL_DELIVERY_MODE !== "internal" && !publicWelcomeEnabled()) { console.info("[Email] Delivery is disabled"); return; }
+  if (!billingDeliveryEnabled() && !publicWelcomeEnabled()) { console.info("[Email] Delivery is disabled"); return; }
   const db = admin.firestore();
   const stripe = new Stripe(stripeKey.value(), { timeout: 15000, maxNetworkRetries: 0 });
   const jobs = await db.collection("emailJobs").where("nextAttemptAt", "<=", Date.now()).limit(2).get();

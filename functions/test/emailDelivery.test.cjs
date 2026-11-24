@@ -37,6 +37,74 @@ const invoice = (h, amount = 9900) => ({
   lines: { data: [{ parent: { subscription_item_details: { subscription: 'sub' } }, period: { start: Math.floor(h.now / 1000), end: Math.floor(h.now / 1000) + 90 * 86400 } }] },
 });
 
+test('removed registrations do not enqueue billing emails, including after the owner registers another bar', async () => {
+  for (const removed of ['bars/bar', 'barOwners/owner']) {
+    const h = setup();
+    h.documents.delete(removed);
+    if (removed === 'bars/bar') h.documents.get('barOwners/owner').barId = 'new-bar';
+    await h.email.planSubscriptionEmails(h.database, h.stripe, event(h), h.sub, h.now);
+    assert.equal(h.jobs().length, 0);
+  }
+});
+
+test('public transactional delivery requires a cutover and only sends new verified sandbox events with test labels', async () => {
+  const since = Date.now() - 60000;
+  for (const cutover of [undefined, 'not-a-date', new Date(since).toISOString()]) {
+    const h = setup({ env: { EMAIL_DELIVERY_MODE: 'transactional', EMAIL_TRANSACTIONAL_SINCE: cutover, EMAIL_PORTAL_READY: 'true' } });
+    await h.email.planSubscriptionEmails(h.database, h.stripe, { ...event(h), created: Math.floor((since - 1000) / 1000) }, h.sub, h.now);
+    assert.equal(h.jobs().length, 0);
+    await h.email.planSubscriptionEmails(h.database, h.stripe, event(h), h.sub, h.now);
+    assert.equal(h.jobs().length, cutover && cutover !== 'not-a-date' ? 3 : 0);
+    if (!h.jobs().length) continue;
+    const [key] = h.jobs().find(([, job]) => job.kind === 'bar-activated');
+    let payload;
+    await h.email.deliverEmailJob(h.database, h.stripe, h.ref(key), 'fixture', h.now, async mail => { payload = mail; return accepted(); });
+    assert.equal(payload.template.variables.SUBJECT_PREFIX, '[PROVA STRIPE] ');
+    assert.equal(h.email.emailEnabledFor('owner@example.test', 'bar-onboarding'), false);
+  }
+});
+
+test('transactional cutover suppresses legacy queued jobs and historical welcomes', async () => {
+  const since = Date.now() - 60000;
+  const h = setup({ env: { EMAIL_DELIVERY_MODE: 'transactional', EMAIL_TRANSACTIONAL_SINCE: new Date(since).toISOString() } });
+  h.options.authUser.metadata.creationTime = new Date(since - 1000).toISOString();
+  assert.equal((await h.api.recordFirstLogin(request({}))).status, 'not-new');
+  for (const sourceCreatedAt of [undefined, since - 1]) {
+    const key = `emailJobs/legacy-${sourceCreatedAt}`;
+    h.documents.set(key, { uid: 'owner', to: 'owner@example.test', kind: 'welcome', input: {},
+      state: 'pending', attempts: 0, nextAttemptAt: h.now, expiresAt: h.now + 60000, sourceCreatedAt });
+    await h.email.deliverEmailJob(h.database, h.stripe, h.ref(key), 'fixture', h.now, () => { throw new Error('Historical job must not send'); });
+    assert.equal(h.documents.get(key).state, 'suppressed');
+  }
+});
+
+test('new support events send normal transactional mail, while delayed old triggers cannot backfill', async () => {
+  const since = Date.now() - 60000;
+  const h = setup({ env: { EMAIL_DELIVERY_MODE: 'transactional', EMAIL_TRANSACTIONAL_SINCE: new Date(since).toISOString() } });
+  const ticket = { userId: 'owner', subject: 'Una consulta' };
+  h.documents.set('contactMessages/new-ticket', ticket);
+  await h.api.onContactEmail({ time: new Date(since - 1000).toISOString(), params: { messageId: 'old-ticket' }, data: { data: () => ticket } });
+  assert.equal(h.jobs().length, 0);
+  await h.api.onContactEmail({ time: new Date(h.now).toISOString(), params: { messageId: 'new-ticket' }, data: { data: () => ticket } });
+  const [key] = h.jobs()[0];
+  let payload;
+  await h.email.deliverEmailJob(h.database, h.stripe, h.ref(key), 'fixture', Date.now() + 1000, async mail => { payload = mail; return accepted(); });
+  assert.equal(payload.template.variables.SUBJECT_PREFIX, '');
+});
+
+test('transactional activation refreshes old security baselines before reporting subsequent changes', async () => {
+  const h = setup({ env: { EMAIL_DELIVERY_MODE: 'transactional', EMAIL_TRANSACTIONAL_SINCE: new Date(Date.now() - 60000).toISOString() },
+    authUser: { uid: 'owner', email: 'owner@example.test', emailVerified: true, providerData: [{ providerId: 'password' }] } });
+  h.documents.set('accountSecurityState/owner', { email: 'old@example.test', providers: 'password',
+    sessionsSince: '', sequence: 1, revision: 'old-baseline' });
+  await h.api.recordAccountSecurity(request({}));
+  const events = () => [...h.documents.keys()].filter(key => key.startsWith('accountSecurityEvents/'));
+  assert.equal(events().length, 0);
+  h.options.authUser.email = 'changed@example.test';
+  await h.api.recordAccountSecurity(request({}));
+  assert.equal(events().length, 1);
+});
+
 test('cancellation and actual end are different events, deduplicated and rechecked before delivery', async () => {
   const h = setup();
   h.sub.cancel_at = Math.floor(h.now / 1000) + 3600;

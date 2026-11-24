@@ -39,47 +39,22 @@
       .splash-gif {
         width: 200px;
         height: 200px;
-        margin-bottom: 12px;
+        margin-bottom: 2px;
         border-radius: 100px;
         object-fit: contain;
       }
 
-      .splash-text {
-        font-family: 'Oi', sans-serif;
-        font-size: 36px;
-        font-weight: 400;
-        color: #ffffff;
-        text-align: center;
-        letter-spacing: 1px;
-        margin: 0;
-      }
-
-      /* SVG per al text curvat */
-      .splash-text-svg {
-        width: 280px;
-        height: 100px;
-        margin-top: -20px;
+      .splash-wordmark {
+        width: 252px;
+        height: 90px;
+        margin-top: -8px;
+        margin-bottom: 12px;
         visibility: hidden;
       }
-      .splash-overlay[data-logo-ready="true"] .splash-text-svg { visibility: visible; }
-
-      .splash-text-svg text {
-        font-family: 'Oi', sans-serif;
-        font-size: 36px;
-        font-weight: 400;
-        fill: #ffffff;
-        letter-spacing: 1px;
-      }
+      .splash-overlay[data-logo-ready="true"] .splash-wordmark { visibility: visible; }
     </style>
 
-    <!--
-      Precarrega la font Oi des de Google Fonts perquè estigui disponible
-      el més aviat possible. Evita el FOUC (flash de tipografia de sistema → Oi).
-    -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oi&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oi&display=swap" />
+    <link rel="preload" as="image" href="/brand/wordmark-cream.svg" />
 
     <!--
       Precarrega el GIF per renderitzar-lo més ràpidament.
@@ -92,16 +67,7 @@
     <!-- Pantalla estàtica de càrrega (GIF + text curvat) — apareix instantàniament -->
     <div class="splash-overlay" id="splash-static">
       <img src="/gif/trobar.gif" alt="troBar" class="splash-gif" onload="this.parentElement.dataset.logoReady='true'" onerror="console.error('troBar animated logo failed to load')" />
-      <svg class="splash-text-svg" viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <path id="curved-path" d="M 40 35 Q 140 80 240 35" fill="none"/>
-        </defs>
-        <text font-family="Oi, sans-serif" font-size="36" font-weight="400" fill="white" letter-spacing="1">
-          <textPath href="#curved-path" startOffset="50%" text-anchor="middle">
-            troBar
-          </textPath>
-        </text>
-      </svg>
+      <img class="splash-wordmark" src="/brand/wordmark-cream.svg" alt="" aria-hidden="true" width="252" height="90" />
     </div>
 
     <!-- Contenidor on React muntarà l'app -->

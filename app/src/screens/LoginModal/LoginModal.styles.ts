@@ -70,10 +70,8 @@ export default StyleSheet.create({
         letterSpacing: 0,
     },
     wordmark: {
-        fontFamily: EDITORIAL.fontDisplay,
-        fontSize: 26,
-        lineHeight: 42,
-        color: EDITORIAL.onBackground,
+        width: 168,
+        height: 60,
     },
     subtitle: {
         alignSelf: 'stretch',

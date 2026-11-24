@@ -98,13 +98,13 @@ export default function Pricing() {
         })}
       </div>
 
-      {/* Card editorial */}
-      <div className="pricing-card" style={{
+      <div className="pricing-card" aria-live="polite" aria-atomic="true" style={{
         maxWidth: 560, margin: '0 auto',
-        padding: '56px 44px',
+        padding: '52px 44px 32px',
         border: '1px solid var(--hairline)',
         background: 'var(--brand-paper)',
         position: 'relative',
+        fontVariantNumeric: 'tabular-nums',
       }}>
         {sel.savePct && (
           <span style={{
@@ -117,8 +117,7 @@ export default function Pricing() {
           </span>
         )}
 
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <span className="eyebrow" style={{ marginBottom: 12 }}>troBar per a bars</span>
+        <div style={{ textAlign: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
             {sel.price < monthlyCost && (
               <span style={{
@@ -144,16 +143,19 @@ export default function Pricing() {
           }}>
             facturat com {totalLabel}
           </p>
-          {yearlySaving > 0 && (
-            <p style={{
-              fontSize: 14, marginTop: 6,
-              color: 'var(--gold)',
-            }}>
-              t&apos;estalvies {yearlySaving}€ l&apos;any
-            </p>
-          )}
+          <p style={{
+            fontSize: 14, marginTop: 6, lineHeight: 1.7, minHeight: '1.7em',
+            color: 'var(--gold)',
+          }}>
+            {yearlySaving > 0 && <>t&apos;estalvies {yearlySaving}€ l&apos;any</>}
+          </p>
         </div>
+      </div>
 
+      <div className="pricing-included" style={{
+        maxWidth: 560, margin: '0 auto', padding: '32px 32px 0',
+      }}>
+        <span className="eyebrow" style={{ marginBottom: 20 }}>troBar per a bars</span>
         <ul className="pricing-features">
           {features.map((feat, i) => (
             <li key={i} style={{ fontSize: 15, color: 'var(--paper)' }}>{feat}</li>

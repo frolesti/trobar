@@ -7,6 +7,11 @@ const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const destination = path.join(root, '.expo', 'email-functions');
 const enableInternalBilling = process.argv.includes('--enable-internal-billing');
+const enableTransactional = process.argv.includes('--enable-public-transactional');
+const transactionalSince = process.argv.find(value => value.startsWith('--transactional-since='))?.split('=').slice(1).join('=');
+if (enableTransactional && (!transactionalSince || !Number.isFinite(Date.parse(transactionalSince)))) {
+  throw new Error('Public transactional delivery requires --transactional-since=<ISO timestamp>');
+}
 fs.mkdirSync(path.join(destination, 'lib'), { recursive: true });
 const modules = path.join(destination, 'node_modules');
 if (!fs.existsSync(modules)) fs.symlinkSync(path.join(root, 'functions', 'node_modules'), modules, 'junction');
@@ -75,10 +80,11 @@ const prices = ['STRIPE_PRICE_MONTHLY', 'STRIPE_PRICE_QUARTERLY', 'STRIPE_PRICE_
   return `${key}=${value}`;
 });
 fs.writeFileSync(path.join(destination, '.env.trobar-1123f'), [
-  'EMAIL_DELIVERY_MODE=internal', 'EMAIL_INTERNAL_RECIPIENTS=frolesti4@gmail.com',
+  `EMAIL_DELIVERY_MODE=${enableTransactional ? 'transactional' : 'internal'}`, 'EMAIL_INTERNAL_RECIPIENTS=frolesti4@gmail.com',
+  ...(enableTransactional ? [`EMAIL_TRANSACTIONAL_SINCE=${transactionalSince}`] : []),
   `EMAIL_PORTAL_READY=${enableInternalBilling}`, 'STRIPE_ALLOW_LIVE_BILLING=false', ...prices, '',
 ].join('\n'));
 fs.writeFileSync(path.join(root, '.expo', 'email.firebase.json'), JSON.stringify({
   functions: [{ source: 'email-functions', codebase: 'default' }],
 }, null, 2));
-console.log(`Prepared isolated email, subscription status, portal and webhook exports; internal billing delivery ${enableInternalBilling ? 'enabled after portal verification' : 'gated off'}. Live billing and unlisted recipients remain disabled.`);
+console.log(`Prepared isolated email exports; delivery ${enableTransactional ? 'transactional, future events only' : 'internal recipients only'}; billing emails ${enableInternalBilling ? 'enabled after portal verification' : 'gated off'}. Live billing remains disabled.`);

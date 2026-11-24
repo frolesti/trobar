@@ -74,3 +74,26 @@ test('bad signatures cannot write billing state', async () => {
   assert.equal((await dispatch(h)).status, 400);
   assert.equal(h.updates.length, 0);
 });
+
+test('late signed events acknowledge removed registrations without recreating data', async () => {
+  for (const removed of ['bars/bar', 'barOwners/owner']) {
+    const documents = ownerDocuments();
+    delete documents[removed];
+    const h = harness({ documents, subscription: subscription('active'),
+      event: { id: 'evt_retired', created: 100, type: 'customer.subscription.updated',
+        data: { object: subscription('active') } } });
+    assert.equal((await dispatch(h)).status, 200);
+    assert.equal(h.documents.has(removed), false);
+    assert.equal(h.updates.length, 0);
+  }
+});
+
+test('existing registrations still reject subscription ownership mismatches', async () => {
+  const documents = ownerDocuments();
+  documents['barOwners/owner'].barId = 'another-bar';
+  const h = harness({ documents, subscription: subscription('active'),
+    event: { id: 'evt_wrong_owner', created: 100, type: 'customer.subscription.updated',
+      data: { object: subscription('active') } } });
+  await assert.rejects(() => dispatch(h), { code: 'failed-precondition' });
+  assert.equal(h.updates.length, 0);
+});

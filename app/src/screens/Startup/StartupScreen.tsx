@@ -33,10 +33,13 @@ const StartupScreen = ({ navigation }: Props) => {
           style={styles.logo}
           resizeMode="cover"
         />
+        <Image
+          source={require('../../../../assets/web/logos/wordmark-cream.png')}
+          style={styles.wordmark}
+          resizeMode="contain"
+          accessibilityLabel="troBar"
+        />
         <Text style={styles.eyebrow}>Benvingut</Text>
-        <Text style={styles.wordmark}>
-          tro<Text style={styles.wordmarkItalic}>Bar</Text>
-        </Text>
       </View>
       <Text style={styles.copyright}>© FROLESTI</Text>
     </View>

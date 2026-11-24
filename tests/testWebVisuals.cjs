@@ -90,11 +90,25 @@ test('header displays the full official icon and a readable wordmark, without th
   const Header = loadComponent('Header').default;
   const html = renderToStaticMarkup(webRequire('react').createElement(Header));
   assert.match(html, /aria-label="troBar — inici"/);
-  assert.match(html, /class="site-header-wordmark"[^>]*>troBar</);
+  assert.match(html, /class="site-header-lockup"/);
+  assert.match(html, /src="\/assets\/logos\/wordmark-grana\.svg"/);
   assert.match(html, /src="\/assets\/logos\/mascot-ball-grana\.png"/);
   assert.match(html, /transform:scale\(1\)/);
   assert.match(html, /width="40" height="40"/);
   assert.doesNotMatch(html, /scale\(1\.42\)/);
+});
+
+test('pricing keeps common benefits and signup outside the changing price panel', () => {
+  const Pricing = loadComponent('Pricing').default;
+  const html = renderToStaticMarkup(webRequire('react').createElement(Pricing));
+  const cardStart = html.indexOf('class="pricing-card"');
+  const includedStart = html.indexOf('class="pricing-included"');
+  assert(cardStart >= 0 && includedStart > cardStart);
+  const card = html.slice(cardStart, includedStart);
+  assert.doesNotMatch(card, /pricing-features|Prova 14 dies gratis|registra-bar/);
+  assert.match(card, /aria-live="polite"/);
+  assert.equal((html.match(/class="pricing-features"/g) || []).length, 1);
+  assert.match(html.slice(includedStart), /href="\/registra-bar\?billing=quarterly"/);
 });
 
 test('hero preserves the animated logo and provides its static fallback for reduced motion', () => {

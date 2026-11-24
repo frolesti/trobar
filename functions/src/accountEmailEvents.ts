@@ -3,7 +3,7 @@ import * as functionsV1 from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { createHash } from "node:crypto";
-import { emailEnabledFor, enqueueEmail, queueWelcome } from "./emailDelivery";
+import { emailEnabledFor, enqueueEmail, passesDeliveryCutover, queueWelcome } from "./emailDelivery";
 
 const region = "europe-west1";
 const options = { region, cors: true, maxInstances: 3 };
@@ -44,7 +44,7 @@ export const onContactEmail = onDocumentCreated({ region, document: "contactMess
   if (!user) return;
   await enqueueEmail(admin.firestore(), `support-received:${event.params.messageId}`, {
     uid: user.uid, to: user.email!, kind: "support-received", sourceId: event.params.messageId,
-    input: {}, nextAttemptAt: Date.now(),
+    input: {}, sourceCreatedAt: Date.parse(event.time), nextAttemptAt: Date.now(),
   });
 });
 
@@ -98,16 +98,16 @@ export const onSupportReplyEmail = onDocumentCreated({
   if (!user) return;
   await enqueueEmail(db, `support-reply:${event.params.messageId}:${event.params.replyId}`, {
     uid: user.uid, to: user.email!, kind: "support-reply", sourceId: event.params.messageId,
-    revision: event.params.replyId, input: {}, nextAttemptAt: Date.now(),
+    revision: event.params.replyId, input: {}, sourceCreatedAt: Date.parse(event.time), nextAttemptAt: Date.now(),
   });
 });
 
-export const onAccountDeletedEmail = functionsV1.region(region).runWith({ failurePolicy: true }).auth.user().onDelete(async user => {
+export const onAccountDeletedEmail = functionsV1.region(region).runWith({ failurePolicy: true }).auth.user().onDelete(async (user, context) => {
   const db = admin.firestore();
   if (user.emailVerified && user.email && emailEnabledFor(user.email)) {
     await enqueueEmail(db, `account-deleted:${user.uid}:${user.metadata.creationTime}`, {
       uid: user.uid, to: user.email, kind: "account-deleted", deletionConfirmed: true,
-      input: { displayName: user.displayName || "" }, nextAttemptAt: Date.now(),
+      input: { displayName: user.displayName || "" }, sourceCreatedAt: Date.parse(context?.timestamp || ""), nextAttemptAt: Date.now(),
     });
   }
   await Promise.all([
@@ -135,11 +135,12 @@ export const recordAccountSecurity = onCall(options, async request => {
   const ref = db.collection("accountSecurityState").doc(user.uid);
   await db.runTransaction(async transaction => {
     const previous = (await transaction.get(ref)).data();
-    if (previous?.revision === revision) return;
+    const currentBaseline = passesDeliveryCutover(previous?.observedAt);
+    if (previous?.revision === revision && currentBaseline) return;
     const sequence = previous?.sequence === undefined ? 1 : previous.sequence + 1;
     if (!Number.isSafeInteger(sequence) || sequence < 1) throw new Error("Invalid account security sequence");
-    transaction.set(ref, { ...observed, revision, sequence });
-    if (!previous) return; // First observation establishes a baseline, not a security incident.
+    transaction.set(ref, { ...observed, revision, sequence, observedAt: Date.now() });
+    if (!previous || !currentBaseline) return; // Establish a fresh baseline rather than report historical changes.
     const changes = [
       previous.email !== observed.email ? "Correu del compte actualitzat" : "",
       previous.providers !== observed.providers ? "Mètodes d'accés actualitzats" : "",
@@ -159,7 +160,8 @@ export const onAccountSecurityEmail = onDocumentCreated({
   const data = event.data?.data();
   if (!data) throw new Error("Missing security event");
   await enqueueEmail(admin.firestore(), `security-alert:${event.params.eventId}`, {
-    uid: data.uid, to: data.to, kind: "security-alert", sourceId: event.params.eventId, input: {}, nextAttemptAt: Date.now(),
+    uid: data.uid, to: data.to, kind: "security-alert", sourceId: event.params.eventId, input: {},
+    sourceCreatedAt: Date.parse(event.time), nextAttemptAt: Date.now(),
   });
 });
 

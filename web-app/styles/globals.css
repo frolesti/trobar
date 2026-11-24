@@ -317,13 +317,10 @@ h1, h2, h3 { overflow-wrap: anywhere; }
   flex-shrink: 0;
 }
 .site-header-brand > span { flex-shrink: 0; }
-.site-header-wordmark {
-  color: var(--brand-grana);
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
+.site-header-lockup {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .site-header { height: 88px; }
@@ -582,7 +579,11 @@ ul.legal li::before {
   }
 
   .pricing-card {
-    padding: 28px 18px !important;
+    padding: 48px 18px 28px !important;
+  }
+
+  .pricing-included {
+    padding: 28px 18px 0 !important;
   }
 
   .pricing-card [style*='font-size: 82px'] {

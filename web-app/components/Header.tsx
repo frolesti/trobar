@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import Logo from './Logo'
+import Wordmark from './Wordmark'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
@@ -36,8 +37,10 @@ export default function Header() {
       transition: 'background .4s ease, border-color .4s ease',
     }}>
       <Link href="/" aria-label="troBar — inici" className="site-header-brand">
-        <Logo size={40} visualScale={1} variant="red" maskCircle={false} />
-        <span className="site-header-wordmark" aria-hidden="true">troBar</span>
+        <span className="site-header-lockup">
+          <Logo size={40} visualScale={1} variant="red" maskCircle={false} />
+          <Wordmark width={76} decorative />
+        </span>
       </Link>
 
       <button

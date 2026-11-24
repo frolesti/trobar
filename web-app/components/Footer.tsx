@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import contactEmails from '../../app/src/data/contactEmails.json'
+import Wordmark from './Wordmark'
 
 export default function Footer() {
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -23,15 +24,11 @@ export default function Footer() {
       }}>
         {/* Marca */}
         <div>
-          <p style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 22,
-            fontWeight: 400,
-            color: 'var(--cream)',
+          <div style={{
             margin: '0 0 16px',
           }}>
-            troBar
-          </p>
+            <Wordmark width={140} variant="cream" />
+          </div>
           <p style={{ fontSize: 14, lineHeight: 1.8, maxWidth: 260, margin: 0 }}>
             El mapa col·laboratiu per trobar on veure el Barça, fet pels culers i per als culers.
           </p>

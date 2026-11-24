@@ -60,10 +60,18 @@ El disseny final del web està integrat a `main`, recuperat de la revisió del
 16 de novembre de `design/unified-brand`. No cal desplegar aquell worktree
 separadament: els canvis del web es publiquen des de `main`. La paleta prové
 de `brand/palette.json` i `app/src/theme/brandColors.json`; els titulars usen
-Lora i la marca Oi, amb fonts locals i llicències a `assets/web/fonts`.
+Lora i la marca Monofett, amb fonts locals i llicències a `assets/web/fonts`.
+El nom del logo és `TROBAR` en Monofett Regular, amb un espaiat del -1% i
+una corba còncava sota el cambrer. Els SVG `wordmark-cream.svg` i
+`wordmark-grana.svg` d'`assets/web/logos` contenen els glifs convertits a
+traçats, sense dependre de fonts remotes. L'app utilitza el PNG d'alta resolució
+derivat dels mateixos traçats i el splash HTML en comparteix l'SVG.
+Les icones i variants que mostren només el cambrer no es modifiquen.
 La capçalera conserva el logo animat amb alternativa estàtica per a moviment reduït.
 Les superfícies del web són crema: `--brand-paper` usa `palette.cream` només
-al web, sense modificar el color dels correus. Els preus usen llistes de punts.
+al web, sense modificar el color dels correus. El selector de facturació només
+canvia els imports i l'estalvi; les prestacions es mostren una sola vegada,
+fora de la targeta de preu, amb el registre vinculat al període seleccionat.
 
 El web és una entrada d'alta per a l'app, no un portal de comptes.
 Una visita normal a `/registra-bar` tanca la sessió heretada i comença de zero.
@@ -323,7 +331,7 @@ El perfil agrupa els enllaços legals en un peu compacte; els crèdits d'icones
 es poden consultar a l'apartat «Crèdits» dels termes del servei.
 
 La interfície utilitza Barlow per a textos, títols i botons; Barlow Condensed
-queda per als partits i Oi per a la marca. Les antigues referències Lora són
+queda per als partits i Monofett per al nom corbat de la marca. Les antigues referències Lora són
 àlies de Barlow, no una quarta família visible.
 
 A l'accés, la mascota queda centrada a dalt, sense cercle, i el títol és
@@ -422,10 +430,23 @@ administradors; `npm run test:firestore` comprova que no hi ha accés directe.
 
 ### Entorn de dades: dev o prod
 
-Hi ha dos entorns de dades, independents del tipus de build d'Expo:
+Hi ha dues configuracions locals, independents del tipus de build d'Expo:
 
 - `npm run env:dev`: selecciona `.env.development`, l'entorn habitual de treball.
 - `npm run env:prod`: selecciona `.env.production`, només quan estigui configurat.
+
+La base definitiva és `(default)` del projecte Firebase `trobar-1123f`.
+El web i TestFlight `1.0.0 (2)` i `1.0.0 (3)` ja utilitzen aquest projecte; no cal recompilar
+l'app per començar a utilitzar les dades definitives. Les fitxes de bars,
+altes de propietari i dades de facturació de prova s'han retirat el 24/11/2026
+després d'una còpia privada a Cloud Storage, a la UE. S'han conservat els
+comptes personals i el catàleg esportiu. Stripe continua en sandbox.
+
+Les etiquetes `development` i `production` no aïllen les dades: si els dos
+fitxers apunten al mateix projecte, comparteixen la mateixa base. No executis
+imports de demostració ni proves destructives contra `trobar-1123f`.
+Les proves automatitzades de regles s'executen amb `npm run test:firestore`
+contra l'emulador local, no contra producció.
 
 El selector valida Firebase i les etiquetes d'entorn abans de canviar res.
 Genera `.env` per als scripts existents i `.env.local` per a Expo; no són
@@ -501,11 +522,35 @@ node scripts/expoUpdates.js --check-only
 ### Preparació per a App Store
 
 La configuració de compilació no equival a una app aprovada ni preparada per
-enviar a revisió pública. La versió iOS `1.0.0 (2)`, amb la pilota visible a
-la icona, està disponible per a proves internes a TestFlight després de la
-compilació amb EAS i l'enviament
+enviar a revisió pública. La versió iOS `1.0.0 (3)`, amb la pilota visible a
+la icona i el logo Monofett, està processada per Apple (`VALID`) i disponible
+per a proves internes a TestFlight després de la compilació amb EAS i l'enviament
 a App Store Connect. L'app registrada és `6838633050`; les proves externes
 requereixen la configuració de testers i la revisió beta que correspongui.
+
+El grup extern «Beta pública» està creat amb l'enllaç públic habilitat i un
+límit verificat de 100 testers. Encara no té cap compilació aprovada per a
+proves externes: la versió 3 hi està associada i continua a
+`READY_FOR_BETA_SUBMISSION`, sense enviament a revisió. La descripció de la beta,
+el correu de comentaris, els URL públics i les instruccions de prova estan
+configurats a Apple en l'idioma principal de la fitxa (`en-US`). El titular
+completarà directament a App Store Connect el contacte de revisió pendent;
+cal confirmar també els accessos de prova que requereixi Apple abans d'enviar-la.
+No s'ha de publicar el botó de descàrrega al web ni al portfoli fins que
+l'enllaç permeti instal·lar una compilació aprovada.
+
+Els esdeveniments Stripe signats que arribin després de retirar un bar
+s'accepten sense recrear-ne les dades ni enviar correus de facturació.
+Les discrepàncies de propietat entre registres existents continuen rebutjant-se.
+
+L'enviament transaccional està activat amb `EMAIL_DELIVERY_MODE=transactional`
+i `EMAIL_TRANSACTIONAL_SINCE=2026-11-24T11:34:57.690Z`: només s'envien
+esdeveniments nous a destinataris verificats, sense recuperar correus històrics
+ni activar consells comercials. `STRIPE_ALLOW_LIVE_BILLING=false` manté Stripe
+en proves i els correus corresponents porten el prefix `[PROVA STRIPE]`.
+S'ha verificat l'acceptació d'un correu real per Resend, no el lliurament final
+a la bústia. Una clau restringida a enviar no permet consultar aquest
+lliurament amb l'API; un 401 d'aquesta consulta no indica un error d'enviament.
 
 Per instal·lar-la, cal instal·lar TestFlight des de l'App Store de l'iPhone,
 obrir-hi el correu d'invitació i prémer «View in TestFlight», «Accept» i
