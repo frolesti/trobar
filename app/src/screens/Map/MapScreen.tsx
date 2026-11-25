@@ -67,7 +67,7 @@ import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
 import { BarFilterKey, matchesBarFilters } from '../../utils/barFilters';
 import { alternativeMapMatch, isWomenMatch, upcomingMapMatches } from '../../utils/mapMatches';
-import { MapRegion, cameraForRegion, isValidMapRegion, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
+import { MapRegion, cameraForRegion, isValidMapRegion, hasMapSearchAreaChanged, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
 import { ReportBarContent } from '../ReportBar/ReportBarScreen';
 import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
 import { getMapIcon } from '../../utils/mapIcons';
@@ -394,16 +394,6 @@ const MapScreen = () => {
 
     const [matchNotice, setMatchNotice] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!selectedMatch?.id) {
-            setMatchNotice(null);
-            return;
-        }
-        setMatchNotice('Mostrant els locals que han confirmat aquest partit.');
-        const timer = setTimeout(() => setMatchNotice(null), 2400);
-        return () => clearTimeout(timer);
-    }, [selectedMatch?.id]);
-
     const [routeInfo, setRouteInfo] = useState<{distance: string, duration: string} | null>(null);
     const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[] | null>(null);
     const routeRequestId = useRef(0);
@@ -474,6 +464,8 @@ const MapScreen = () => {
     const [discoveredGoogleDetails, setDiscoveredGoogleDetails] = useState(false);
 
     const [isScanning, setIsScanning] = useState(false);
+    const scanPendingRef = useRef(false);
+    const [lastScanRegion, setLastScanRegion] = useState<MapRegion | null>(null);
 
     // Bars escanejats filtrats per amenitats actives (dinàmic)
     const filteredScannedBars = useMemo(() => {
@@ -1076,6 +1068,20 @@ const MapScreen = () => {
 
     }, [centerLocation, visibleBounds, bars, selectedMatch, nextMatch, upcomingMatches, currentZoom, activeFilters]);
 
+    useEffect(() => {
+        if (!selectedMatch?.id || !initialBarsLoaded || !mapReady || tutorialKind) {
+            setMatchNotice(null);
+            return;
+        }
+        if (filteredBars.length === 0) {
+            setMatchNotice('Cap bar amb aquest partit confirmat a prop.');
+            return;
+        }
+        setMatchNotice('Mostrant els locals que han confirmat aquest partit.');
+        const timer = setTimeout(() => setMatchNotice(null), 2400);
+        return () => clearTimeout(timer);
+    }, [selectedMatch?.id, initialBarsLoaded, mapReady, filteredBars.length, tutorialKind]);
+
 
 
     // 5. Netejar scannedBars quan es recarreguen els bars (eliminar els ja registrats)
@@ -1210,10 +1216,19 @@ const MapScreen = () => {
 
 
 
+    const scanRegion: MapRegion | null = centerLocation ? {
+        latitude: visibleBounds ? (visibleBounds.minLat + visibleBounds.maxLat) / 2 : centerLocation.latitude,
+        longitude: visibleBounds ? (visibleBounds.minLng + visibleBounds.maxLng) / 2 : centerLocation.longitude,
+        latitudeDelta: visibleBounds ? visibleBounds.maxLat - visibleBounds.minLat : radiusToLatDelta(searchRadiusKm),
+        longitudeDelta: visibleBounds ? visibleBounds.maxLng - visibleBounds.minLng : radiusToLatDelta(searchRadiusKm),
+    } : null;
+    const canRepeatScan = !tutorialKind && !matchIdFromNav && hasMapSearchAreaChanged(lastScanRegion, scanRegion);
+
     async function handleManualScan() {
 
-        if (!centerLocation || isScanning) return;
-
+        if (!centerLocation || !scanRegion || isScanning || scanPendingRef.current) return;
+        const requestedRegion = scanRegion;
+        scanPendingRef.current = true;
         setIsScanning(true);
         setScanMessage('Buscant bars sense registrar…');
 
@@ -1230,7 +1245,7 @@ const MapScreen = () => {
                 ? `${newScanned.length} ${newScanned.length === 1 ? 'local sense registrar' : 'locals sense registrar'}. Toca un pin per veure el local.`
                 : 'No hem trobat locals nous en aquesta zona. Prova de moure el mapa.');
             setScannedBars(prev => mergeDiscoveredBars(prev, newScanned));
-
+            setLastScanRegion(requestedRegion);
 
 
         } catch (e) {
@@ -1241,6 +1256,7 @@ const MapScreen = () => {
 
         } finally {
 
+            scanPendingRef.current = false;
             setIsScanning(false);
 
         }
@@ -1257,6 +1273,7 @@ const MapScreen = () => {
 
             setScannedBars([]); // Amagar/Netejar
             setScanMessage(null);
+            setLastScanRegion(null);
 
         } else {
 
@@ -2131,7 +2148,7 @@ const MapScreen = () => {
 
                             <Text style={{textAlign:'center', color: SKETCH_THEME.colors.textMuted, marginTop: 10, fontFamily: 'Lora'}}>
 
-                                Cap bar trobat a la zona.
+                                {selectedMatch ? 'Cap bar amb aquest partit confirmat a prop.' : 'Cap bar trobat a la zona.'}
 
                             </Text>
 
@@ -2631,13 +2648,24 @@ const MapScreen = () => {
                             </View>
                         </View>
                     )}
-                    {!mapLoadFailed && !transientAlertVisible && !selectedLocation && (scanMessage || matchNotice) && (
+                    {!mapLoadFailed && !transientAlertVisible && !selectedLocation && (canRepeatScan || scanMessage || matchNotice) && (
                         <View pointerEvents="box-none" style={{ position: 'absolute', bottom: mapNoticeBottom, left: mapNoticeLeft, right: mapNoticeRight, zIndex: 50, alignItems: 'center' }}>
-                            <View style={{ width: '100%', maxWidth: 480 }}>
-                                <UserNotice
+                            <View style={{ width: '100%', maxWidth: 480, gap: 8 }}>
+                                {canRepeatScan && !isScanning && scanMessage && <UserNotice compact message={scanMessage} />}
+                                {canRepeatScan ? <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Tornar a cercar en aquesta zona"
+                                    accessibilityState={{ busy: isScanning, disabled: isScanning }}
+                                    disabled={isScanning}
+                                    onPress={handleManualScan}
+                                    style={{ minHeight: 48, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 24, backgroundColor: EDITORIAL.matchday, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    {isScanning ? <ActivityIndicator size="small" color={EDITORIAL.background} /> : <Feather name="search" size={18} color={EDITORIAL.background} />}
+                                    <Text style={{ color: EDITORIAL.background, fontFamily: EDITORIAL.fontBold, fontSize: 14, flexShrink: 1, textAlign: 'center' }}>{isScanning ? 'Cercant…' : 'Tornar a cercar en aquesta zona'}</Text>
+                                </TouchableOpacity> : <UserNotice
                                     compact
                                     message={scanMessage || matchNotice!}
-                                />
+                                />}
                             </View>
                         </View>
                     )}

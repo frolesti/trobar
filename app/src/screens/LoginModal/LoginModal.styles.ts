@@ -6,6 +6,7 @@ const INK_MUTED = EDITORIAL.onBackgroundMuted;
 const PAPER = EDITORIAL.background;
 const HAIRLINE = EDITORIAL.borderOnBackground;
 const GRANA = EDITORIAL.onBackground;
+const BRAND_CREAM = '#F4E6CC';
 
 export default StyleSheet.create({
     container: {
@@ -29,8 +30,9 @@ export default StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
-        marginBottom: 24,
+        marginBottom: 16,
     },
+    brand: { alignItems: 'center' },
     closeButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -52,6 +54,7 @@ export default StyleSheet.create({
     logoImg: {
         width: 96,
         height: 116,
+        tintColor: BRAND_CREAM,
     },
     eyebrow: {
         fontSize: 12,
@@ -72,10 +75,12 @@ export default StyleSheet.create({
     wordmark: {
         width: 168,
         height: 60,
+        marginTop: -6,
+        tintColor: BRAND_CREAM,
     },
     subtitle: {
         alignSelf: 'stretch',
-        marginTop: 16,
+        marginTop: 0,
         fontSize: 17,
         lineHeight: 25,
         color: INK_MUTED,

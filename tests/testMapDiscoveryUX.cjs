@@ -387,12 +387,14 @@ test('manual discovery shows the same results for partial coverage and retains a
         ts.forEachChild(node, visit);
     };
     visit(ast);
-    const messages = [], rendered = [], errors = [], busy = [];
+    const messages = [], rendered = [], errors = [], busy = [], searchedRegions = [];
     let discovery = { bars: [{ id: 'new-bar' }], partial: false };
     let failure;
     class OSMSearchError extends Error {}
     const context = {
         centerLocation: { latitude: 41, longitude: 2 }, isScanning: false, searchRadiusKm: 1,
+        scanRegion: { latitude: 41, longitude: 2, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        scanPendingRef: { current: false }, setLastScanRegion: region => searchedRegions.push(region),
         visibleBounds: null, bars: [], OSMSearchError,
         setIsScanning: value => busy.push(value), setScanMessage: value => messages.push(value),
         discoverMapBars: async () => { if (failure) throw failure; return discovery; },
@@ -416,6 +418,20 @@ test('manual discovery shows the same results for partial coverage and retains a
     assert.match(messages.at(-1), /Torna-ho a provar/);
     assert.equal(errors.length, 1);
     assert.deepEqual(busy, [true, false, true, false, true, false, true, false]);
+    assert.equal(searchedRegions.length, 3, 'empty successful searches count, but failures leave the last searched area unchanged');
+    let release, requests = 0, retained = [{ id: 'existing-result' }];
+    failure = null;
+    context.discoverMapBars = () => { requests++; return new Promise(resolve => { release = resolve; }); };
+    context.setScannedBars = update => { retained = update(retained); };
+    const requested = context.scanRegion;
+    const first = context.scan();
+    context.scanRegion = { ...requested, latitude: 42 };
+    await context.scan();
+    assert.equal(requests, 1, 'a synchronous busy guard prevents duplicate taps');
+    release({ bars: [{ id: 'new-area-result' }], partial: false });
+    await first;
+    assert.equal(searchedRegions.at(-1), requested, 'finishing an old-area request must not mark the new viewport as searched');
+    assert.deepEqual(retained.map(bar => bar.id), ['existing-result', 'new-area-result']);
 });
 
 test('unregistered popup accepts zero coordinates, preserves Place ID and address, blocks duplicate reports and cleans navigation timers', async () => {
@@ -439,6 +455,7 @@ test('unregistered popup accepts zero coordinates, preserves Place ID and addres
                 Easing: { in: value => value, back() {} },
             };
             if (name === '@react-navigation/native') return { useIsFocused: () => true };
+            if (name === '@expo/vector-icons') return { Feather: 'Feather' };
             if (name.endsWith('editorialTheme')) return { EDITORIAL: {} };
             if (name.endsWith('AuthContext')) return { useAuth: () => ({ user: { id: 'alice' } }) };
             if (name.endsWith('barService')) return { addUserReportedBar: (...args) => { calls.push(['report', ...args]); return new Promise(resolve => { release = resolve; }); } };
@@ -486,7 +503,12 @@ test('unregistered popup accepts zero coordinates, preserves Place ID and addres
     release();
     await Promise.all([first, second]);
     assert.equal(timers.size, 1);
-    assert.equal(render().find(node => node.type === 'UserNotice').props.tone, 'success');
+    const success = render().find(node => node.props.testID === 'bar-registration-success');
+    assert(success);
+    assert.equal(success.props.accessibilityLiveRegion, 'polite');
+    assert(!render().some(node => node.type === 'UserNotice'), 'success uses the existing popup surface, not another card');
+    assert.equal(success.props.style.backgroundColor, undefined);
+    assert.equal(success.props.style.borderWidth, undefined);
     cleanups.forEach(cleanup => cleanup?.());
     assert.equal(detailCredits.at(-1), false, 'clear detail attribution when the popup closes');
     assert.equal(timers.size, 0);

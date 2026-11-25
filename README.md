@@ -55,6 +55,10 @@ El mapa permet girar i inclinar la vista. El botó d'ubicació torna a situar
 la persona i orienta el mapa al nord sense canviar el nivell de zoom.
 Arrossegar el mapa cancel·la els moviments automàtics pendents i el retorn
 a la vista anterior d'una fitxa. Esborrar una cerca no recentra el mapa.
+Després d'una cerca de locals sense confirmar, moure o ampliar prou la zona
+ofereix «Tornar a cercar en aquesta zona», sense consultar els proveïdors
+automàticament ni descartar els resultats anteriors. El mapa mostra un avís
+si no hi ha bars que hagin confirmat el partit seleccionat a la zona visible.
 Els crèdits dels proveïdors de cerca són al desplegable mentre la cerca és
 oberta; no substitueixen els crèdits propis del mapa base.
 

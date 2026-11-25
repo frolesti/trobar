@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, TouchableOpacity, ScrollView, useWindowDimensions, Linking } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import Text from '../../components/AppText';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -10,7 +11,6 @@ import { addUserReportedBar } from '../../services/barService';
 import { fetchBarPlaceDetails, PlaceDetails } from '../../services/placesService';
 import BarCard from '../../components/BarCard';
 import AlertBanner, { showAlert } from '../../components/AlertBanner';
-import UserNotice from '../../components/UserNotice';
 
 type Props = {
     navigation: NativeStackNavigationProp<RootStackParamList, 'ReportBar'>;
@@ -114,7 +114,11 @@ export const ReportBarContent = ({ osmBar, onClose, onRegistered, onBusyChange, 
     return (
         <View>
                         {submitSuccess ? (
-                            <UserNotice tone="success" message="Bar registrat. Gràcies per ajudar la comunitat!" />
+                            <View testID="bar-registration-success" accessibilityLiveRegion="polite" style={{ alignItems: 'center', paddingVertical: 16, gap: 10 }}>
+                                <Feather name="check-circle" size={28} color={EDITORIAL.matchday} />
+                                <Text style={{ color: EDITORIAL.onBackground, fontFamily: EDITORIAL.fontBold, fontSize: 18 }}>Bar registrat.</Text>
+                                <Text style={{ color: EDITORIAL.onBackgroundMuted, fontFamily: EDITORIAL.fontRegular, fontSize: 14, textAlign: 'center' }}>Gràcies per ajudar la comunitat!</Text>
+                            </View>
                         ) : (
                         <BarCard
                             name={osmBar.name}

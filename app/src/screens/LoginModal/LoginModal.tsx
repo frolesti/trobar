@@ -312,11 +312,20 @@ const LoginModal = ({ navigation }: Props) => {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 <View style={styles.panel}>
                     <View style={styles.topBar}>
+                        <View testID="login-brand" style={styles.brand}>
                         <Image
                             source={require('../../../../assets/app/img/logo/mascot-open-cloche.png')}
                             style={styles.logoImg}
                             resizeMode="contain"
                         />
+                        {!showEmailForm && <Image
+                            source={require('../../../../assets/web/logos/wordmark-cream.png')}
+                            style={styles.wordmark}
+                            resizeMode="contain"
+                            accessibilityLabel="troBar"
+                            accessibilityRole="header"
+                        />}
+                        </View>
                         <TouchableOpacity 
                             style={[styles.closeButton, styles.topCloseButton]}
                             onPress={() => {
@@ -349,13 +358,6 @@ const LoginModal = ({ navigation }: Props) => {
 
                     {!showEmailForm && (
                         <View style={styles.header}>
-                            <Image
-                                source={require('../../../../assets/web/logos/wordmark-cream.png')}
-                                style={styles.wordmark}
-                                resizeMode="contain"
-                                accessibilityLabel="troBar"
-                                accessibilityRole="header"
-                            />
                             <Text style={styles.subtitle}>
                                 Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic. Si encara no tens compte, el crearem automàticament la primera vegada.
                             </Text>

@@ -94,6 +94,42 @@ test('switching the displayed match preserves an active match filter', async () 
     assert.equal(state.selectedMatch.id, 'men');
 });
 
+test('a selected match with no visible confirmed venues keeps its notice until results or scope change', () => {
+    const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
+    const ast = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    let effect;
+    function visit(node) {
+        if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useEffect'
+            && node.arguments[0]?.getText(ast).includes('Cap bar amb aquest partit confirmat')) effect = node.arguments[0].getText(ast);
+        ts.forEachChild(node, visit);
+    }
+    visit(ast);
+    assert(effect);
+    const timers = new Map();
+    const context = {
+        selectedMatch: { id: 'chosen' }, initialBarsLoaded: true, mapReady: true, tutorialKind: null, filteredBars: [],
+        setMatchNotice: value => { context.notice = value; },
+        setTimeout: callback => { timers.set(1, callback); return 1; }, clearTimeout: id => timers.delete(id),
+    };
+    const apply = vm.runInNewContext(ts.transpileModule(`(${effect})`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+    apply();
+    assert.match(context.notice, /Cap bar.*partit confirmat a prop/);
+    assert.equal(timers.size, 0, 'the empty state must not disappear while the map remains empty');
+    context.filteredBars = [{ id: 'real' }];
+    const cleanup = apply();
+    assert.match(context.notice, /Mostrant els locals/);
+    timers.get(1)();
+    assert.equal(context.notice, null);
+    cleanup();
+    for (const change of [{ initialBarsLoaded: false }, { mapReady: false }, { selectedMatch: null }, { tutorialKind: 'basic' }]) {
+        const saved = { ...context };
+        Object.assign(context, change);
+        apply();
+        assert.equal(context.notice, null);
+        Object.assign(context, saved);
+    }
+});
+
 test('map swipes cannot open login or trigger the stack back gesture', () => {
     const map = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
     const navigator = fs.readFileSync(require.resolve('../app/src/navigation/AppNavigator.tsx'), 'utf8');

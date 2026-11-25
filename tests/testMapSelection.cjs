@@ -8,7 +8,7 @@ const geometry = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/utils/mapSelection.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: geometry.exports });
-const { selectionRegion, mapBubbleLayout, mapMarkerSize, cameraForRegion, isValidMapRegion } = geometry.exports;
+const { selectionRegion, mapBubbleLayout, mapMarkerSize, cameraForRegion, isValidMapRegion, hasMapSearchAreaChanged } = geometry.exports;
 const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
 const parsed = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function implementation(name, declaration = false) {
@@ -23,6 +23,20 @@ function implementation(name, declaration = false) {
     assert(result, `missing ${name}`);
     return result;
 }
+
+test('repeat discovery ignores small camera jitter but recognizes another area or a meaningful zoom change', () => {
+    const previous = { latitude: 41, longitude: 2, latitudeDelta: 0.008, longitudeDelta: 0.012 };
+    assert(!hasMapSearchAreaChanged(null, previous));
+    assert(!hasMapSearchAreaChanged(previous, null));
+    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitude: NaN }));
+    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitude: 41.0001, longitude: 2.0001 }));
+    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitudeDelta: 0.0081 }));
+    for (const change of [
+        { latitude: 41.003 }, { longitude: 2.004 },
+        { latitudeDelta: 0.0101 }, { longitudeDelta: 0.008 },
+    ]) assert(hasMapSearchAreaChanged(previous, { ...previous, ...change }));
+    assert(!hasMapSearchAreaChanged(previous, { ...previous }), 'returning to the searched area hides the offer');
+});
 
 test('selecting either venue pans to the popup anchor without zooming at any viewport or existing zoom', () => {
     for (const height of [568, 667, 844]) for (const delta of [0.0004, 0.008, 0.1, 2]) {

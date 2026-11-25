@@ -13,6 +13,14 @@ export function isValidMapRegion(region: MapRegion): boolean {
         && region.latitudeDelta > 0 && region.longitudeDelta > 0;
 }
 
+export function hasMapSearchAreaChanged(previous: MapRegion | null, current: MapRegion | null): boolean {
+    if (!previous || !current || !isValidMapRegion(previous) || !isValidMapRegion(current)) return false;
+    return Math.abs(current.latitude - previous.latitude) >= previous.latitudeDelta * 0.25
+        || Math.abs(current.longitude - previous.longitude) >= previous.longitudeDelta * 0.25
+        || Math.abs(current.latitudeDelta - previous.latitudeDelta) >= previous.latitudeDelta * 0.25
+        || Math.abs(current.longitudeDelta - previous.longitudeDelta) >= previous.longitudeDelta * 0.25;
+}
+
 export function cameraForRegion(camera: Camera, previous: MapRegion, next: MapRegion): Camera {
     if (!isValidMapRegion(previous) || !isValidMapRegion(next)) throw new Error('Invalid map region');
     const scale = next.longitudeDelta / previous.longitudeDelta;

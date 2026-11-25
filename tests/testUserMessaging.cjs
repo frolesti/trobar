@@ -194,6 +194,7 @@ function loginHarness(emailForm = true) {
         'firebase/auth': { sendPasswordResetEmail: async (...args) => { resetCalls.push(args); if (resume) await new Promise(resolve => { resume = resolve; }); if (resetFailure) throw resetFailure; } },
         './LoginModal.styles': { __esModule: true, default: {} },
         '../../../../assets/app/img/logo/mascot-open-cloche.png': 0,
+        '../../../../assets/web/logos/wordmark-cream.png': 1,
     }, { console: { info() {} } });
     const render = () => { cursor = 0; return screen.default({ navigation: { canGoBack: () => true, goBack() {} } }); };
     const button = label => nodes(render()).find(node => node.type === 'TouchableOpacity' && text(node).includes(label));
@@ -214,8 +215,10 @@ test('login retains product copy and centers the open-cloche mascot above the tr
     const ui = loginHarness(false);
     const tree = ui.render();
     const heading = nodes(tree).find(node => node.props.accessibilityRole === 'header');
-    assert.equal(text(heading), 'troBar');
-    assert.equal(heading.props.numberOfLines, 1);
+    assert.equal(heading.props.accessibilityLabel, 'troBar');
+    const brand = nodes(tree).find(node => node.props.testID === 'login-brand');
+    assert.equal(nodes(brand).filter(node => node.type === 'Image').length, 2);
+    assert(nodes(brand).includes(heading), 'mascot and wordmark stay together even when an inline error is shown');
     assert(!text(tree).includes('Entra a'));
     assert(text(tree).includes('Guarda els teus bars preferits, rep alertes de partits del Barça i descobreix on viure el proper clàssic. Si encara no tens compte, el crearem automàticament la primera vegada.'));
     assert(!text(tree).includes('El partit es viu millor junts.'));
@@ -231,7 +234,9 @@ test('login retains product copy and centers the open-cloche mascot above the tr
     assert.equal(styles.topBar.justifyContent, 'center');
     assert.equal(styles.topCloseButton.position, 'absolute');
     assert.equal(styles.header.alignItems, 'center');
-    assert.equal(styles.wordmark.fontSize, 26);
+    assert.equal(styles.logoImg.tintColor, '#F4E6CC');
+    assert.equal(styles.wordmark.tintColor, styles.logoImg.tintColor);
+    assert(styles.wordmark.marginTop <= 0);
 });
 
 test('failed login shows only a safe inline notice without account lookup or backend details', async () => {
