@@ -55,8 +55,11 @@ El mapa permet girar i inclinar la vista. El botó d'ubicació torna a situar
 la persona i orienta el mapa al nord sense canviar el nivell de zoom.
 Arrossegar el mapa cancel·la els moviments automàtics pendents i el retorn
 a la vista anterior d'una fitxa. Esborrar una cerca no recentra el mapa.
-Després d'una cerca de locals sense confirmar, moure o ampliar prou la zona
-ofereix «Tornar a cercar en aquesta zona», sense consultar els proveïdors
+Després d'una cerca de locals sense confirmar, una vista sense bars carregats
+que inclogui una zona encara no cercada ofereix «Tornar a cercar en aquesta
+zona». Fer zoom o moure's dins d'una zona ja cercada no mostra l'avís, tampoc
+si aquella cerca no va trobar locals. Es conserven les zones cercades fins
+que s'amaguen els resultats, sense consultar els proveïdors
 automàticament ni descartar els resultats anteriors. El mapa mostra un avís
 si no hi ha bars que hagin confirmat el partit seleccionat a la zona visible.
 Els crèdits dels proveïdors de cerca són al desplegable mentre la cerca és
@@ -232,6 +235,9 @@ Els avisos del mapa queden a baix, al costat dels controls i sense tapar-los.
 La bombolla sencera queda centrada a la pantalla, amb la mateixa reserva
 d'espai a esquerra i dreta. Els avisos de cerca i resultats desapareixen al
 cap de 3,5 segons; l'estat de càrrega continua indicat a la icona.
+La regla admet la privacitat del 24/11/2026 i la del 10/11/2026 per mantenir
+compatibles les versions ja distribuïdes. La prova de regles obté les versions
+actuals del contingut canònic i comprova també l'acceptació de la versió anterior.
 La lupa i el posicionament conserven les icones 3D; en mostrar resultats,
 la lupa es converteix en un símbol de prohibició 3D per amagar-los.
 Els pins registrats utilitzen la imatge 3D grana. El pin premium incorpora

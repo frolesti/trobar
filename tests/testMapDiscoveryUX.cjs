@@ -394,7 +394,10 @@ test('manual discovery shows the same results for partial coverage and retains a
     const context = {
         centerLocation: { latitude: 41, longitude: 2 }, isScanning: false, searchRadiusKm: 1,
         scanRegion: { latitude: 41, longitude: 2, latitudeDelta: 0.01, longitudeDelta: 0.01 },
-        scanPendingRef: { current: false }, setLastScanRegion: region => searchedRegions.push(region),
+        scanPendingRef: { current: false }, setSearchedRegions: update => {
+            const next = update(searchedRegions);
+            searchedRegions.splice(0, searchedRegions.length, ...next);
+        },
         visibleBounds: null, bars: [], OSMSearchError,
         setIsScanning: value => busy.push(value), setScanMessage: value => messages.push(value),
         discoverMapBars: async () => { if (failure) throw failure; return discovery; },
@@ -418,7 +421,7 @@ test('manual discovery shows the same results for partial coverage and retains a
     assert.match(messages.at(-1), /Torna-ho a provar/);
     assert.equal(errors.length, 1);
     assert.deepEqual(busy, [true, false, true, false, true, false, true, false]);
-    assert.equal(searchedRegions.length, 3, 'empty successful searches count, but failures leave the last searched area unchanged');
+    assert.equal(searchedRegions.length, 3, 'empty successful searches count, but failures leave searched coverage unchanged');
     let release, requests = 0, retained = [{ id: 'existing-result' }];
     failure = null;
     context.discoverMapBars = () => { requests++; return new Promise(resolve => { release = resolve; }); };

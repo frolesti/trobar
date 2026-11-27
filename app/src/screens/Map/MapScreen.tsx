@@ -67,7 +67,7 @@ import { ownerDemoCopy } from '../../data/premiumDemoProfiles';
 import { AMENITY_OPTIONS, AMENITY_CATEGORIES } from '../../data/amenities';
 import { BarFilterKey, matchesBarFilters } from '../../utils/barFilters';
 import { alternativeMapMatch, isWomenMatch, upcomingMapMatches } from '../../utils/mapMatches';
-import { MapRegion, cameraForRegion, isValidMapRegion, hasMapSearchAreaChanged, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
+import { MapRegion, cameraForRegion, isValidMapRegion, shouldRepeatMapSearch, mapBubbleLayout, mapMarkerSize } from '../../utils/mapSelection';
 import { ReportBarContent } from '../ReportBar/ReportBarScreen';
 import { useTutorial, useTutorialTarget } from '../../context/TutorialContext';
 import { getMapIcon } from '../../utils/mapIcons';
@@ -465,7 +465,7 @@ const MapScreen = () => {
 
     const [isScanning, setIsScanning] = useState(false);
     const scanPendingRef = useRef(false);
-    const [lastScanRegion, setLastScanRegion] = useState<MapRegion | null>(null);
+    const [searchedRegions, setSearchedRegions] = useState<MapRegion[]>([]);
 
     // Bars escanejats filtrats per amenitats actives (dinàmic)
     const filteredScannedBars = useMemo(() => {
@@ -1222,7 +1222,10 @@ const MapScreen = () => {
         latitudeDelta: visibleBounds ? visibleBounds.maxLat - visibleBounds.minLat : radiusToLatDelta(searchRadiusKm),
         longitudeDelta: visibleBounds ? visibleBounds.maxLng - visibleBounds.minLng : radiusToLatDelta(searchRadiusKm),
     } : null;
-    const canRepeatScan = !tutorialKind && !matchIdFromNav && hasMapSearchAreaChanged(lastScanRegion, scanRegion);
+    const canRepeatScan = !tutorialKind && !matchIdFromNav && shouldRepeatMapSearch(
+        searchedRegions, scanRegion,
+        [...bars, ...scannedBars.map(bar => ({ latitude: bar.lat, longitude: bar.lon }))],
+    );
 
     async function handleManualScan() {
 
@@ -1245,7 +1248,7 @@ const MapScreen = () => {
                 ? `${newScanned.length} ${newScanned.length === 1 ? 'local sense registrar' : 'locals sense registrar'}. Toca un pin per veure el local.`
                 : 'No hem trobat locals nous en aquesta zona. Prova de moure el mapa.');
             setScannedBars(prev => mergeDiscoveredBars(prev, newScanned));
-            setLastScanRegion(requestedRegion);
+            setSearchedRegions(previous => [...previous, requestedRegion]);
 
 
         } catch (e) {
@@ -1273,7 +1276,7 @@ const MapScreen = () => {
 
             setScannedBars([]); // Amagar/Netejar
             setScanMessage(null);
-            setLastScanRegion(null);
+            setSearchedRegions([]);
 
         } else {
 

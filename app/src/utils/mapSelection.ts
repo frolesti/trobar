@@ -13,12 +13,23 @@ export function isValidMapRegion(region: MapRegion): boolean {
         && region.latitudeDelta > 0 && region.longitudeDelta > 0;
 }
 
-export function hasMapSearchAreaChanged(previous: MapRegion | null, current: MapRegion | null): boolean {
-    if (!previous || !current || !isValidMapRegion(previous) || !isValidMapRegion(current)) return false;
-    return Math.abs(current.latitude - previous.latitude) >= previous.latitudeDelta * 0.25
-        || Math.abs(current.longitude - previous.longitude) >= previous.longitudeDelta * 0.25
-        || Math.abs(current.latitudeDelta - previous.latitudeDelta) >= previous.latitudeDelta * 0.25
-        || Math.abs(current.longitudeDelta - previous.longitudeDelta) >= previous.longitudeDelta * 0.25;
+export function shouldRepeatMapSearch(
+    searchedRegions: readonly MapRegion[],
+    current: MapRegion | null,
+    knownLocations: readonly { latitude: number; longitude: number }[],
+): boolean {
+    if (!current || !isValidMapRegion(current)) return false;
+    const searched = searchedRegions.filter(isValidMapRegion);
+    if (!searched.length) return false;
+    if (knownLocations.some(point =>
+        Math.abs(point.latitude - current.latitude) <= current.latitudeDelta / 2
+        && Math.abs(point.longitude - current.longitude) <= current.longitudeDelta / 2
+    )) return false;
+    // Allow 1% boundary jitter without treating a covered viewport as a new area.
+    return !searched.some(previous =>
+        Math.abs(current.latitude - previous.latitude) + current.latitudeDelta / 2 <= previous.latitudeDelta * 0.51
+        && Math.abs(current.longitude - previous.longitude) + current.longitudeDelta / 2 <= previous.longitudeDelta * 0.51
+    );
 }
 
 export function cameraForRegion(camera: Camera, previous: MapRegion, next: MapRegion): Camera {

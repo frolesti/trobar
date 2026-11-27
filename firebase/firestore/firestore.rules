@@ -160,7 +160,8 @@ service cloud.firestore {
         return acceptance.keys().hasAll(['termsVersion', 'privacyVersion', 'termsRead', 'privacyRead', 'acceptedAt', 'platform'])
           && acceptance.keys().hasOnly(['termsVersion', 'privacyVersion', 'termsRead', 'privacyRead', 'acceptedAt', 'platform'])
           && acceptance.termsVersion == '2026-11-10'
-          && acceptance.privacyVersion == '2026-11-10'
+          // Older installed builds still submit the previous privacy version.
+          && acceptance.privacyVersion in ['2026-11-10', '2026-11-24']
           && acceptance.termsRead == true && acceptance.privacyRead == true
           && acceptance.acceptedAt == request.time
           && acceptance.platform in ['ios', 'android', 'web'];

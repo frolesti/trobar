@@ -8,7 +8,7 @@ const geometry = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../app/src/utils/mapSelection.ts'), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText, { exports: geometry.exports });
-const { selectionRegion, mapBubbleLayout, mapMarkerSize, cameraForRegion, isValidMapRegion, hasMapSearchAreaChanged } = geometry.exports;
+const { selectionRegion, mapBubbleLayout, mapMarkerSize, cameraForRegion, isValidMapRegion, shouldRepeatMapSearch } = geometry.exports;
 const source = fs.readFileSync(require.resolve('../app/src/screens/Map/MapScreen.tsx'), 'utf8');
 const parsed = ts.createSourceFile('MapScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function implementation(name, declaration = false) {
@@ -24,18 +24,45 @@ function implementation(name, declaration = false) {
     return result;
 }
 
-test('repeat discovery ignores small camera jitter but recognizes another area or a meaningful zoom change', () => {
+test('repeat discovery only offers empty new areas, never zooming or panning inside a searched area', () => {
     const previous = { latitude: 41, longitude: 2, latitudeDelta: 0.008, longitudeDelta: 0.012 };
-    assert(!hasMapSearchAreaChanged(null, previous));
-    assert(!hasMapSearchAreaChanged(previous, null));
-    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitude: NaN }));
-    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitude: 41.0001, longitude: 2.0001 }));
-    assert(!hasMapSearchAreaChanged(previous, { ...previous, latitudeDelta: 0.0081 }));
-    for (const change of [
-        { latitude: 41.003 }, { longitude: 2.004 },
-        { latitudeDelta: 0.0101 }, { longitudeDelta: 0.008 },
-    ]) assert(hasMapSearchAreaChanged(previous, { ...previous, ...change }));
-    assert(!hasMapSearchAreaChanged(previous, { ...previous }), 'returning to the searched area hides the offer');
+    const zoomed = { ...previous, latitude: 41.002, longitude: 2.003, latitudeDelta: 0.002, longitudeDelta: 0.003 };
+    assert(!shouldRepeatMapSearch([], previous, []));
+    assert(!shouldRepeatMapSearch([previous], null, []));
+    assert(!shouldRepeatMapSearch([previous], { ...previous, latitude: NaN }, []));
+    assert(!shouldRepeatMapSearch([{ ...previous, latitudeDelta: 0 }], previous, []));
+    assert(!shouldRepeatMapSearch([previous], { ...previous, latitude: 41.00001 }, []));
+    assert(!shouldRepeatMapSearch([previous], zoomed, []), 'even an empty zoomed-in viewport is already covered');
+    assert(!shouldRepeatMapSearch([previous], previous, []));
+    const newArea = { ...zoomed, latitude: 42 };
+    assert(shouldRepeatMapSearch([previous], newArea, []));
+    assert(!shouldRepeatMapSearch([previous, newArea], zoomed, []), 'remember earlier searches, not only the latest');
+    assert(!shouldRepeatMapSearch([previous], newArea, [{ latitude: 42, longitude: 2.003 }]));
+    assert(shouldRepeatMapSearch([previous], newArea, [{ latitude: 41, longitude: 2 }]), 'old offscreen pins do not suppress the offer');
+    assert(shouldRepeatMapSearch([previous], { ...previous, longitudeDelta: 0.024 }, []), 'zooming out into empty unsearched space may offer a search');
+});
+
+test('map repeat-search visibility uses both saved and discovered coordinates, independent of filters', () => {
+    const previous = { latitude: 41, longitude: 2, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+    const current = { ...previous, latitude: 42 };
+    const context = {
+        shouldRepeatMapSearch, searchedRegions: [previous], scanRegion: current,
+        tutorialKind: null, matchIdFromNav: null, bars: [], scannedBars: [],
+    };
+    const evaluate = () => vm.runInNewContext(implementation('canRepeatScan'), context);
+    assert(evaluate());
+    context.scannedBars = [{ lat: 42, lon: 2 }];
+    assert(!evaluate(), 'OSM/Google pins use lat/lon, not saved-bar coordinate names');
+    context.scannedBars = [{ lat: 41, lon: 2 }];
+    assert(evaluate(), 'retained offscreen discoveries do not hide the offer');
+    context.bars = [{ latitude: 42, longitude: 2 }];
+    assert(!evaluate(), 'a known saved bar prevents an empty-area offer even if filters hide it');
+    context.bars = [];
+    context.tutorialKind = 'basic';
+    assert(!evaluate());
+    context.tutorialKind = null;
+    context.matchIdFromNav = 'match';
+    assert(!evaluate());
 });
 
 test('selecting either venue pans to the popup anchor without zooming at any viewport or existing zoom', () => {
